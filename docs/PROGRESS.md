@@ -305,3 +305,30 @@ ASSUMED — The title comes from script.json (what you'd edit), chapter titles f
 The description opening line is a placeholder (NEEDS_PIETRO).
 DIVERGED — none.
 NEXT — P1-5 (parallel TTS and image generation, with budget reservation under a lock).
+
+## 2026-09-27 P1-5 Parallel generation
+CHANGED — `pipeline.py`: `generate_assets` (narration for all scenes, then visuals) on
+`config.WORKERS` (4) threads via `in_parallel` (ordered results; the first failure cancels what
+hasn't started, sets `ledger.stopping` until in-flight calls finish, then clears it); clips are
+still built sequentially. `ledger.py`: `reserve()` holds each call's estimated cost under an
+RLock (spent + held + this ≤ budget) until the call has recorded; reads under the lock;
+`stopping` / `interrupted` events. `utils.py`: `output_lock` per output (two scenes with the
+same cache key pay once), unique temp names, atomic `save_json`, `log()` single-write lines.
+Voice / image / Veo / Manim / Claude call sites: lock → re-check cache → reserve → buy. Veo jobs
+run one at a time (daily cap can't be raced) and are abandoned only on Ctrl-C. Threaded
+messages carry the scene id. New `tests/test_parallel.py` (9); conftest resets the stop events
+and holds per test; test_cache fakes name files by hash (thread-safe). README, D17.
+CHECKED — verified: red first: 8 concurrent narrations with budget for 3 bought 8 (now 3);
+duplicate line/picture across scenes bought 4× (now 1×); a failure let 20/20 items start (now
+< 6); no refusal after a stop. Wall-clock, 8 scenes with 0.2 s fake latency per TTS and image
+call (seeded jitter): ~3.5 s sequential → ~1.35 s on 4 workers (3 runs: 3.52/1.29, 3.87/1.35,
+3.45/1.41); the ceiling below 4× is each wave waiting for its slowest call plus ~0.3 s of
+sequential local work. Reviewer subagent: first pass 1 Critical (duplicate keys paid twice and
+crashed on the shared temp file — I had flagged it) + 3 warnings; fixed and re-reviewed (its
+repros: 60 → 30 paid calls, 20 → 5 started); second pass 2 warnings (stop flag leaked across runs;
+a budget stop abandoned a paid Veo job) fixed, each with a test that fails without the fix.
+`make check`: 115 passed (3 min 51 s).
+ASSUMED — 4 workers; clip rendering stays sequential (FFmpeg is already multi-threaded).
+DIVERGED — D10's "check-then-call is not atomic" limit is now closed within one process (D17);
+two processes sharing the ledger still aren't coordinated.
+NEXT — P1-6 (faster still rendering). Risk: Manim renders may now run 4 at a time (CPU heavy).

@@ -1,4 +1,5 @@
 """Agent 4b: atmospheric clips via Google Veo. Any failure falls back to Manim upstream."""
+import threading
 import time
 from pathlib import Path
 
@@ -6,7 +7,7 @@ import config
 import ledger
 import retries
 from agents import google_client
-from utils import atomic_output, content_key
+from utils import atomic_output, content_key, output_lock
 
 STYLE = (" Calm documentary footage, one continuous slow camera move, soft natural "
          "light, muted colours, shallow depth of field. No text, no captions, no logos, "
@@ -22,18 +23,33 @@ def cache_path(scene: dict, out_dir: Path) -> Path:
     return out_dir / f"ai_{content_key('ai', prompt, config.VEO_MODEL, config.ASPECT_RATIO)}.mp4"
 
 
+_veo_lock = threading.Lock()
+
+
 class DailyCapReached(RuntimeError):
     """Today's Veo clips are used up. A failed generation, so the scene falls back to a still."""
 
 
 def render_scene(scene: dict, out_dir: Path, timeout_s: int = 600) -> Path:
     out = cache_path(scene, out_dir)
-    if out.exists():
-        return out
-    if ledger.veo_clips_today() >= config.VEO_MAX_PER_DAY:
-        raise DailyCapReached(f"{config.VEO_MAX_PER_DAY} Veo clips already made today (VEO_MAX_PER_DAY)")
-    cost = ledger.video_eur(config.VEO_CLIP_S)
-    ledger.check("google", cost)
+    with output_lock(out):
+        if out.exists():
+            return out
+        return _start(scene, out, timeout_s)
+
+
+def _start(scene: dict, out: Path, timeout_s: int) -> Path:
+    # One Veo job at a time: the daily cap is counted from the ledger, and two scenes checking
+    # it at once could both see room for one more clip.
+    with _veo_lock:
+        if ledger.veo_clips_today() >= config.VEO_MAX_PER_DAY:
+            raise DailyCapReached(f"{config.VEO_MAX_PER_DAY} Veo clips already made today (VEO_MAX_PER_DAY)")
+        cost = ledger.video_eur(config.VEO_CLIP_S)
+        with ledger.reserve("google", cost):
+            return _buy(scene, out, cost, timeout_s)
+
+
+def _buy(scene: dict, out: Path, cost: float, timeout_s: int) -> Path:
     import httpx
     from google.genai import errors, types
 
@@ -58,6 +74,8 @@ def render_scene(scene: dict, out_dir: Path, timeout_s: int = 600) -> Path:
         while not op.done:
             if time.time() - start > timeout_s:
                 raise RuntimeError("Veo timed out")
+            if ledger.interrupted.is_set():  # only Ctrl-C abandons a paid job; a budget stop lets it finish
+                raise RuntimeError("interrupted")
             time.sleep(10)
             op = client.operations.get(op)
     except Exception as e:

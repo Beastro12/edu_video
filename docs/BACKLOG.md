@@ -96,7 +96,7 @@ Work top to bottom within a priority.
   chapter timestamps taken from real clip boundaries (YouTube needs 00:00 first and
   ≥10 s chapters), SRT from narration timing per scene.
 
-- [ ] P1-5 — Parallel generation
+- [x] P1-5 — Parallel generation
   Accept: TTS and image generation for independent scenes run concurrently
   (configurable workers, default 4), respecting P0-4 retries and P0-2 budget checks.
   Wall-clock time before/after recorded.

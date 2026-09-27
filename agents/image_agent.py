@@ -5,7 +5,7 @@ from pathlib import Path
 import config
 import ledger
 from agents import google_client, still_critic
-from utils import atomic_output, content_key, load_json, run, save_json
+from utils import atomic_output, content_key, load_json, output_lock, run, save_json
 
 STYLE = (" Calm, dark, low-contrast, cinematic, deep blues and soft warm highlights, "
          "lots of negative space, soft focus edges. No text, no letters, no watermark, "
@@ -24,9 +24,14 @@ def cache_path(scene: dict, out_dir: Path) -> Path:
 
 def render_still(scene: dict, out_dir: Path) -> Path:
     out = cache_path(scene, out_dir)
-    if out.exists():
-        return out
-    ledger.check("google", ledger.image_eur())
+    with output_lock(out):
+        if out.exists():
+            return out
+        with ledger.reserve("google", ledger.image_eur()):
+            return _buy(scene, out)
+
+
+def _buy(scene: dict, out: Path) -> Path:
     from google.genai import types
 
     resp = google_client.make().models.generate_content(
@@ -97,6 +102,11 @@ def reviewed_still(scene: dict, out_dir: Path) -> Path:
     folded into the prompt (STILL_REVIEW_RETRIES times), then StillRejected. Each attempt is
     written to review_<key>.json as it happens, so neither a rerun nor a crash pays twice."""
     path = review_path(scene, out_dir)
+    with output_lock(path):  # a scene with the same picture waits for this decision
+        return _decide(scene, out_dir, path)
+
+
+def _decide(scene: dict, out_dir: Path, path: Path) -> Path:
     log = review_log(scene, out_dir) or {"accepted": None, "done": False, "attempts": []}
     if log.get("done"):
         if log["accepted"] and (out_dir / log["accepted"]).exists():

@@ -6,7 +6,7 @@ import requests
 import config
 import ledger
 import retries
-from utils import atomic_output, content_key
+from utils import atomic_output, content_key, output_lock
 
 URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_128"
 
@@ -19,10 +19,15 @@ def cache_path(text: str, out_dir: Path) -> Path:
 
 def narrate(text: str, out_dir: Path) -> Path:
     out = cache_path(text, out_dir)
-    if out.exists():
-        return out  # cached: same text and voice, don't pay twice
-    cost = ledger.tts_eur(len(text))
-    ledger.check("elevenlabs", cost)
+    with output_lock(out):
+        if out.exists():
+            return out  # cached: same text and voice, don't pay twice
+        cost = ledger.tts_eur(len(text))
+        with ledger.reserve("elevenlabs", cost):
+            return _buy(text, out, cost)
+
+
+def _buy(text: str, out: Path, cost: float) -> Path:
 
     def post():
         r = requests.post(

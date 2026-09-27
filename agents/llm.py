@@ -21,12 +21,12 @@ _client = make_client()
 def _create(est_in: int | None = None, **kwargs):
     if est_in is None:
         est_in = ledger.claude_input_estimate(json.dumps(kwargs, default=str))
-    ledger.check("anthropic", ledger.claude_eur(config.CLAUDE_MODEL, est_in, kwargs["max_tokens"]))
-    resp = _client.messages.create(model=config.CLAUDE_MODEL, **kwargs)
-    usage = resp.usage
-    ledger.record("anthropic", config.CLAUDE_MODEL,
-                  {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens},
-                  ledger.claude_eur(config.CLAUDE_MODEL, usage.input_tokens, usage.output_tokens))
+    with ledger.reserve("anthropic", ledger.claude_eur(config.CLAUDE_MODEL, est_in, kwargs["max_tokens"])):
+        resp = _client.messages.create(model=config.CLAUDE_MODEL, **kwargs)
+        usage = resp.usage
+        ledger.record("anthropic", config.CLAUDE_MODEL,
+                      {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens},
+                      ledger.claude_eur(config.CLAUDE_MODEL, usage.input_tokens, usage.output_tokens))
     return resp
 
 

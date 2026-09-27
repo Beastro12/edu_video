@@ -33,7 +33,7 @@ def film(tmp_path, monkeypatch, stills_approved):
     def fake_post(url, headers, json, timeout):
         text = json["text"]
         paid["tts"].append(text)
-        out = tmp_path / f"tts_{len(paid['tts'])}.mp3"
+        out = tmp_path / f"tts_{hashlib.sha256(text.encode()).hexdigest()[:12]}.mp3"  # thread-safe name
         pitch = 200 + int(hashlib.sha256(text.encode()).hexdigest()[:4], 16) % 400  # same length, other text: other audio
         ff("-f", "lavfi", "-i", f"sine=f={pitch}:d={speech_s(text)}:sample_rate=44100", str(out))
         spoken[text] = out.read_bytes()
@@ -44,7 +44,7 @@ def film(tmp_path, monkeypatch, stills_approved):
             prompt = contents
             paid["image"].append(prompt)
             colour = hashlib.sha256(prompt.encode()).hexdigest()[:6]
-            out = tmp_path / f"img_{len(paid['image'])}.png"
+            out = tmp_path / f"img_{colour}.png"  # thread-safe name
             ff("-f", "lavfi", "-i", f"color=c=0x{colour}:s=64x36", "-frames:v", "1", str(out))
             made[prompt] = out.read_bytes()
             image = SimpleNamespace(data=made[prompt], mime_type="image/png")

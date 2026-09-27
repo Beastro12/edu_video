@@ -100,6 +100,10 @@ Chapters follow YouTube's rules: the first at 00:00, each at least 10 s, and at 
 
 ## Tuning
 
+Scenes are narrated and illustrated `WORKERS` at a time (see `config.py`). The budget cap
+still holds with calls in flight: each paid call reserves its estimated cost before it starts
+(Claude's actual tokens can differ a little from the estimate).
+
 Everything is in `config.py`: voice calmness and speed, pauses, crossfade length, how
 far stills drift, music level and ducking. Model names can be overridden in `.env`
 (`CLAUDE_MODEL`, `IMAGE_MODEL`, `VEO_MODEL`), since Google renames them often.

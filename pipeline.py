@@ -5,6 +5,7 @@
 """
 import argparse
 import sys
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from pathlib import Path
 
 import config
@@ -13,7 +14,7 @@ import metadata
 import qa
 from agents import ai_video, critic, image_agent, manim_agent, music, script_agent, voice
 from assembly import add_music, build_scene_clip, crossfade_concat
-from utils import content_key, duration, load_json, save_json, slugify, video_duration
+from utils import content_key, duration, load_json, log, save_json, slugify, video_duration
 
 
 def _chapter_sources(work: Path) -> str | None:
@@ -104,18 +105,18 @@ def make_visual(scene: dict, target_s: float, out_dir: Path, allow_veo: bool) ->
         except ledger.BudgetExceeded:
             raise  # out of money is not a failed generation: stop the run
         except ai_video.DailyCapReached as e:
-            print(f"    Veo daily cap reached ({e}); using a still")
+            log(f"    scene {scene['id']}: Veo daily cap reached ({e}); using a still")
         except Exception as e:  # noqa: BLE001
-            print(f"    Veo failed ({str(e)[:100]}); trying a still")
+            log(f"    scene {scene['id']}: Veo failed ({str(e)[:100]}); trying a still")
     if vt in ("ai_video", "still") and image_agent.available():
         try:
             return image_agent.reviewed_still(scene, out_dir), "still"
         except ledger.BudgetExceeded:
             raise
         except image_agent.StillRejected as e:
-            print(f"    still failed review ({str(e)[:120]}); falling back to Manim")
+            log(f"    scene {scene['id']}: still failed review ({str(e)[:120]}); falling back to Manim")
         except Exception as e:  # noqa: BLE001
-            print(f"    Image model failed ({str(e)[:100]}); falling back to Manim")
+            log(f"    scene {scene['id']}: image model failed ({str(e)[:100]}); falling back to Manim")
     atmospheric = vt != "manim"
     return manim_agent.render_scene(scene, target_s, out_dir, atmospheric), "manim"
 
@@ -211,16 +212,54 @@ def print_estimate(topic: str, est: dict[str, float], worst: dict[str, float]) -
     if not image_agent.available():
         print("  (no GOOGLE_API_KEY: stills and Veo scenes are counted as Manim)")
 
+def in_parallel(fn, items: list) -> list:
+    """fn over items on WORKERS threads, results in the items' order. The first failure (say
+    BudgetExceeded) stops the run at once: calls not yet started are cancelled and, until the
+    calls in flight have finished, no new paid call may be reserved (ledger.stopping)."""
+    if config.WORKERS <= 1 or len(items) <= 1:
+        return [fn(x) for x in items]
+    pool = ThreadPoolExecutor(config.WORKERS)
+    futures = [pool.submit(fn, x) for x in items]
+    try:
+        done, _ = wait(futures, return_when=FIRST_EXCEPTION)
+        failed = next((f for f in futures if f in done and f.exception() is not None), None)
+        if failed is not None:
+            raise failed.exception()
+        return [f.result() for f in futures]
+    except KeyboardInterrupt:
+        ledger.interrupted.set()  # even a Veo job in flight gives up (it's recorded as billed)
+        ledger.stopping.set()
+        raise
+    except BaseException:  # jobs in flight finish and are cached; nothing new starts
+        ledger.stopping.set()
+        raise
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+        ledger.stopping.clear()  # nothing is in flight any more: the next run starts clean
+        ledger.interrupted.clear()
+
+
+def generate_assets(script: dict, work: Path, allow_veo: bool) -> list[dict]:
+    """Everything paid for, per scene: narration first (its length sets the scene's), then the
+    visual. Independent scenes run concurrently (P1-5)."""
+    scenes = script["scenes"]
+    print(f"• narration: {len(scenes)} scenes, {config.WORKERS} at a time")
+    audio = in_parallel(lambda s: voice.narrate(s["narration"], work / "audio"), scenes)
+    targets = [config.LEAD_IN_S + duration(a) + config.TAIL_S for a in audio]
+    print("• visuals")
+    visuals = in_parallel(lambda i: make_visual(scenes[i], targets[i], work / "visuals", allow_veo),
+                          list(range(len(scenes))))
+    return [{"scene": s, "audio": a, "visual": v, "kind": k}
+            for s, a, (v, k) in zip(scenes, audio, visuals, strict=True)]
+
+
 def render_film(script: dict, work: Path, allow_veo: bool, seed: str) -> Path:
     """Per-scene files live in audio/, visuals/ and clips/, named by a hash of their inputs.
     manifest.json maps each scene id to the files it used."""
     clips, manifest = [], []
-    for scene in script["scenes"]:
-        print(f"• scene {scene['id']}/{len(script['scenes'])}: {scene['concept']} [{scene['visual_type']}]")
-        # Audio first: the narration length decides everything else
-        narration = voice.narrate(scene["narration"], work / "audio")
-        target = config.LEAD_IN_S + duration(narration) + config.TAIL_S
-        visual, kind = make_visual(scene, target, work / "visuals", allow_veo)
+    for asset in generate_assets(script, work, allow_veo):
+        scene, narration, visual, kind = asset["scene"], asset["audio"], asset["visual"], asset["kind"]
+        print(f"• scene {scene['id']}/{len(script['scenes'])}: {scene['concept']} [{kind}]")
         clip = build_scene_clip(visual, narration, work / "clips", kind, scene["id"])
         clips.append(clip)
         review = image_agent.review_path(scene, work / "visuals")

@@ -117,7 +117,7 @@ def test_review_cost_estimate_ignores_the_image_bytes(world, monkeypatch, tmp_pa
     ff("-f", "lavfi", "-i", "color=c=0x223344:s=64x36", "-frames:v", "1", str(small))
     ff("-f", "lavfi", "-i", "cellauto=s=1376x768", "-frames:v", "1", str(large))  # busy: big JPEG
     checked = []
-    monkeypatch.setattr(ledger, "check", lambda provider, eur: checked.append(eur))
+    monkeypatch.setattr(ledger, "check", lambda provider, eur, held=0.0: checked.append(eur))
     world.verdicts[:] = [(True, []), (True, [])]
     still_critic.review(SCENE, small)
     still_critic.review(SCENE, large)

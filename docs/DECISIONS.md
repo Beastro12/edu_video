@@ -156,3 +156,19 @@ written after every attempt so a crash or rerun never pays twice; `manifest.json
 Cost: one extra image (~€0.06) and one review (~€0.01) per rejected attempt; the image cost
 estimate uses a fixed `EST_IMAGE_TOKENS` because base64 counted as text would look like
 tens of thousands of tokens. Not verified live: reviewer strictness on real images.
+
+**D17 — Generate scenes concurrently; reserve budget, serialise Veo.** Narration for all
+scenes, then visuals for all scenes, run on `WORKERS` threads (`pipeline.in_parallel`,
+results in scene order). The first failure stops the run at once: calls not yet started are
+cancelled and, until the calls in flight have finished, `ledger.stopping` refuses any new
+reservation (then it clears, so a later run in the same process starts clean). A started Veo
+job is only abandoned on Ctrl-C (`ledger.interrupted`); otherwise it finishes and is cached,
+since abandoning it would waste a paid clip. Two scenes with the same cache key are made once (`utils.output_lock`; the other waits
+and finds it cached); temp files carry the thread id; JSON writes are atomic. Clip rendering stays
+sequential (FFmpeg already uses the cores). Every paid call now *reserves* its estimated
+cost under the ledger lock (spent + held by calls in flight + this call ≤ budget) and records
+its actual cost before releasing the hold, which closes D10's check-then-call gap within a
+process. Veo jobs run one at a time so the daily cap can't be raced. Evidence: 8 concurrent
+narrations with room for 3 bought 8 before, exactly 3 now; 8 scenes (TTS + image, 0.2 s fake
+latency) took ~3.5 s sequentially and ~1.35 s on 4 workers. Still open: two separate
+processes share the ledger file but not the lock.

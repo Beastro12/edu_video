@@ -3,7 +3,9 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -48,7 +50,18 @@ def slugify(text: str) -> str:
 
 
 def save_json(path: Path, data) -> None:
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    with atomic_output(path) as tmp:  # never a half-written file, even with threads (P1-5)
+        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+_print_lock = threading.Lock()
+
+
+def log(message: str) -> None:
+    """One line, written in one piece: threads' messages don't run into each other."""
+    with _print_lock:
+        sys.stdout.write(message + "\n")
+        sys.stdout.flush()
 
 
 def load_json(path: Path):
@@ -79,12 +92,26 @@ def atomic_output(out: Path) -> Iterator[Path]:
     """Yield a temporary path next to `out` and move it into place only if the block
     succeeds, so a crash never leaves a half-written file that later looks cached."""
     out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_name(f"{out.stem}.partial{out.suffix}")
+    tmp = out.with_name(f"{out.stem}.partial-{os.getpid()}-{threading.get_ident()}{out.suffix}")
     try:
         yield tmp
         os.replace(tmp, out)
     finally:
         tmp.unlink(missing_ok=True)
+
+
+_output_locks: dict[str, threading.Lock] = {}  # one small lock per output made; kept for the process
+_output_locks_guard = threading.Lock()
+
+
+@contextmanager
+def output_lock(out: Path) -> Iterator[None]:
+    """One thread at a time makes a given output. Two scenes with the same cache key (a line
+    or a picture used twice) then pay once: the second waits and finds the file made."""
+    with _output_locks_guard:
+        lock = _output_locks.setdefault(str(out), threading.Lock())
+    with lock:
+        yield
 
 
 def _stamp(out: Path) -> Path:

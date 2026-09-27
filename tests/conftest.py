@@ -62,6 +62,11 @@ def offline(request, monkeypatch, tmp_path):
     import requests
 
     import config
+    import ledger
+
+    ledger.stopping.clear()  # no test inherits another's stopped run
+    ledger.interrupted.clear()
+    monkeypatch.setattr(ledger, "_held", 0.0)
 
     def blocked(*args, **kwargs):
         raise PaidCallInOfflineTest("offline test reached a paid API without mocking it")

@@ -10,6 +10,7 @@ from typing import TypeVar
 import requests
 
 import config
+from utils import log
 
 TRANSIENT_STATUS = {408, 429, 500, 502, 503, 504}
 T = TypeVar("T")
@@ -58,6 +59,6 @@ def call(fn: Callable[[], T], what: str) -> T:
             if not is_transient(e) or retry == config.MAX_RETRIES:
                 raise
             wait = min(max(getattr(e, "retry_after_s", None) or backoff_s(retry), 0), config.RETRY_MAX_S)
-            print(f"    {what}: {str(e)[:120]}; retry {retry + 1}/{config.MAX_RETRIES} in {wait:.1f}s")
+            log(f"    {what}: {str(e)[:120]}; retry {retry + 1}/{config.MAX_RETRIES} in {wait:.1f}s")
             time.sleep(wait)
     raise AssertionError("unreachable")

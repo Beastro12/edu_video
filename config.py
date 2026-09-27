@@ -82,6 +82,7 @@ YOUTUBE_DESCRIPTION = "A calm, slow science documentary to relax or fall asleep 
 # --- Pipeline ---------------------------------------------------------------
 MAX_CRITIC_ROUNDS = 2
 MAX_MANIM_ATTEMPTS = 3
+WORKERS = 4                   # scenes whose narration / visual are generated at the same time
 MANIM_MAX_SHORTFALL = 0.25    # a render this much shorter than its scene gets one retiming request
 STILL_REVIEW_RETRIES = 2      # a still Claude rejects is regenerated with the critique this many times, then Manim
 STILL_REVIEW_MAX_TOKENS = 500 # the verdict is a short JSON

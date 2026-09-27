@@ -5,12 +5,16 @@ build/ledger.jsonl after it succeeds. The ledger is shared by all videos, so the
 total across runs: raise BUDGET_EUR (or archive the ledger) to allow more spend."""
 import json
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 import config
 
-_lock = threading.Lock()
+_lock = threading.RLock()  # re-entrant: reserve() holds it while check() reads the ledger
+stopping = threading.Event()  # set when a parallel run fails: no new paid call may start (P1-5)
+interrupted = threading.Event()  # set on Ctrl-C: jobs in flight give up too (a Veo poll)
 
 
 class BudgetExceeded(Exception):
@@ -22,31 +26,51 @@ def ledger_path() -> Path:
     return Path(config.BUILD_DIR) / "ledger.jsonl"
 
 
+def _entries() -> list[dict]:
+    with _lock:  # never read a line another thread is halfway through writing
+        path = ledger_path()
+        return [json.loads(line) for line in path.read_text().splitlines() if line.strip()] if path.exists() else []
+
+
 def spent_eur() -> float:
-    path = ledger_path()
-    if not path.exists():
-        return 0.0
-    return sum(json.loads(line)["est_cost_eur"] for line in path.read_text().splitlines() if line.strip())
+    return sum(e["est_cost_eur"] for e in _entries())
 
 
 def veo_clips_today() -> int:
     """Veo clips recorded today (UTC), for CLAUDE.md's daily limit. A Veo entry is the only
     one billed in seconds."""
-    path = ledger_path()
-    if not path.exists():
-        return 0
     today = datetime.now(timezone.utc).date().isoformat()
-    entries = (json.loads(line) for line in path.read_text().splitlines() if line.strip())
-    return sum(1 for e in entries if e["provider"] == "google" and "seconds" in e["units"]
+    return sum(1 for e in _entries() if e["provider"] == "google" and "seconds" in e["units"]
                and e["time"].startswith(today))
 
 
-def check(provider: str, est_cost_eur: float) -> None:
+_held = 0.0  # cost reserved by calls in flight (P1-5: several can run at once)
+
+
+def check(provider: str, est_cost_eur: float, held: float = 0.0) -> None:
     spent = spent_eur()
-    if spent + est_cost_eur > config.BUDGET_EUR:
+    if spent + held + est_cost_eur > config.BUDGET_EUR:
         raise BudgetExceeded(
-            f"{provider} call (~€{est_cost_eur:.3f}) would take spend to €{spent + est_cost_eur:.2f}, "
+            f"{provider} call (~€{est_cost_eur:.3f}) would take spend to €{spent + held + est_cost_eur:.2f}, "
             f"over BUDGET_EUR €{config.BUDGET_EUR:.2f} ({ledger_path()}). Stopping.")
+
+
+@contextmanager
+def reserve(provider: str, est_cost_eur: float) -> Iterator[None]:
+    """Hold this call's estimated cost for as long as it runs, checked against what is spent
+    plus what other calls in flight already hold, in one step under the lock. The call
+    records its actual cost before the hold is released, so the cap holds under concurrency."""
+    global _held
+    with _lock:
+        if stopping.is_set():
+            raise BudgetExceeded(f"{provider} call refused: the run is stopping after an earlier failure")
+        check(provider, est_cost_eur, _held)
+        _held += est_cost_eur
+    try:
+        yield
+    finally:
+        with _lock:
+            _held -= est_cost_eur
 
 
 def record(provider: str, model: str, units: dict, est_cost_eur: float) -> None:
