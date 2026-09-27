@@ -100,6 +100,8 @@ def make_visual(scene: dict, target_s: float, out_dir: Path, allow_veo: bool) ->
             return ai_video.render_scene(scene, out_dir), "ai"
         except ledger.BudgetExceeded:
             raise  # out of money is not a failed generation: stop the run
+        except ai_video.DailyCapReached as e:
+            print(f"    Veo daily cap reached ({e}); using a still")
         except Exception as e:  # noqa: BLE001
             print(f"    Veo failed ({str(e)[:100]}); trying a still")
     if vt in ("ai_video", "still") and image_agent.available():
@@ -158,14 +160,17 @@ def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool
     est = {"claude": sum(ledger.claude_eur(model, i, o) * (reviews if label == "review" else 1)
                          for label, i, o in calls),
            "elevenlabs": 0.0, "images": 0.0, "veo": 0.0}
+    veo_left = max(0, config.VEO_MAX_PER_DAY - ledger.veo_clips_today())
     for scene in scenes:
         audio = voice.cache_path(scene["narration"], work / "audio")
         if not audio.exists():
             est["elevenlabs"] += ledger.tts_eur(len(scene["narration"]))
         vt = scene["visual_type"]
-        if vt == "ai_video" and allow_veo:
-            if not ai_video.cache_path(scene, work / "visuals").exists():
+        veo_cached = vt == "ai_video" and allow_veo and ai_video.cache_path(scene, work / "visuals").exists()
+        if vt == "ai_video" and allow_veo and (veo_cached or veo_left > 0):
+            if not veo_cached:
                 est["veo"] += ledger.video_eur(config.VEO_CLIP_S)
+                veo_left -= 1
         elif vt in ("ai_video", "still") and image_agent.available():
             if not image_agent.cache_path(scene, work / "visuals").exists():
                 est["images"] += ledger.image_eur()
@@ -185,6 +190,8 @@ def print_estimate(topic: str, est: dict[str, float], worst: dict[str, float]) -
     for name, eur in est.items():
         print(f"  {name:<11} €{eur:.2f}")
     print(f"  {'total':<11} €{total:.2f}   (worst case, every critic round and Manim retry: €{worst_total:.2f})")
+    veo_left = max(0, config.VEO_MAX_PER_DAY - ledger.veo_clips_today())
+    print(f"  Veo clips left today: {veo_left} of {config.VEO_MAX_PER_DAY}")
     verdict = "fits" if spent + worst_total <= config.BUDGET_EUR else "may EXCEED"
     print(f"Spent so far €{spent:.2f} of the €{config.BUDGET_EUR:.2f} budget: this run {verdict} it.")
     if not image_agent.available():

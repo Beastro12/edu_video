@@ -29,6 +29,18 @@ def spent_eur() -> float:
     return sum(json.loads(line)["est_cost_eur"] for line in path.read_text().splitlines() if line.strip())
 
 
+def veo_clips_today() -> int:
+    """Veo clips recorded today (UTC), for CLAUDE.md's daily limit. A Veo entry is the only
+    one billed in seconds."""
+    path = ledger_path()
+    if not path.exists():
+        return 0
+    today = datetime.now(timezone.utc).date().isoformat()
+    entries = (json.loads(line) for line in path.read_text().splitlines() if line.strip())
+    return sum(1 for e in entries if e["provider"] == "google" and "seconds" in e["units"]
+               and e["time"].startswith(today))
+
+
 def check(provider: str, est_cost_eur: float) -> None:
     spent = spent_eur()
     if spent + est_cost_eur > config.BUDGET_EUR:

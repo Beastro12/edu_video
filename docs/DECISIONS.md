@@ -57,7 +57,10 @@ Known limits: check-then-call is not atomic (across threads or processes), so pa
 work could overshoot by the calls in flight; P1-5 must reserve the cost under a lock. Failed
 calls are assumed unbilled and not recorded, except a Veo job that times out: it keeps
 running on Google's side, so it is recorded as spent. `build/` is anchored to the project
-folder so a different cwd can't start a fresh ledger.
+folder so a different cwd can't start a fresh ledger. The Veo daily cap (P0-7,
+`VEO_MAX_PER_DAY`) is counted from the same ledger and shares its weakness: a clip counts
+once its job ends (up to 10 min), so two runs at once could each make 2. A Veo start that
+fails with a 5xx or timeout is counted as possibly started (it may have been accepted).
 
 **D11 — Use each SDK's own retry loop; one small helper for the rest.** Transient errors
 are retried up to `MAX_RETRIES` (4) with jittered exponential backoff; anything else

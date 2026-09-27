@@ -70,7 +70,9 @@ python pipeline.py "What happens inside a neutron star" --minutes 15 --estimate
 ```
 
 Prices are estimates in `config.py`, marked "verify": check them against each provider's
-price page. Veo dominates: about €3 per clip, up to one clip per chapter.
+price page. Veo dominates: about €3 per clip, up to one clip per chapter. Veo is also capped at
+`VEO_MAX_PER_DAY` clips per UTC day (2, counted from the ledger); past that, Veo scenes get a
+still instead.
 
 Edit the script in `script.json`, or in a `chapter_XX.json` (script.json is then
 rebuilt from the chapters). If both were edited, the run stops and asks you to keep one.

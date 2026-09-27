@@ -176,3 +176,21 @@ maps Imagen 4 to; 1K images are sharp enough for a 10% slow drift at 1080p.
 DIVERGED — none from DECISIONS (D3 is restored, not changed). CLAUDE.md still says "Imagen" in
 its flow line and file table; left for Pietro since it's his instruction file.
 NEXT — P0-7 (Veo daily cap from the ledger).
+
+## 2026-09-27 P0-7 Enforce "Veo: max 2 clips per day" in code
+CHANGED — `config.VEO_MAX_PER_DAY` (2). `ledger.veo_clips_today()` counts today's (UTC) Veo
+entries (the only ones billed in seconds). `agents/ai_video.py`: `DailyCapReached` raised before
+the budget check (a cached clip is still served); a start POST failing with 5xx/timeout is now
+recorded as "may have started". `pipeline.py`: "Veo daily cap reached …; using a still" log
+line; `--estimate` prices only the clips still allowed today and prints how many are left.
+New `tests/test_veo_cap.py` (4); one P0-4 test updated (see DIVERGED). README, D10 note.
+CHECKED — verified: red first (cap test got kind 'ai'; estimate priced 3 clips instead of 1;
+the yesterday test passed before too, now also proves image entries don't count). Mutation:
+without the start-failure record, the Veo start test fails. Reviewer subagent: no Critical;
+its Warning (a started-but-unanswered job escaped the cap) fixed; suggestions applied.
+`make check`: 63 passed.
+ASSUMED — Past the cap a Veo scene should become a still (not stop the run), per the task text.
+DIVERGED — P0-4's test asserted "no ledger entry" after a 503 on the Veo start; it now expects
+one "may have started" entry. Deliberate: over-counting only makes the budget and cap stricter,
+and D10 already treats a lost job as billed.
+NEXT — P1-1 (automated QA report). All P0 tasks are done except P0-3 (blocked on keys).

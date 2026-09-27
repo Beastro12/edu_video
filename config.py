@@ -88,6 +88,7 @@ TTS_USD_PER_1K_CHARS = 0.10             # verify: ElevenLabs API, Multilingual v
 IMAGE_USD_PER_IMAGE = {"1K": 0.067, "2K": 0.101, "4K": 0.151}  # verify: Gemini 3.1 Flash Image, by IMAGE_SIZE
 VEO_USD_PER_SECOND = 0.40               # verify
 VEO_CLIP_S = 8                          # verify: length of one Veo clip, billed per second
+VEO_MAX_PER_DAY = 2                     # CLAUDE.md hard rule; counted from the ledger, per UTC day
 
 # Rough sizes used only by `--estimate` (and the pre-call check for Claude's input).
 EST_CHARS_PER_TOKEN = 3                 # conservative: more tokens than typical English

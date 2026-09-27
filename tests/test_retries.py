@@ -200,16 +200,18 @@ def test_google_client_has_a_request_timeout(real_google, monkeypatch):
 
 
 def test_veo_start_is_retried_only_when_refused(real_google, fast, monkeypatch, tmp_path):
-    """A 5xx may come after Google accepted the job: retrying could start (and bill) a second one."""
+    """A 5xx may come after Google accepted the job: retrying could start (and bill) a second
+    one, so it isn't retried, and it is counted as possibly started (P0-7 review)."""
     seen = google_via(monkeypatch, [503, 200])
     with pytest.raises(errors.ServerError):
         ai_video.render_scene({"visual_description": "a dark sky"}, tmp_path)
     assert len(seen) == 1
+    assert len(ledger_entries()) == 1, "a job that may have started is counted"
     seen = google_via(monkeypatch, [429, 429, 400])
     with pytest.raises(errors.ClientError):
         ai_video.render_scene({"visual_description": "a dark sky"}, tmp_path)
     assert len(seen) == 3
-    assert ledger_entries() == [], "a job that never started costs nothing"
+    assert len(ledger_entries()) == 1, "a refused job (4xx) never started and costs nothing"
 
 
 class FakeVeo:

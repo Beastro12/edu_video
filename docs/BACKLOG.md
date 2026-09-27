@@ -65,7 +65,7 @@ Work top to bottom within a priority.
   defaults updated, marked "verify"; prices updated; DECISIONS entry; P0-3's live check
   covers the new names. If the SDK installed doesn't expose the needed types, log it.
 
-- [ ] P0-7 — Enforce CLAUDE.md's "Veo: max 2 clips per day" in code
+- [x] P0-7 — Enforce CLAUDE.md's "Veo: max 2 clips per day" in code
   Found in the P0-2 review: a run with a Google key asks Veo for one clip per chapter (4-6),
   and nothing enforces the daily limit.
   Accept: `VEO_MAX_PER_DAY` in config (default 2) counts today's (UTC) Veo entries in the

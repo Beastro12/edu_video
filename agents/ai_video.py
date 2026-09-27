@@ -22,21 +22,36 @@ def cache_path(scene: dict, out_dir: Path) -> Path:
     return out_dir / f"ai_{content_key('ai', prompt, config.VEO_MODEL, config.ASPECT_RATIO)}.mp4"
 
 
+class DailyCapReached(RuntimeError):
+    """Today's Veo clips are used up. A failed generation, so the scene falls back to a still."""
+
+
 def render_scene(scene: dict, out_dir: Path, timeout_s: int = 600) -> Path:
     out = cache_path(scene, out_dir)
     if out.exists():
         return out
+    if ledger.veo_clips_today() >= config.VEO_MAX_PER_DAY:
+        raise DailyCapReached(f"{config.VEO_MAX_PER_DAY} Veo clips already made today (VEO_MAX_PER_DAY)")
     cost = ledger.video_eur(config.VEO_CLIP_S)
     ledger.check("google", cost)
-    from google.genai import types
+    import httpx
+    from google.genai import errors, types
 
     client = google_client.make()
-    op = client.models.generate_videos(
-        model=config.VEO_MODEL,
-        source=types.GenerateVideosSource(prompt=scene["visual_description"] + STYLE),
-        config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO,
-                                          http_options=google_client.start_job_options()),
-    )
+    try:
+        op = client.models.generate_videos(
+            model=config.VEO_MODEL,
+            source=types.GenerateVideosSource(prompt=scene["visual_description"] + STYLE),
+            config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO,
+                                              http_options=google_client.start_job_options()),
+        )
+    except (errors.ServerError, httpx.TimeoutException) as e:
+        # Google may have accepted the job before failing to answer: count it (D10, D11),
+        # so neither the budget nor the daily cap can be walked around this way.
+        ledger.record("google", config.VEO_MODEL,
+                      {"seconds": config.VEO_CLIP_S, "note": f"start failed ({type(e).__name__}); may have started"},
+                      cost)
+        raise
     # From here the job is running on Google's side and is likely billed even if we lose it.
     start = time.time()
     try:
