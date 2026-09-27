@@ -28,6 +28,9 @@ Work top to bottom within a priority.
   `--no-ai-video`. Verifies and records in PROGRESS: Claude model name accepted,
   ElevenLabs accepts `speed` in voice_settings, Imagen model name and response shape
   (`generated_images[0].image.image_bytes`). Fix config/code for anything that fails.
+  (Since P0-6 the stills come from the Gemini image model through `generate_content`, so
+  read "Imagen" as `IMAGE_MODEL` and its `parts[].inline_data` answer; `test_live.py` runs
+  the current code.)
   If keys are missing, log it in NEEDS_PIETRO.md, mark `[~]`, and continue with other tasks.
 
 - [x] P0-4 — Retry with backoff on transient errors
@@ -143,15 +146,21 @@ Work top to bottom within a priority.
   Accept (once Pietro says the difference is visible): stills drift with jitter ≤ 0.1 px in
   the benchmark, same framing and motion as today; D18 updated with the new render time.
 
+- [ ] P1-11 — Pin dependency versions
+  Found in the foundation check (PLAN.md): requirements use `>=` only, and the installed
+  versions are exactly the tested minimums (anthropic 1.8.0, google-genai 2.25.0), so a new
+  SDK release could silently break calls the tests mock.
+  Accept: a `requirements.lock` (exact versions of the working environment) that README's
+  install uses; `requirements.txt` keeps the ranges; `make check` passes in a fresh venv
+  installed from the lock; a test fails if an installed version differs from the lock.
+
 ## P2 — scale and polish
 
-- [ ] P2-1 — Batch mode from `topics.txt`, with a variety check against past titles
-  and outlines (avoid near-duplicate videos; YouTube demonetises mass-produced content).
-- [ ] P2-2 — Thumbnail generation (1280×720, no text baked in by the image model; title
-  text added by FFmpeg/Pillow).
+Order set by docs/PLAN.md (2026-09-27): the run report first (the first live run needs
+it); batch mode waits for one verified live film.
+
 - [ ] P2-3 — Structured run log and a `run_report.md` per video (costs, timings, QA,
   fallbacks used).
-- [ ] P2-4 — README refresh reflecting everything above.
 - [ ] P2-5 — Prune per-scene files no film uses any more
   Found in the P1-6 review: files are named by a hash of their inputs, so any change of
   settings (e.g. D18's clip encoder) leaves the old clips behind; `clips/` roughly doubles.
@@ -161,3 +170,9 @@ Work top to bottom within a priority.
   are deleted only with `--prune-paid` (a reverted script edit would otherwise pay again).
   Nothing in `music/` is touched. Test: after a settings change and rebuild, `--prune` leaves
   exactly the referenced clips and every paid file.
+- [ ] P2-2 — Thumbnail generation (1280×720, no text baked in by the image model; title
+  text added by FFmpeg/Pillow).
+- [ ] P2-4 — README refresh reflecting everything above.
+- [~] P2-1 — Batch mode from `topics.txt`, with a variety check against past titles
+  and outlines (avoid near-duplicate videos; YouTube demonetises mass-produced content).
+  [blocked: needs one verified live film first, PLAN.md phase 3]

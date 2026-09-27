@@ -55,6 +55,9 @@ python pipeline.py "What happens inside a neutron star" --no-ai-video
 
 # Ask Veo / the image model again for scenes whose generation failed on an earlier run
 python pipeline.py "What happens inside a neutron star" --retry-failed
+
+# Skip the critic's review of each chapter (cheaper; not for films you publish)
+python pipeline.py "What happens inside a neutron star" --skip-critic
 ```
 
 A Veo clip or a still that fails for good (a safety filter, an invalid prompt, a Veo job

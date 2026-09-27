@@ -14,6 +14,11 @@ with Veo would stop partway. Prices are estimates from secondary sources, not ve
 ~€3 each for sleep content (stills already drift slowly), and keep €10 as the cap for the
 first live test runs. The cap is cumulative, so if you want Veo, raise `BUDGET_EUR` by
 about €20 for each Veo film you plan.
+**Update (foundation check, same day):** the numbers above predate the Veo daily cap (P0-7).
+With it, `--estimate` for a 15-min film with Google now says €8.85 typical (Veo €5.89 for
+2 clips; the other Veo scenes get stills) and €15.16 worst case; without Veo, €2.06. So one
+film fits the €10 budget in the typical case but may not in the worst, and a second film
+would not. The decision is unchanged; the "about €20 per Veo film" becomes about €9–15.
 
 ## 2026-09-27 — Lock the spend ledger against the agent (permissions: yours to change)
 **What:** two optional hardening changes that only you should make, because they change
@@ -94,3 +99,21 @@ files (their sound is a test tone: mute it).
 **Recommend:** run it on one of your stills (e.g. `build/<slug>/visuals/still_*.png`) and watch
 the films in pairs, full-screen, on your largest display. If you see a difference, say so and I'll do
 P1-10; if not, nothing to do.
+
+## 2026-09-27 — Music you have the rights to (licensing; blocks publishing)
+**What:** soft instrumental tracks for `music/`, which is empty.
+**Why:** with no tracks, every film gets a synthetic placeholder pad ("don't publish with it").
+Which music the channel may use is a licensing decision.
+**Tried:** checked `music/` (only `.gitkeep`). The bed builder loops and crossfades whatever is
+there, so a few tracks of a few minutes each are enough.
+**Recommend:** 3–6 calm instrumental tracks you hold a licence for (wav/mp3/flac/ogg/m4a),
+with their credits added to the YouTube description text if the licence asks for it.
+
+## 2026-09-27 — Run the Python tests in CI? (repo settings: yours to change)
+**What:** add an `edu_video` job to `.github/workflows/ci.yml`: install ffmpeg and
+`requirements-dev.txt`, then run `make check` (about 4 minutes).
+**Why:** PR #3's CI runs only the Next.js jobs, so none of edu_video's 134 tests run outside
+the agent's own `make check`. A regression pushed by mistake would go unnoticed.
+**Tried:** nothing; the workflow is shared with the Next.js app, so I haven't touched it.
+**Recommend:** yes, and I'll write it if you say so (with the lock file from P1-11, so CI
+installs the tested versions).
