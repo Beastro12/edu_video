@@ -81,6 +81,14 @@ assembly. `manifest.json` lists the files each scene used: to re-roll one with u
 text (say, a still you don't like), delete its file under `visuals/` and rerun. To have Claude
 rewrite a chapter, delete its `chapter_XX.json` and `script.json`.
 
+## Quality check
+
+Every run ends with `qa.py`, which writes `qa.json` next to the film and fails the run if
+the film misses a target: length vs the script, loudness (−16 LUFS ±1 LU), true peak
+(≤ −1 dBTP), music ducking under the voice (≥ 6 dB), black frames outside the opening and
+closing fades, and narration inside a crossfade. Run it on its own with
+`python qa.py build/<topic>/<film>.mp4` (exit code 1 on failure).
+
 ## Tuning
 
 Everything is in `config.py`: voice calmness and speed, pauses, crossfade length, how

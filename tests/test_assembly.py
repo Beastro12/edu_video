@@ -109,9 +109,9 @@ def test_long_chain_keeps_every_voice_in_place(small, media, tmp_path):
     # the film is exactly the sum of its scenes minus the overlaps, to the frame
     assert video_duration(narrated) == pytest.approx(last_start + durs[-1], abs=1e-3)
     secs, levels = decoded_audio(narrated)
-    # sine-tone narrations: the last voice is the first sound after the silence that starts
-    # 0.5 s before its scene does (the previous scene's tail)
-    window = int((last_start - 0.5) * 100)
+    # sine-tone narrations: the last voice is the first sound after the previous voice ends,
+    # which is where the previous scene's silent tail begins
+    window = int((last_start + config.XFADE_S - config.TAIL_S + 0.05) * 100)
     assert window / 100 + onset_s(levels[window:]) == pytest.approx(last_start + config.LEAD_IN_S, abs=0.03)
     assert secs == pytest.approx(video_duration(narrated), abs=AAC_FRAME)
 

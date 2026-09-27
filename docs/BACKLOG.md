@@ -74,7 +74,7 @@ Work top to bottom within a priority.
 
 ## P1 — quality
 
-- [ ] P1-1 — Automated video QA report
+- [x] P1-1 — Automated video QA report
   Accept: `qa.py build/<slug>/<final>.mp4` writes `qa.json` and exits non-zero on
   failure. Checks: duration vs script estimate, integrated loudness within ±1 LU of
   target, true peak ≤ −1 dBTP, ducking depth ≥ 6 dB (music level during speech vs

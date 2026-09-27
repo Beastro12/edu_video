@@ -112,7 +112,8 @@ def crossfade_concat(clips: list[Path], out: Path) -> Path:
         parts.append(f"[{v}][{i}:v]xfade=transition=fade:duration={xf}:offset={offset}[v{i}]")
         parts.append(f"[{a}][s{i}]acrossfade=d={xf}[a{i}]")
         v, a = f"v{i}", f"a{i}"
-    graph = ";".join(parts) + f";[{v}]fade=t=in:d=1.5,fade=t=out:st={total - 2.5:.2f}:d=2.5[vout]"
+    graph = ";".join(parts) + (f";[{v}]fade=t=in:d={config.FADE_IN_S},"
+                               f"fade=t=out:st={total - config.FADE_OUT_S:.2f}:d={config.FADE_OUT_S}[vout]")
     args = ["-filter_complex", graph, "-map", "[vout]", "-map", f"[{a}]",
             *VIDEO_ENC, "-r", str(FPS), *AUDIO_ENC]
     key = content_key("xfade", [file_hash(c) for c in clips], args)
@@ -124,30 +125,56 @@ def crossfade_concat(clips: list[Path], out: Path) -> Path:
     return out
 
 
-def add_music(narrated: Path, bed: Path | None, out: Path) -> Path:
-    total = video_duration(narrated)
-    master = f"loudnorm=I={config.TARGET_LUFS}:TP=-1.5:LRA=11,aresample={RATE},{RESTAMP}"
-    if bed is None:
-        args = ["-map", "0:v", "-map", "0:a", "-c:v", "copy", "-af", master,
-                *AUDIO_ENC, "-t", f"{total:.3f}"]
-    else:
-        fc = (
-            "[0:a]asplit=2[voice][key];"
-            f"[1:a]aresample={RATE},aformat=channel_layouts=stereo,"
-            f"volume={config.MUSIC_VOLUME},afade=t=in:d={config.MUSIC_FADE_S}[mus];"
+def music_graph() -> str:
+    """Input [1:a] music bed. Output [mus]: the bed at its level in the mix, before ducking."""
+    return (f"[1:a]aresample={RATE},aformat=channel_layouts=stereo,"
+            f"volume={config.MUSIC_VOLUME},afade=t=in:d={config.MUSIC_FADE_S}[mus]")
+
+
+def duck_graph() -> str:
+    """Inputs [0:a] narration, [1:a] music bed. Outputs [voice] and [duck], the bed pushed
+    down by the voice. Shared with qa.py, which measures how far it ducks."""
+    return ("[0:a]asplit=2[voice][key];" + music_graph() + ";"
             # sidechain: the voice pushes the music down while it speaks
             f"[mus][key]sidechaincompress=threshold=0.03:ratio={config.DUCK_RATIO}"
-            ":attack=80:release=900[duck];"
-            "[voice][duck]amix=inputs=2:duration=first:normalize=0,"
-            f"afade=t=out:st={max(total - config.MUSIC_FADE_S, 0):.2f}:d={config.MUSIC_FADE_S},"
-            f"{master}[aout]"
-        )
-        args = ["-filter_complex", fc, "-map", "0:v", "-map", "[aout]",
-                "-c:v", "copy", *AUDIO_ENC, "-t", f"{total:.3f}"]
-    key = content_key("mix", file_hash(narrated), file_hash(bed) if bed else None, args)
+            ":attack=80:release=900[duck]")
+
+
+def master_chain() -> str:
+    return (f"loudnorm=I={config.TARGET_LUFS}:TP={config.MASTER_TP_DBTP}:LRA=11,"
+            f"aresample={RATE},{RESTAMP}")
+
+
+def mix_graph(total: float, voice_gain: float = 1.0, master: bool = True) -> str:
+    """Inputs [0:a] narration, [1:a] bed; output [aout]. qa.py renders this same graph with
+    voice_gain=0 (the voice still keys the sidechain, then is muted) to hear the music exactly
+    as mixed, and with master=False to see what went into the final loudnorm."""
+    return (duck_graph() + ";"
+            f"[voice]volume={voice_gain}[v];"
+            "[v][duck]amix=inputs=2:duration=first:normalize=0,"
+            f"afade=t=out:st={max(total - config.MUSIC_FADE_S, 0):.2f}:d={config.MUSIC_FADE_S}"
+            f"{',' + master_chain() if master else ''}[aout]")
+
+
+def _mix_args(narrated: Path, bed: Path | None) -> list[str]:
+    total = video_duration(narrated)
+    if bed is None:
+        return ["-map", "0:v", "-map", "0:a", "-c:v", "copy", "-af", master_chain(),
+                *AUDIO_ENC, "-t", f"{total:.3f}"]
+    return ["-filter_complex", mix_graph(total), "-map", "0:v", "-map", "[aout]",
+            "-c:v", "copy", *AUDIO_ENC, "-t", f"{total:.3f}"]
+
+
+def mix_key(narrated: Path, bed: Path | None) -> str:
+    """What add_music would stamp on a film mixed now from these inputs (qa.py compares)."""
+    return content_key("mix", file_hash(narrated), file_hash(bed) if bed else None, _mix_args(narrated, bed))
+
+
+def add_music(narrated: Path, bed: Path | None, out: Path) -> Path:
+    key = mix_key(narrated, bed)
     if is_fresh(out, key):
         return out
     inputs = ["-i", str(narrated)] + (["-i", str(bed)] if bed else [])
     with stamped_output(out, key) as tmp:
-        run(["ffmpeg", "-y", *inputs, *args, str(tmp)])
+        run(["ffmpeg", "-y", *inputs, *_mix_args(narrated, bed), str(tmp)])
     return out

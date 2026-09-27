@@ -4,10 +4,12 @@
     python pipeline.py "What happens inside a neutron star" --script-only   # review before spending
 """
 import argparse
+import sys
 from pathlib import Path
 
 import config
 import ledger
+import qa
 from agents import ai_video, critic, image_agent, manim_agent, music, script_agent, voice
 from assembly import add_music, build_scene_clip, crossfade_concat
 from utils import content_key, duration, load_json, save_json, slugify, video_duration
@@ -253,7 +255,11 @@ def main():
         print(f"Script saved to {work / 'script.json'}. Edit it, then rerun without --script-only.")
         return
 
-    render_film(script, work, allow_veo, args.topic)
+    final = render_film(script, work, allow_veo, args.topic)
+    report = qa.run_qa(final)  # writes qa.json next to the film
+    qa.print_report(report)
+    if not report["passed"]:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

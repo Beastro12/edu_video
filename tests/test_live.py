@@ -73,6 +73,12 @@ def test_film_is_about_a_minute(film):
     assert 30 < duration(film["final"]) < 150
 
 
+def test_film_passes_qa(film):
+    import qa
+    report = qa.run_qa(film["final"])
+    assert report["passed"], {k: v for k, v in report["checks"].items() if not v["passed"]}
+
+
 @pytest.mark.live_veo
 def test_veo_model_makes_one_clip():
     """Opt-in, NOT part of `make smoke`: costs about €3 and counts toward CLAUDE.md's 2 Veo

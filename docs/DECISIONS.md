@@ -118,3 +118,28 @@ API shut down Imagen 4 on 2026-08-17 and Veo 3.0 on 2026-06-30; model names and 
 Veo's clip length is left at the model default (8 s assumed in the ledger) rather than
 sending `duration_seconds`, which isn't verified for Veo 3.1 and isn't covered by the smoke
 test (it runs without Veo).
+
+**D14 — The crossfade sits in silence on both sides.** `XFADE_S` must be shorter than
+`LEAD_IN_S` as well as `TAIL_S` (both asserted). D5 only guarded the tail: with lead-in 0.6 s
+and a 1.2 s crossfade, every narration began halfway through the crossfade, so its first
+0.6 s was faded in by `acrossfade` (measured by qa.py: silence for 0.6 s, then the voice at
+−30 → −19 dBFS across the rest of the fade, in all 5 crossfades of a test film) while the
+picture was still dissolving. Now lead-in 1.4 s and tail 1.4 s (were 0.6 / 1.8): 0.2 s of
+silence on each side of every crossfade, 1.6 s between narrations (was 1.2), each scene 0.4 s
+longer. The values are a pacing choice (NEEDS_PIETRO); the constraint is the decision.
+
+**D15 — QA measures the film, not the settings; master ceiling −2 dBTP.** qa.py's ducking
+check first requires the film's mix stamp to match what `add_music` would make now from the
+folder's narration and bed (else: fail, rebuild). It then renders the one shared `mix_graph`
+before the master with the voice muted after it keys the sidechain (the music exactly as
+wired), adds the master's per-window gain (film level − pre-master level), and compares the
+music under speech with real pauses (≥ `QA_PAUSE_S` of silence). Evidence: a first version
+compared the bed with vs without the sidechain from config; the reviewer showed a film mixed
+with no ducking and one mixed with the raw bed both passed at 10.5 dB. Now both fail; the
+healthy test film reads 10.8 dB (D2: ~10 dB by hand). `blackdetect` uses `pix_th` 0.05: at
+0.10 the Manim background (#0f1419) alone counted as black. Master true-peak ceiling −2.0
+(was −1.5): bursty pink noise through the master measured −1.2 dBTP at −1.5 (QA limit −1.0)
+and −1.8 at −2.0, loudness unchanged (−16.6 / −16.7 LUFS). Limits: the check trusts the
+stamp (a film replaced after mixing, with other music under the speech, would not be seen,
+since the voice dominates both renders there), and it needs pauses of `QA_PAUSE_S` + 0.2 s
+between narrations (asserted in config). Real music is untested until the first live run.

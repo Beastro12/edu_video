@@ -194,3 +194,38 @@ DIVERGED — P0-4's test asserted "no ledger entry" after a 503 on the Veo start
 one "may have started" entry. Deliberate: over-counting only makes the budget and cap stricter,
 and D10 already treats a lost job as billed.
 NEXT — P1-1 (automated QA report). All P0 tasks are done except P0-3 (blocked on keys).
+
+## 2026-09-27 P1-1 Automated video QA report
+CHANGED — New `qa.py` (`python qa.py build/<slug>/<film>.mp4` → `qa.json`, exit 1 on failure):
+duration vs the script's estimate (words at WORDS_PER_MIN + scene pads − crossfades, ±30%),
+scene count (manifest vs script), integrated loudness (±1 LU of −16), true peak (≤ −1 dBTP), ducking depth (≥ 6 dB), black
+segments outside the opening/closing fades, narration inside any crossfade. `pipeline.main`
+runs it after rendering and exits 1 if it fails. `config.py`: QA_* thresholds, FADE_IN_S /
+FADE_OUT_S, MASTER_TP_DBTP −2.0 (was −1.5), LEAD_IN_S 0.6→1.4 and TAIL_S 1.8→1.4 with asserts
+(crossfade inside silence both sides; ≥ 1.2 s between narrations) (D14). `assembly.py`: one
+shared `mix_graph()` (+ `music_graph`, `duck_graph`, `mix_key`) used by `add_music` and qa.py;
+the mix graph gained a `[voice]volume=1.0` stage, so existing films re-mix once (FFmpeg only).
+New `tests/test_qa.py` (13); `tests/test_live.py` checks QA; `tests/test_assembly.py` derives its onset search from
+config. README "Quality check", D14, D15, NEEDS_PIETRO (pacing FYI).
+CHECKED — verified: a healthy 6-scene test film (real assembly code, 320×180, one scene on
+the dark Manim background) passes all 7 checks: 39.2 s vs 38.8 s estimate, −16.3 LUFS,
+−11.1 dBTP, ducking 10.8 dB in the film (D2's hand measurement ~10 dB), no stray black, silent
+crossfades. Faults, each failing its own check: film turned down 8 dB after mixing → loudness
+only; voice at −34 LUFS (under the sidechain's absolute threshold) → ducking; film mixed with
+DUCK_RATIO 1 → ducking (stale stamp) and, with QA on the same settings, ducking measured ~0;
+mix wired to the raw bed → ducking; lead-in 0.6 s → narration_in_crossfade + ducking (no
+pause long enough); black scene → black_frames; script 3× longer → duration; ~0 dBFS tone →
+true_peak; CLI exit codes; pipeline exits 1 on a failed report. Master true peak on bursty
+pink noise: −1.2 dBTP at TP −1.5, −1.8 at −2.0. Reviewer subagent: first pass Critical — my
+first ducking check measured the settings, not the film (films with no ducking passed at
+10.5 dB); fixed and re-reviewed: no Critical (its probes: stale → fail, mis-wired → 0.2 dB).
+It also found the pix_th 0.10 false positive on our own background (verified; now 0.05).
+`make check`: 76 passed (3 min 27 s; the QA tests build nine small films).
+ASSUMED — ±30% for the duration check (voice speed is unknown before TTS). The new lead-in
+and tail values (1.4 / 1.4 s) are a pacing choice, flagged in NEEDS_PIETRO.
+DIVERGED — D5's rule extended by D14 (evidence in D14); LEAD_IN_S/TAIL_S changed. (An earlier
+draft of this entry claimed a with/without-sidechain comparison was equivalent to "speech vs
+pauses"; the reviewer showed it measured config, not the film. The shipped check measures the
+film, speech vs pauses, as the acceptance says.)
+NEXT — P1-2 (vision review of stills). Risks: `make check` is getting slow (~3.5 min); the
+ducking margin (4.8 dB) is untested on real music — confirm on the first live run.

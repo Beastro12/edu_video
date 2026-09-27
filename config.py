@@ -40,12 +40,15 @@ WIDTH, HEIGHT, FPS = 1920, 1080, 30
 AUDIO_RATE = 48000            # every scene is a whole number of frames = AUDIO_RATE / FPS samples each
 assert AUDIO_RATE % FPS == 0, "a video frame must be a whole number of audio samples"
 ASPECT_RATIO = "16:9"         # what the image/video models are asked for; matches WIDTH x HEIGHT
-LEAD_IN_S = 0.6              # silence before each scene's narration
-TAIL_S = 1.8                 # silence after it
-XFADE_S = 1.2                # crossfade between scenes; must stay below TAIL_S
+LEAD_IN_S = 1.4              # silence before each scene's narration
+TAIL_S = 1.4                 # silence after it
+XFADE_S = 1.2                # crossfade between scenes; must stay below LEAD_IN_S and TAIL_S (D5, D14)
 KEN_BURNS_ZOOM = 0.10        # how far stills drift (10%) over a scene
 MAX_AI_SLOWDOWN = 1.6        # stretch Veo clips up to this before holding the last frame
-assert XFADE_S < TAIL_S, "crossfade would overlap narration"
+FADE_IN_S = 1.5              # the film fades in from black...
+FADE_OUT_S = 2.5             # ...and out to black
+assert XFADE_S < TAIL_S, "crossfade would overlap the end of a narration"
+assert XFADE_S < LEAD_IN_S, "crossfade would overlap the start of the next narration"
 assert abs(XFADE_S * FPS - round(XFADE_S * FPS)) < 1e-9, "crossfade must be whole frames (D12)"
 
 # --- Music ----------------------------------------------------------------
@@ -56,6 +59,21 @@ MUSIC_FADE_S = 6.0           # fade in/out of the whole bed
 MUSIC_XFADE_S = 5.0          # crossfade between tracks / loop repeats (no audible seam)
 VOICE_LUFS = -18             # every scene's narration is levelled to this before mixing
 TARGET_LUFS = -16            # final master
+MASTER_TP_DBTP = -2.0        # true-peak ceiling for loudnorm; AAC adds a little, QA allows -1 (was -1.5)
+
+# --- QA (qa.py) ---------------------------------------------------------------
+QA_DURATION_TOL = 0.30        # film length vs the script's estimate (words at WORDS_PER_MIN)
+QA_LOUDNESS_TOL_LU = 1.0      # integrated loudness within this of TARGET_LUFS
+QA_MAX_TRUE_PEAK_DBTP = -1.0
+QA_MIN_DUCKING_DB = 6.0       # music during speech vs during pauses
+QA_SPEECH_DB = -40.0          # narration louder than this (dBFS, 100 ms RMS) counts as speech
+QA_SILENCE_DB = -50.0         # ...quieter than this counts as silence
+QA_BLACK_MIN_S = 0.5          # shortest black segment reported
+QA_BLACK_PIX_TH = 0.05        # luma below this counts as black; 0.10 flagged the Manim background
+QA_PAUSE_S = 1.0              # voice silent this long = a pause (the ducking compressor has released)
+QA_ATTACK_S = 0.3             # skip this much of each speech onset (compressor attack)
+assert LEAD_IN_S + TAIL_S - XFADE_S >= QA_PAUSE_S + 0.2, \
+    "pauses between narrations too short for the music to come back (and for qa.py to hear it)"
 
 # --- Pipeline ---------------------------------------------------------------
 MAX_CRITIC_ROUNDS = 2

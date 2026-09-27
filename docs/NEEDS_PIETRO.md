@@ -54,3 +54,16 @@ scene quietly becoming a still.
 it never runs by default (not in `make check` or `make smoke`).
 **Recommend:** only if you want Veo in films at all (see the first entry): after `make smoke`
 passes, run `pytest -m live_veo tests/test_live.py` once.
+
+## 2026-09-27 — FYI: pauses between narrations are longer (taste; change if you like)
+**What:** `LEAD_IN_S` 0.6 → 1.4 s and `TAIL_S` 1.8 → 1.4 s in `config.py` (P1-1, D14).
+**Why:** the new QA check found every narration started halfway through a crossfade, so its
+first words were faded in while the picture was still dissolving. The crossfade now sits in
+silence on both sides. Side effects: 1.6 s between narrations instead of 1.2 s, and each
+scene 0.4 s longer (a 15-min film has ~31 scenes, so about +13 s). Changing these values later
+re-renders every Manim scene (their target length is part of the cache key: a Claude call each).
+**Tried:** kept the gentle 1.2 s crossfade and split the extra silence evenly.
+**Recommend:** keep it unless the pauses feel too long. Other values work as long as
+`XFADE_S` stays below both, and the pause between narrations (`LEAD_IN_S + TAIL_S − XFADE_S`)
+stays at least 1.2 s so the ducked music audibly comes back (config asserts both); a shorter
+crossfade (e.g. 0.6 s) would keep the old length but dissolve faster.
