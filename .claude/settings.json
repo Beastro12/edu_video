@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Read", "Edit", "Write", "Glob", "Grep",
+      "Bash(make check)", "Bash(make lint)", "Bash(make test)", "Bash(make smoke)",
+      "Bash(pytest *)", "Bash(ruff *)",
+      "Bash(python pipeline.py *)", "Bash(python qa.py *)", "Bash(python -m *)", "Bash(python -c *)",
+      "Bash(ffmpeg *)", "Bash(ffprobe *)", "Bash(manim *)",
+      "Bash(git status*)", "Bash(git diff*)", "Bash(git log*)", "Bash(git show*)",
+      "Bash(git add *)", "Bash(git commit *)", "Bash(git restore *)",
+      "Bash(git switch *)", "Bash(git checkout -b *)", "Bash(git branch)",
+      "Bash(pip install *)", "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)",
+      "Bash(wc *)", "Bash(mkdir *)", "Bash(touch *)", "Bash(du *)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Bash(cat .env)", "Bash(env)", "Bash(printenv*)",
+      "Bash(git push)", "Bash(git push *)", "Bash(git reset --hard*)", "Bash(git rebase *)",
+      "Bash(git branch -D *)", "Bash(git clean *)",
+      "Bash(rm -rf *)", "Bash(curl *)", "Bash(wget *)", "Bash(sudo *)"
+    ]
+  }
+}

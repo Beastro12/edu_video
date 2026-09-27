@@ -1,0 +1,5 @@
+anthropic>=0.40
+requests>=2.31
+python-dotenv>=1.0
+google-genai>=1.0      # only needed for AI video scenes (Veo)
+manim>=0.18            # also needs system deps: ffmpeg, cairo, pango (see README)
