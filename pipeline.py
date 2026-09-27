@@ -164,7 +164,7 @@ def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool
     scenes, calls = _planned_scenes(minutes, work)
     model = config.CLAUDE_MODEL
     reviews = 0 if skip_critic else (config.MAX_CRITIC_ROUNDS if worst_case else 1)
-    manim_tries = config.MAX_MANIM_ATTEMPTS if worst_case else 1
+    manim_tries = config.MAX_MANIM_ATTEMPTS + 1 if worst_case else 1  # worst: every fix round, then a retime
     est = {"claude": sum(ledger.claude_eur(model, i, o) * (reviews if label == "review" else 1)
                          for label, i, o in calls),
            "elevenlabs": 0.0, "images": 0.0, "veo": 0.0}

@@ -159,6 +159,7 @@ def test_manim_cache_ignores_scene_id_but_not_inputs(tmp_path, monkeypatch, medi
 
     monkeypatch.setattr(manim_agent, "text", fake_text)
     monkeypatch.setattr(manim_agent, "_render", lambda py, cls, media_dir: media / "manim.mp4")
+    monkeypatch.setattr(config, "MANIM_MAX_SHORTFALL", 1.0)  # about cache keys, not retiming (P1-3)
     scene = {"id": 3, "concept": "orbits", "narration": "The moon falls around us.",
              "visual_type": "manim", "visual_description": "a small circle orbits a larger one"}
 

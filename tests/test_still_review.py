@@ -185,7 +185,7 @@ def test_estimate_prices_a_still_by_what_is_left_to_decide(world, tmp_path):
     assert (est["images"], est["claude"]) == pytest.approx((ledger.image_eur(), rate_review))
     worst, _ = estimate_for(tmp_path, SCENE, worst_case=True)
     tries = 1 + config.STILL_REVIEW_RETRIES
-    assert worst["claude"] == pytest.approx(tries * rate_review + config.MAX_MANIM_ATTEMPTS * manim)
+    assert worst["claude"] == pytest.approx(tries * rate_review + (config.MAX_MANIM_ATTEMPTS + 1) * manim)
 
     world.verdicts[:] = [(True, [])]
     image_agent.reviewed_still(SCENE, visuals)

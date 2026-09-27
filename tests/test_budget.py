@@ -215,7 +215,7 @@ def test_estimate_without_google_counts_visuals_as_manim_and_skips_cached_ones(m
     one_manim = ledger.claude_eur(config.CLAUDE_MODEL, *config.EST_MANIM_TOKENS)
     assert est["images"] == est["veo"] == 0
     assert est["claude"] == pytest.approx(one_manim), "only the uncached Manim scene costs"
-    assert worst["claude"] == pytest.approx(config.MAX_MANIM_ATTEMPTS * one_manim)
+    assert worst["claude"] == pytest.approx((config.MAX_MANIM_ATTEMPTS + 1) * one_manim)
 
 
 def test_estimate_skip_critic_drops_the_review_calls(monkeypatch, tmp_path):

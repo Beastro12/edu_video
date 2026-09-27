@@ -257,3 +257,25 @@ DIVERGED — test_budget's estimate fixture now marks scene 2 as decided with an
 on disk (a bare still file no longer means "nothing to buy": its review would still be owed).
 NEXT — P1-3 (Manim timing fit). Not verified live: how strict the reviewer is on real images
 (too strict → many Manim fallbacks and extra spend; watch the review logs on the first run).
+
+## 2026-09-27 P1-3 Manim timing fit
+CHANGED — `agents/manim_agent.py`: `_fit_timing` runs after a successful render (outside the
+error-fix loop): if the render is more than `MANIM_MAX_SHORTFALL` (25%) shorter than its scene,
+Claude is asked once to retime it (measured and target lengths given, "not longer"); the render
+with the smaller timing error is kept, an overshoot counting double (the assembler cuts the end
+off). Fail-soft: any problem while retiming keeps the original; only BudgetExceeded stops the
+run. `config.MANIM_MAX_SHORTFALL`. `--estimate` worst case counts the retime call. New
+`tests/test_manim_timing.py` (7); a cache test isolates itself from retiming; two estimate
+expectations include the retime.
+CHECKED — verified: red first (a 4.0 s render for a 10 s scene stayed 4.0 s; Claude asked once
+instead of twice). Now measured before 4.0 s → after 9.5 s (mocked renderer whose clip length
+comes from the code). Retime that fails, is shorter (3 s) or overshoots (15 s) keeps the
+original; exactly one extra Claude call. Reviewer subagent: no Critical; its warnings fixed
+(retime inside the render try could discard a good render and trigger a fix round; estimate
+missed the call). Mutations caught: symmetric timing error; a retiming error inside the render
+try. `make check`: 95 passed (3 min 21 s).
+ASSUMED — Overshoot counts double; renders cached before this change are not retimed (the
+threshold isn't in the cache key, which is fine: only new renders are affected).
+DIVERGED — none.
+NEXT — P1-4 (YouTube metadata + SRT). Not verified live: whether Claude's retimes land close
+to the target on real Manim code.

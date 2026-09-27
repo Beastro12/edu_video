@@ -87,7 +87,7 @@ Work top to bottom within a priority.
   sleep viewing). On failure, regenerate with the critique appended (max 2), then fall
   back to Manim. Result logged per scene.
 
-- [ ] P1-3 — Manim timing fit
+- [x] P1-3 — Manim timing fit
   Accept: if a render is >25% shorter than the target, ask Claude once to retime the
   scene. Measured before/after in a mocked test.
 
