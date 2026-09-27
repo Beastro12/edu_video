@@ -9,11 +9,13 @@ from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from pathlib import Path
 
 import config
+import failures as failure_log
 import ledger
 import metadata
 import qa
 from agents import ai_video, critic, image_agent, manim_agent, music, script_agent, voice
 from assembly import add_music, build_scene_clip, crossfade_concat
+from failures import FailedEarlier, Failures
 from utils import content_key, duration, load_json, log, save_json, slugify, video_duration
 
 
@@ -95,26 +97,32 @@ def get_script(topic: str, minutes: float, work: Path, skip_critic: bool) -> dic
     return script
 
 
-def make_visual(scene: dict, target_s: float, out_dir: Path, allow_veo: bool) -> tuple[Path, str]:
+def make_visual(scene: dict, target_s: float, out_dir: Path, allow_veo: bool,
+                failures: Failures | None = None) -> tuple[Path, str]:
     """Returns (path, kind). Falls back video -> still -> Manim, so one failed
-    generation never stops the whole film."""
+    generation never stops the whole film. Failures are recorded in `failures` and, on
+    later runs, skipped straight to the fallback (P1-7)."""
     vt = scene["visual_type"]
     if vt == "ai_video" and allow_veo:
         try:
-            return ai_video.render_scene(scene, out_dir), "ai"
+            return ai_video.render_scene(scene, out_dir, failures=failures), "ai"
         except ledger.BudgetExceeded:
             raise  # out of money is not a failed generation: stop the run
         except ai_video.DailyCapReached as e:
             log(f"    scene {scene['id']}: Veo daily cap reached ({e}); using a still")
+        except FailedEarlier as e:
+            log(f"    scene {scene['id']}: Veo {e}; using a still")
         except Exception as e:  # noqa: BLE001
             log(f"    scene {scene['id']}: Veo failed ({str(e)[:100]}); trying a still")
     if vt in ("ai_video", "still") and image_agent.available():
         try:
-            return image_agent.reviewed_still(scene, out_dir), "still"
+            return image_agent.reviewed_still(scene, out_dir, failures), "still"
         except ledger.BudgetExceeded:
             raise
         except image_agent.StillRejected as e:
             log(f"    scene {scene['id']}: still failed review ({str(e)[:120]}); falling back to Manim")
+        except FailedEarlier as e:
+            log(f"    scene {scene['id']}: image model {e}; falling back to Manim")
         except Exception as e:  # noqa: BLE001
             log(f"    scene {scene['id']}: image model failed ({str(e)[:100]}); falling back to Manim")
     atmospheric = vt != "manim"
@@ -159,11 +167,13 @@ def _still_rejected_for_good(scene: dict, visuals: Path) -> bool:
 
 
 def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool,
-                  worst_case: bool = False) -> dict[str, float]:
+                  worst_case: bool = False, retry_failed: bool = False) -> dict[str, float]:
     """Projected spend in EUR for what this run would still have to buy. Cached work costs
-    nothing. Calls no paid API. Typical: one critic round, one Manim attempt; worst case:
-    every critic round and every Manim retry."""
+    nothing, and a generation that failed before costs its fallback (P1-7). Calls no paid API.
+    Typical: one critic round, one Manim attempt; worst case: every critic round and every
+    Manim retry."""
     scenes, calls = _planned_scenes(minutes, work)
+    failed = Failures(failure_log.path(work), retry=retry_failed).earlier
     model = config.CLAUDE_MODEL
     reviews = 0 if skip_critic else (config.MAX_CRITIC_ROUNDS if worst_case else 1)
     manim_tries = config.MAX_MANIM_ATTEMPTS + 1 if worst_case else 1  # worst: every fix round, then a retime
@@ -176,13 +186,15 @@ def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool
         if not audio.exists():
             est["elevenlabs"] += ledger.tts_eur(len(scene["narration"]))
         vt = scene["visual_type"]
-        veo_cached = vt == "ai_video" and allow_veo and ai_video.cache_path(scene, work / "visuals").exists()
-        if vt == "ai_video" and allow_veo and (veo_cached or veo_left > 0):
+        veo = ai_video.cache_path(scene, work / "visuals")
+        veo_cached = vt == "ai_video" and allow_veo and veo.exists()
+        if vt == "ai_video" and allow_veo and (veo_cached or (veo_left > 0 and not failed(veo.stem))):
             if not veo_cached:
                 est["veo"] += ledger.video_eur(config.VEO_CLIP_S)
                 veo_left -= 1
         elif (vt in ("ai_video", "still") and image_agent.available()
-              and not _still_rejected_for_good(scene, work / "visuals")):
+              and not _still_rejected_for_good(scene, work / "visuals")
+              and not failed(image_agent.next_still(scene, work / "visuals").stem)):
             if not image_agent.is_decided(scene, work / "visuals"):
                 tries = 1 + config.STILL_REVIEW_RETRIES if worst_case else 1
                 est["images"] += tries * ledger.image_eur()
@@ -239,25 +251,27 @@ def in_parallel(fn, items: list) -> list:
         ledger.interrupted.clear()
 
 
-def generate_assets(script: dict, work: Path, allow_veo: bool) -> list[dict]:
+def generate_assets(script: dict, work: Path, allow_veo: bool, retry_failed: bool = False) -> list[dict]:
     """Everything paid for, per scene: narration first (its length sets the scene's), then the
-    visual. Independent scenes run concurrently (P1-5)."""
+    visual. Independent scenes run concurrently (P1-5). Visuals that failed on an earlier run
+    go straight to their fallback unless `retry_failed` (P1-7)."""
     scenes = script["scenes"]
+    failures = Failures(failure_log.path(work), retry=retry_failed)
     print(f"• narration: {len(scenes)} scenes, {config.WORKERS} at a time")
     audio = in_parallel(lambda s: voice.narrate(s["narration"], work / "audio"), scenes)
     targets = [config.LEAD_IN_S + duration(a) + config.TAIL_S for a in audio]
     print("• visuals")
-    visuals = in_parallel(lambda i: make_visual(scenes[i], targets[i], work / "visuals", allow_veo),
+    visuals = in_parallel(lambda i: make_visual(scenes[i], targets[i], work / "visuals", allow_veo, failures),
                           list(range(len(scenes))))
     return [{"scene": s, "audio": a, "visual": v, "kind": k}
             for s, a, (v, k) in zip(scenes, audio, visuals, strict=True)]
 
 
-def render_film(script: dict, work: Path, allow_veo: bool, seed: str) -> Path:
+def render_film(script: dict, work: Path, allow_veo: bool, seed: str, retry_failed: bool = False) -> Path:
     """Per-scene files live in audio/, visuals/ and clips/, named by a hash of their inputs.
     manifest.json maps each scene id to the files it used."""
     clips, manifest = [], []
-    for asset in generate_assets(script, work, allow_veo):
+    for asset in generate_assets(script, work, allow_veo, retry_failed):
         scene, narration, visual, kind = asset["scene"], asset["audio"], asset["visual"], asset["kind"]
         print(f"• scene {scene['id']}/{len(script['scenes'])}: {scene['concept']} [{kind}]")
         clip = build_scene_clip(visual, narration, work / "clips", kind, scene["id"])
@@ -293,13 +307,17 @@ def main():
     ap.add_argument("--no-ai-video", action="store_true", help="skip Veo; use stills instead")
     ap.add_argument("--skip-critic", action="store_true")
     ap.add_argument("--estimate", action="store_true", help="print the projected cost and exit; calls nothing")
+    ap.add_argument("--retry-failed", action="store_true",
+                    help="ask Veo / the image model again for scenes whose generation failed on an earlier run")
     args = ap.parse_args()
 
     work = Path(config.BUILD_DIR) / slugify(args.topic)
     allow_veo = ai_video.available() and not args.no_ai_video
     if args.estimate:
-        print_estimate(args.topic, estimate_cost(args.minutes, work, allow_veo, args.skip_critic),
-                       estimate_cost(args.minutes, work, allow_veo, args.skip_critic, worst_case=True))
+        print_estimate(args.topic, estimate_cost(args.minutes, work, allow_veo, args.skip_critic,
+                                                 retry_failed=args.retry_failed),
+                       estimate_cost(args.minutes, work, allow_veo, args.skip_critic, worst_case=True,
+                                     retry_failed=args.retry_failed))
         return
     work.mkdir(parents=True, exist_ok=True)
 
@@ -308,7 +326,7 @@ def main():
         print(f"Script saved to {work / 'script.json'}. Edit it, then rerun without --script-only.")
         return
 
-    final = render_film(script, work, allow_veo, args.topic)
+    final = render_film(script, work, allow_veo, args.topic, args.retry_failed)
     metadata.write_metadata(work)  # metadata.json + subtitles.srt for YouTube
     print(f"• YouTube metadata: {work / 'metadata.json'}, {work / 'subtitles.srt'}")
     report = qa.run_qa(final)  # writes qa.json next to the film

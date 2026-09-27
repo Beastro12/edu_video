@@ -7,6 +7,7 @@ import config
 import ledger
 import retries
 from agents import google_client
+from failures import Failures
 from utils import atomic_output, content_key, output_lock
 
 STYLE = (" Calm documentary footage, one continuous slow camera move, soft natural "
@@ -27,15 +28,30 @@ _veo_lock = threading.Lock()
 
 
 class DailyCapReached(RuntimeError):
-    """Today's Veo clips are used up. A failed generation, so the scene falls back to a still."""
+    """Today's Veo clips are used up. The scene falls back to a still, as after a failed
+    generation, but nothing is recorded as failed: tomorrow it can have its clip (P1-7)."""
 
 
-def render_scene(scene: dict, out_dir: Path, timeout_s: int = 600) -> Path:
+def render_scene(scene: dict, out_dir: Path, timeout_s: int = 600, failures: Failures | None = None) -> Path:
+    """A failed generation is recorded in `failures` (P1-7) and not attempted again unless
+    it retries failures."""
     out = cache_path(scene, out_dir)
     with output_lock(out):
         if out.exists():
             return out
-        return _start(scene, out, timeout_s)
+        if failures:
+            failures.check(out.stem)
+        try:
+            made = _start(scene, out, timeout_s)
+        except (ledger.BudgetExceeded, DailyCapReached):
+            raise  # not a failed generation: nothing was asked of Veo
+        except Exception as e:
+            if failures:
+                failures.record(out.stem, "veo", scene.get("id"), e)
+            raise
+        if failures:
+            failures.clear(out.stem)
+        return made
 
 
 def _start(scene: dict, out: Path, timeout_s: int) -> Path:

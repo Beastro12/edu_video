@@ -109,7 +109,7 @@ Work top to bottom within a priority.
   Accept: still-scene render time drops ≥40% without visible jitter. Measure the
   current 3× upscale approach vs alternatives; record numbers in DECISIONS.
 
-- [ ] P1-7 — Don't re-attempt failed paid generations on every rerun
+- [x] P1-7 — Don't re-attempt failed paid generations on every rerun
   Found during P0-1: `make_visual` falls back Veo → still → Manim, but only successes are
   cached, so every rerun of a film asks Veo (and Imagen) again for scenes that already
   failed, paying or waiting up to 10 min each time.

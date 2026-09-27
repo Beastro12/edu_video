@@ -5,6 +5,7 @@ from pathlib import Path
 import config
 import ledger
 from agents import google_client, still_critic
+from failures import Failures
 from utils import atomic_output, content_key, load_json, output_lock, run, save_json
 
 STYLE = (" Calm, dark, low-contrast, cinematic, deep blues and soft warm highlights, "
@@ -22,13 +23,27 @@ def cache_path(scene: dict, out_dir: Path) -> Path:
     return out_dir / f"still_{key}.png"
 
 
-def render_still(scene: dict, out_dir: Path) -> Path:
+def render_still(scene: dict, out_dir: Path, failures: Failures | None = None) -> Path:
+    """A failed generation is recorded in `failures` (P1-7) and not attempted again unless
+    it retries failures."""
     out = cache_path(scene, out_dir)
     with output_lock(out):
         if out.exists():
             return out
-        with ledger.reserve("google", ledger.image_eur()):
-            return _buy(scene, out)
+        if failures:
+            failures.check(out.stem)
+        try:
+            with ledger.reserve("google", ledger.image_eur()):
+                made = _buy(scene, out)
+        except ledger.BudgetExceeded:
+            raise  # not a failed generation: nothing was asked of the image model
+        except Exception as e:
+            if failures:
+                failures.record(out.stem, "still", scene.get("id"), e)
+            raise
+        if failures:
+            failures.clear(out.stem)
+        return made
 
 
 def _buy(scene: dict, out: Path) -> Path:
@@ -87,6 +102,12 @@ def is_decided(scene: dict, out_dir: Path) -> bool:
         log["accepted"] is None or (out_dir / log["accepted"]).exists())
 
 
+def next_still(scene: dict, out_dir: Path) -> Path:
+    """The file the scene's next review attempt would make (for --estimate: did it fail before?)."""
+    attempts = (review_log(scene, out_dir) or {"attempts": []})["attempts"]
+    return cache_path({**scene, "visual_description": _retry_prompt(scene, attempts)}, out_dir)
+
+
 def _retry_prompt(scene: dict, attempts: list[dict]) -> str:
     """Say what to show, not what went wrong: naming 'letters' can make the model draw some."""
     if not attempts:
@@ -97,16 +118,16 @@ def _retry_prompt(scene: dict, attempts: list[dict]) -> str:
             f"to the concept ({scene['concept']}). Earlier versions were turned down: {fixes}.")
 
 
-def reviewed_still(scene: dict, out_dir: Path) -> Path:
+def reviewed_still(scene: dict, out_dir: Path, failures: Failures | None = None) -> Path:
     """A still that passed Claude's review. A rejected one is regenerated with the critique
     folded into the prompt (STILL_REVIEW_RETRIES times), then StillRejected. Each attempt is
     written to review_<key>.json as it happens, so neither a rerun nor a crash pays twice."""
     path = review_path(scene, out_dir)
     with output_lock(path):  # a scene with the same picture waits for this decision
-        return _decide(scene, out_dir, path)
+        return _decide(scene, out_dir, path, failures)
 
 
-def _decide(scene: dict, out_dir: Path, path: Path) -> Path:
+def _decide(scene: dict, out_dir: Path, path: Path, failures: Failures | None) -> Path:
     log = review_log(scene, out_dir) or {"accepted": None, "done": False, "attempts": []}
     if log.get("done"):
         if log["accepted"] and (out_dir / log["accepted"]).exists():
@@ -117,7 +138,7 @@ def _decide(scene: dict, out_dir: Path, path: Path) -> Path:
         log = {"accepted": None, "done": False, "attempts": []}  # accepted file is gone: decide again
     while len(log["attempts"]) < 1 + config.STILL_REVIEW_RETRIES:
         prompt = _retry_prompt(scene, log["attempts"])
-        still = render_still({**scene, "visual_description": prompt}, out_dir)
+        still = render_still({**scene, "visual_description": prompt}, out_dir, failures)
         verdict = still_critic.review(scene, still)
         log["attempts"].append({"still": still.name, "prompt": prompt, "ok": verdict["ok"],
                                 "problems": verdict["problems"]})

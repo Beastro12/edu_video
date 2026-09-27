@@ -231,3 +231,23 @@ between the film's fades; "detail" is the variance of the Laplacian of the middl
   be reproduced (the P1-6 review's Critical), and (iii) an intermediate version measured the
   push-in on a 480 px strip, where motion isn't uniform, so the estimate moved with wherever the
   encoder left detail (0.54 → 0.65 px for identical motion).
+
+**D19 — A failed paid generation is recorded, not re-attempted (P1-7).** Before, only
+successes were cached, so every rerun asked Veo (and the image model) again for scenes that
+had already failed, paying or waiting up to 10 minutes each time. Now `ai_video.render_scene`
+and `image_agent.render_still` record a failure under the cache key of the generation itself
+(`failures.json`, per film) and later runs raise `FailedEarlier` at once, which `make_visual`
+treats like the failure (still, then Manim). Recorded at the generation call, not in
+`make_visual`: a still's review is a separate Claude call, and a Claude outage must not make
+later runs throw away a still that was bought. Not recorded: `BudgetExceeded`,
+`DailyCapReached` (nothing was asked of the provider) and anything while Ctrl-C is stopping the
+run; a still Claude rejects is already kept by P1-2's review log. Only errors about the request
+itself are recorded (`failures.lasting`: a safety filter, an invalid prompt, no image or video,
+a Veo job that never finished). Transient errors (`retries.is_transient`, D11, and any other
+httpx transport error) and this machine's errors (OSError, a failed FFmpeg command) are not:
+asking again may well work, and a network outage must not push a whole film to Manim. Every
+skip is logged with the error and the `--retry-failed` hint. Under `--retry-failed`, a key that
+fails again in that run isn't asked twice (two scenes sharing a picture pay once). Error text
+is redacted of API keys before it is saved or logged (`utils.redact`, applied in `log()`).
+`--estimate` counts the fallback for such scenes, including a failure on a later review
+attempt.

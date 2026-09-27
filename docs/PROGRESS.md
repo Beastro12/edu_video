@@ -371,3 +371,31 @@ failed (0.540 → 0.649) on a 480 px strip; I diagnosed the instrument (identica
 strips), replaced it, and re-measured everything with the replacement.
 NEXT — P1-7 (don't re-attempt failed paid generations). Risk: none known from P1-6; existing
 builds re-render their clips once (free), and old clips stay on disk until P2-5.
+
+## 2026-09-27 P1-7 Don't re-attempt failed paid generations
+CHANGED — new `failures.py`: `Failures` (per film `build/<slug>/failures.json`: what, scene,
+error, time, by the generation's cache key), `FailedEarlier`, `lasting()` (which errors are worth
+remembering). `ai_video.render_scene` and `image_agent.render_still` check it before paying,
+record a lasting failure, clear the entry on success. `pipeline.py`: `make_visual` passes it and
+falls back on `FailedEarlier`; `generate_assets` / `render_film` take `retry_failed`; CLI
+`--retry-failed`; `--estimate` counts the fallback for failed scenes (`image_agent.next_still`
+finds the next review attempt's file). `utils.py`: `CommandFailed` (FFmpeg/Manim errors, a
+RuntimeError subclass), `redact()`, applied in `log()`. README, D19. New `tests/test_failures.py`
+(18).
+CHECKED — verified: red first (no module; the estimate counted €2.94 for a Veo clip that would
+not be bought). The mocked second run makes no provider call for a failed Veo scene, a failed
+still, or a failure on a later review attempt; `--retry-failed` asks again and a success clears
+the entry; budget stop, daily cap, Ctrl-C, a network error and a full disk are not recorded;
+two scenes sharing a failed key ask once even when retrying; 32 concurrent records all kept; no
+key in failures.json or the output. 16 mutants, each killed (the lock one 5 of 5 times; the
+concurrent test passes 10 of 10 with the lock). Reviewer: no Critical; 4 warnings, all fixed
+— the main one showed my D19 claim false (I wrote transient errors "cannot be told apart", but
+`retries.is_transient` does exactly that; they were being recorded, so a network blip would have
+pushed a film's remaining scenes to Manim for good) — plus the retry double-pay, 5 untested
+behaviours, and unredacted log lines; 3 suggestions taken. Fixes checked by the mutants, not
+re-reviewed. `make check`: 134 passed (3 min 48 s).
+ASSUMED — a failure is kept until `--retry-failed` (no expiry); a changed timeout or key doesn't
+clear it (README says to use `--retry-failed`). A still rejected for good by Claude stays P1-2's
+decision; `--retry-failed` doesn't reopen it (delete its `review_*.json` to).
+DIVERGED — none from DECISIONS.
+NEXT — P1-8 (the closing fade dims the last narration).

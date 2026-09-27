@@ -10,12 +10,18 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+import config
+
+
+class CommandFailed(RuntimeError):
+    """An external command (FFmpeg, Manim) exited with an error."""
+
 
 def run(cmd: list[str], cwd: str | None = None) -> subprocess.CompletedProcess:
     """Run a command; raise with stderr attached so failures are diagnosable."""
     result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(
+        raise CommandFailed(
             f"Command failed: {' '.join(cmd)}\n--- stderr (tail) ---\n{result.stderr[-3000:]}"
         )
     return result
@@ -57,10 +63,19 @@ def save_json(path: Path, data) -> None:
 _print_lock = threading.Lock()
 
 
+def redact(text: str) -> str:
+    """`text` with any API key in it replaced by ***: for error text that is logged or saved."""
+    for key in (config.ANTHROPIC_API_KEY, config.ELEVENLABS_API_KEY, config.GOOGLE_API_KEY):
+        if key:
+            text = text.replace(key, "***")
+    return text
+
+
 def log(message: str) -> None:
-    """One line, written in one piece: threads' messages don't run into each other."""
+    """One line, written in one piece: threads' messages don't run into each other. Keys are
+    redacted, since messages carry provider error text."""
     with _print_lock:
-        sys.stdout.write(message + "\n")
+        sys.stdout.write(redact(message) + "\n")
         sys.stdout.flush()
 
 

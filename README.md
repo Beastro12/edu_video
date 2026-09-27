@@ -52,7 +52,18 @@ python pipeline.py "What happens inside a neutron star" --minutes 15
 
 # Skip Veo entirely (stills + Manim only, cheaper)
 python pipeline.py "What happens inside a neutron star" --no-ai-video
+
+# Ask Veo / the image model again for scenes whose generation failed on an earlier run
+python pipeline.py "What happens inside a neutron star" --retry-failed
 ```
+
+A Veo clip or a still that fails for good (a safety filter, an invalid prompt, a Veo job
+that never finishes) is recorded in `build/<topic>/failures.json`, and later runs go straight to that
+scene's fallback (still, then Manim) instead of paying or waiting for the same failure again;
+the run says so for each such scene. `--retry-failed` asks again, and a success clears the
+entry; use it too after a change that could fix a failure without changing the prompt (a new
+key, a longer timeout). Errors that say nothing about the request (network, rate limits,
+server errors, a full disk), budget stops, the Veo daily cap and Ctrl-C are not recorded.
 
 ## Money
 
