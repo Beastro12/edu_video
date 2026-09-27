@@ -108,9 +108,11 @@ def make_visual(scene: dict, target_s: float, out_dir: Path, allow_veo: bool) ->
             print(f"    Veo failed ({str(e)[:100]}); trying a still")
     if vt in ("ai_video", "still") and image_agent.available():
         try:
-            return image_agent.render_still(scene, out_dir), "still"
+            return image_agent.reviewed_still(scene, out_dir), "still"
         except ledger.BudgetExceeded:
             raise
+        except image_agent.StillRejected as e:
+            print(f"    still failed review ({str(e)[:120]}); falling back to Manim")
         except Exception as e:  # noqa: BLE001
             print(f"    Image model failed ({str(e)[:100]}); falling back to Manim")
     atmospheric = vt != "manim"
@@ -150,6 +152,10 @@ def _planned_scenes(minutes: float, work: Path) -> tuple[list[dict], list[tuple[
     return scenes, calls
 
 
+def _still_rejected_for_good(scene: dict, visuals: Path) -> bool:
+    return image_agent.is_decided(scene, visuals) and image_agent.review_log(scene, visuals)["accepted"] is None
+
+
 def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool,
                   worst_case: bool = False) -> dict[str, float]:
     """Projected spend in EUR for what this run would still have to buy. Cached work costs
@@ -173,9 +179,14 @@ def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool
             if not veo_cached:
                 est["veo"] += ledger.video_eur(config.VEO_CLIP_S)
                 veo_left -= 1
-        elif vt in ("ai_video", "still") and image_agent.available():
-            if not image_agent.cache_path(scene, work / "visuals").exists():
-                est["images"] += ledger.image_eur()
+        elif (vt in ("ai_video", "still") and image_agent.available()
+              and not _still_rejected_for_good(scene, work / "visuals")):
+            if not image_agent.is_decided(scene, work / "visuals"):
+                tries = 1 + config.STILL_REVIEW_RETRIES if worst_case else 1
+                est["images"] += tries * ledger.image_eur()
+                est["claude"] += tries * ledger.claude_eur(model, *config.EST_STILL_REVIEW_TOKENS)
+                if worst_case:  # every attempt rejected: the scene then needs Manim as well
+                    est["claude"] += manim_tries * ledger.claude_eur(model, *config.EST_MANIM_TOKENS)
         else:
             cached = audio.exists() and manim_agent.cache_path(
                 scene, config.LEAD_IN_S + duration(audio) + config.TAIL_S, work / "visuals",
@@ -211,10 +222,12 @@ def render_film(script: dict, work: Path, allow_veo: bool, seed: str) -> Path:
         visual, kind = make_visual(scene, target, work / "visuals", allow_veo)
         clip = build_scene_clip(visual, narration, work / "clips", kind, scene["id"])
         clips.append(clip)
+        review = image_agent.review_path(scene, work / "visuals")
         manifest.append({"id": scene["id"], "concept": scene["concept"], "kind": kind,
                          "audio": str(narration.relative_to(work)),
                          "visual": str(visual.relative_to(work)),
-                         "clip": str(clip.relative_to(work))})
+                         "clip": str(clip.relative_to(work)),
+                         "still_review": str(review.relative_to(work)) if kind != "ai" and review.exists() else None})
     save_json(work / "manifest.json", {"title": script["title"], "scenes": manifest})
 
     print("• assembling (crossfades)")

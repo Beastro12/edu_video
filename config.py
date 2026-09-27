@@ -78,6 +78,9 @@ assert LEAD_IN_S + TAIL_S - XFADE_S >= QA_PAUSE_S + 0.2, \
 # --- Pipeline ---------------------------------------------------------------
 MAX_CRITIC_ROUNDS = 2
 MAX_MANIM_ATTEMPTS = 3
+STILL_REVIEW_RETRIES = 2      # a still Claude rejects is regenerated with the critique this many times, then Manim
+STILL_REVIEW_MAX_TOKENS = 500 # the verdict is a short JSON
+PREVIEW_PX = 1024             # long edge of the JPEG preview Claude reviews
 # Transient API errors (429, 5xx, timeouts): retried with jittered exponential backoff,
 # wait = min(base * 2**n + random(0, jitter), max). Other errors fail on the first try.
 MAX_RETRIES = 4
@@ -118,3 +121,5 @@ EST_MANIM_SHARE = 0.3                   # D3: ~30% of scenes are diagrams; plus 
 EST_PROMPT_TOKENS = 2_000               # system prompt + outline sent with each script call
 EST_SCRIPT_TOKENS_PER_WORD = 3          # chapter JSON out: narration + visual descriptions
 EST_MANIM_TOKENS = (1_500, 2_500)       # (input, output) per Manim attempt
+EST_IMAGE_TOKENS = 1_600                # one image in a Claude request (1024 px preview)
+EST_STILL_REVIEW_TOKENS = (2_000, 200)  # (input, output) per vision review of a still

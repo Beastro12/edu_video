@@ -23,7 +23,7 @@ def veo_entry(when: datetime) -> None:
 
 
 @pytest.fixture
-def google(monkeypatch):
+def google(monkeypatch, stills_approved):
     calls = []
 
     class FakeModels:

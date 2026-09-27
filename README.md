@@ -15,8 +15,9 @@ Several AI agents make one narrated, slow-paced science documentary:
 | 5c | Veo (Google) | At most one moving shot per chapter |
 | 6 | Assembly (FFmpeg) | Crossfades between scenes, seamless music bed ducked under the voice, −16 LUFS |
 
-Failures fall back instead of stopping: Veo → still → Manim. Without a Google key,
-every scene is rendered with Manim.
+Every still is checked by Claude (vision) for text, wrong physics and anything unsettling;
+a rejected one is regenerated with the critique (twice at most). Failures fall back instead
+of stopping: Veo → still → Manim. Without a Google key, every scene is rendered with Manim.
 
 Everything caches in `build/<topic>/` (outline, each chapter, audio, visuals). If a run
 crashes, rerun the same command and it resumes without paying again. Cached files are

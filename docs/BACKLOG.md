@@ -81,7 +81,7 @@ Work top to bottom within a priority.
   pauses), no black frames except the opening/closing fades (`blackdetect`), no
   narration overlapping a crossfade. Pipeline runs it at the end.
 
-- [ ] P1-2 — Visual review of stills
+- [x] P1-2 — Visual review of stills
   Accept: after generating a still, a Claude vision call checks it against the scene
   (text/letters in the image, physically wrong depictions, unsettling imagery for
   sleep viewing). On failure, regenerate with the critique appended (max 2), then fall

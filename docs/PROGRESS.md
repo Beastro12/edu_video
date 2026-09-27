@@ -229,3 +229,31 @@ pauses"; the reviewer showed it measured config, not the film. The shipped check
 film, speech vs pauses, as the acceptance says.)
 NEXT — P1-2 (vision review of stills). Risks: `make check` is getting slow (~3.5 min); the
 ducking margin (4.8 dB) is untested on real music — confirm on the first live run.
+
+## 2026-09-27 P1-2 Visual review of stills
+CHANGED — New `agents/still_critic.py` (Claude vision verdict `{ok, problems}` on a JPEG
+preview + the scene's concept and description). `agents/image_agent.py`: `reviewed_still`
+(generate → review → regenerate with a "what to show" prompt plus earlier problems,
+STILL_REVIEW_RETRIES=2 → `StillRejected`), per-scene `review_<key>.json` written after every
+attempt, `is_decided`. `agents/llm.py`: `structured(images=...)` with a text + fixed per-image
+token estimate; a tool call cut off at max_tokens raises. `utils.preview_jpeg` (long edge ≤
+PREVIEW_PX). `pipeline.py`: `make_visual` uses the review ("still failed review …; falling back
+to Manim"); manifest links each scene's review; `--estimate` prices undecided stills (image +
+review), rejected ones as Manim, and a worst case with every retry plus Manim. `config.py`:
+STILL_REVIEW_RETRIES, STILL_REVIEW_MAX_TOKENS, PREVIEW_PX, EST_IMAGE_TOKENS,
+EST_STILL_REVIEW_TOKENS. Tests: `tests/test_still_review.py` (12); conftest `stills_approved`
+for tests not about the review; the paid-call guard is now a BaseException so the fallbacks'
+`except Exception` can't hide it. README, D16.
+CHECKED — verified: red first (7 of 8 original tests failed: no review happened). Reviewer
+subagent: no Critical; its warnings fixed with tests that fail without the fix (mutations):
+concept not in the review key; base64 counted as text (a real 1376×768 preview is >20k base64
+chars; estimates for tiny and real images now equal and < €0.02); log saved only at the end
+(a crash re-reviewed attempt 1 and accepted the rejected image); guard as AssertionError
+(swallowed into Manim). `--estimate` for rejected / accepted-but-missing / accepted states
+tested. `make check`: 88 passed (3 min 22 s).
+ASSUMED — 2 retries then Manim (from the task text); the reviewer's standard ("artistic
+simplification is fine when it doesn't teach something wrong").
+DIVERGED — test_budget's estimate fixture now marks scene 2 as decided with an accepted still
+on disk (a bare still file no longer means "nothing to buy": its review would still be owed).
+NEXT — P1-3 (Manim timing fit). Not verified live: how strict the reviewer is on real images
+(too strict → many Manim fallbacks and extra spend; watch the review logs on the first run).

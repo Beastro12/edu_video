@@ -143,3 +143,16 @@ and −1.8 at −2.0, loudness unchanged (−16.6 / −16.7 LUFS). Limits: the c
 stamp (a film replaced after mixing, with other music under the speech, would not be seen,
 since the voice dominates both renders there), and it needs pauses of `QA_PAUSE_S` + 0.2 s
 between narrations (asserted in config). Real music is untested until the first live run.
+
+**D16 — Every still is reviewed by Claude (vision) before it is used.** Answers D3's risk
+("the critic reads text, not images, so a still can show wrong physics"). The reviewer sees a
+≤1024 px JPEG preview plus the scene's concept and description, and rejects text/letters,
+physically wrong depictions and anything unsettling for sleep viewing. A rejected still is
+regenerated with a prompt that says what to show (naming "letters" can make the model draw
+some) plus the earlier problems, up to `STILL_REVIEW_RETRIES` (2) times; then the scene falls
+back to Manim (D7 extended). The decision is cached per scene in `visuals/review_<key>.json`,
+keyed by everything both models are given (prompt, concept, models, reviewer prompt/schema),
+written after every attempt so a crash or rerun never pays twice; `manifest.json` links it.
+Cost: one extra image (~€0.06) and one review (~€0.01) per rejected attempt; the image cost
+estimate uses a fixed `EST_IMAGE_TOKENS` because base64 counted as text would look like
+tens of thousands of tokens. Not verified live: reviewer strictness on real images.

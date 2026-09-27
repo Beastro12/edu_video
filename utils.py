@@ -3,6 +3,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -30,6 +31,16 @@ def video_duration(path: str | Path) -> float:
     out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=duration",
                "-of", "json", str(path)]).stdout
     return float(json.loads(out)["streams"][0]["duration"])
+
+
+def preview_jpeg(path: str | Path, px: int = 1024) -> bytes:
+    """A small JPEG of an image (long edge at most `px`), for sending to a vision model."""
+    with tempfile.TemporaryDirectory() as d:
+        out = Path(d) / "preview.jpg"
+        run(["ffmpeg", "-v", "error", "-y", "-i", str(path),
+             "-vf", f"scale='min({px},iw)':'min({px},ih)':force_original_aspect_ratio=decrease",
+             "-q:v", "4", "-frames:v", "1", str(out)])
+        return out.read_bytes()
 
 
 def slugify(text: str) -> str:

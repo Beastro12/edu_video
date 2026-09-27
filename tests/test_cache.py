@@ -24,7 +24,7 @@ def speech_s(text: str) -> float:
 
 
 @pytest.fixture
-def film(tmp_path, monkeypatch):
+def film(tmp_path, monkeypatch, stills_approved):
     paid = {"tts": [], "image": []}
     made = {}  # prompt -> image bytes the fake image model returned for it
     spoken = {}  # text -> mp3 bytes the fake ElevenLabs returned for it

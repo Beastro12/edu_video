@@ -49,6 +49,10 @@ def onset_s(levels: list[float], threshold_db: float = -40) -> float:
     return next(i for i, db in enumerate(levels) if db > threshold_db) / 100
 
 
+class PaidCallInOfflineTest(BaseException):
+    """Not an Exception: the pipeline's fallbacks catch Exception, and must not hide this."""
+
+
 @pytest.fixture(autouse=True)
 def offline(request, monkeypatch, tmp_path):
     """Every offline test gets its own build dir, so the spend ledger never touches build/,
@@ -60,13 +64,20 @@ def offline(request, monkeypatch, tmp_path):
     import config
 
     def blocked(*args, **kwargs):
-        raise AssertionError("offline test reached a paid API without mocking it")
+        raise PaidCallInOfflineTest("offline test reached a paid API without mocking it")
 
     monkeypatch.setattr(config, "BUILD_DIR", str(tmp_path / "build"))
     monkeypatch.setattr(requests.Session, "request", blocked)  # requests.post and friends
     monkeypatch.setattr(requests, "post", blocked)
     monkeypatch.setattr(anthropic.resources.messages.Messages, "create", blocked)  # any client
     monkeypatch.setattr(google.genai, "Client", blocked)
+
+
+@pytest.fixture
+def stills_approved(monkeypatch):
+    """For tests that make stills but aren't about the vision review (P1-2): every still passes."""
+    from agents import still_critic
+    monkeypatch.setattr(still_critic, "review", lambda scene, still: {"ok": True, "problems": []})
 
 
 @pytest.fixture

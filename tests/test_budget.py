@@ -158,13 +158,18 @@ def test_estimate_prices_uncached_work_without_calling_anything(monkeypatch, tmp
     (work / "script.json").write_text(json.dumps({"title": "T", "scenes": scenes}))
     voice.cache_path(scenes[0]["narration"], work / "audio").parent.mkdir(parents=True)
     voice.cache_path(scenes[0]["narration"], work / "audio").write_bytes(b"cached")
-    image_agent.cache_path(scenes[1], work / "visuals").parent.mkdir(parents=True)
-    image_agent.cache_path(scenes[1], work / "visuals").write_bytes(b"cached")
+    # scene 2's still is already made and accepted: nothing left to buy for it
+    visuals = work / "visuals"
+    visuals.mkdir(parents=True)
+    (visuals / "accepted.png").write_bytes(b"png")
+    image_agent.review_path(scenes[1], visuals).write_text(
+        '{"accepted": "accepted.png", "done": true, "attempts": []}')
 
     est = pipeline.estimate_cost(15, work, allow_veo=True, skip_critic=False)
 
     rate = config.USD_TO_EUR
-    assert est["claude"] == 0  # script exists; no Manim scenes
+    # script exists and there are no Manim scenes: Claude only reviews scene 1's still
+    assert est["claude"] == pytest.approx(ledger.claude_eur(config.CLAUDE_MODEL, *config.EST_STILL_REVIEW_TOKENS))
     assert est["elevenlabs"] == pytest.approx(500 / 1000 * config.TTS_USD_PER_1K_CHARS * rate)
     assert est["images"] == pytest.approx(1 * config.IMAGE_USD_PER_IMAGE[config.IMAGE_SIZE] * rate)
     assert est["veo"] == pytest.approx(config.VEO_CLIP_S * config.VEO_USD_PER_SECOND * rate)
