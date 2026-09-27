@@ -78,3 +78,18 @@ are written up in NEEDS_PIETRO.md.
 NEXT — P0-3 (live smoke): keys are missing in this environment, so it will be logged and
 marked blocked. Then P0-4 (retries: Anthropic SDK \`max_retries\`, google-genai
 \`HttpRetryOptions\`, own helper for ElevenLabs).
+
+## 2026-09-27 P0-3 Live smoke test — BLOCKED (no keys)
+CHANGED — \`tests/test_live.py\` (marked \`live\`): seeds a 1-chapter, 1-minute outline, runs the
+real writer + critic + render with \`allow_veo=False\` into \`build/smoke-test/\` (spend goes to
+the real ledger), then checks: Claude model in the ledger, an ElevenLabs call succeeded with
+\`speed\` in voice_settings, at least one still came from \`IMAGE_MODEL\` (not all fell back to
+Manim), film length 30-150 s. NEEDS_PIETRO.md: keys + network hosts. BACKLOG: P0-3 \`[~]\`.
+CHECKED — verified: \`pytest -m live tests/test_live.py\` → 4 skipped ("missing ..."); \`make
+check\` deselects it (27 passed). Key presence checked with \`test -n\`, values never printed.
+Not verified: anything live.
+ASSUMED — Seeding outline.json is how to get "1 chapter": the outline agent is told to plan
+4-6 chapters, so \`--minutes 1\` alone wouldn't give one.
+DIVERGED — The reviewer subagent was not run for this blocked task; \`tests/test_live.py\` is
+included in the P0-4 review instead (it adds no offline code path).
+NEXT — P0-4. One blocked task so far (stop rule: 3 in a row).

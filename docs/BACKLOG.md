@@ -23,7 +23,7 @@ Work top to bottom within a priority.
   the run. `python pipeline.py "<topic>" --estimate` prints the projected cost without
   calling anything. Offline tests with mocked providers.
 
-- [ ] P0-3 — Live smoke test (needs keys; run once)
+- [~] P0-3 — Live smoke test (needs keys; run once) [blocked: no API keys in this environment; tests/test_live.py written, see NEEDS_PIETRO.md]
   Accept: `tests/test_live.py` marked `live` renders a ~1-minute, 1-chapter film with
   `--no-ai-video`. Verifies and records in PROGRESS: Claude model name accepted,
   ElevenLabs accepts `speed` in voice_settings, Imagen model name and response shape
