@@ -58,7 +58,7 @@ def tts_eur(chars: int) -> float:
 
 
 def image_eur() -> float:
-    return config.IMAGE_USD_PER_IMAGE * config.USD_TO_EUR
+    return config.IMAGE_USD_PER_IMAGE[config.IMAGE_SIZE] * config.USD_TO_EUR
 
 
 def video_eur(seconds: float) -> float:

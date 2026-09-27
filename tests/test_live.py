@@ -71,3 +71,18 @@ def test_image_model_returns_an_image(film):
 
 def test_film_is_about_a_minute(film):
     assert 30 < duration(film["final"]) < 150
+
+
+@pytest.mark.live_veo
+def test_veo_model_makes_one_clip():
+    """Opt-in, NOT part of `make smoke`: costs about €3 and counts toward CLAUDE.md's 2 Veo
+    clips per day. Run with `pytest -m live_veo tests/test_live.py` to verify VEO_MODEL."""
+    if not config.GOOGLE_API_KEY:
+        pytest.skip("missing GOOGLE_API_KEY")
+    from agents import ai_video
+    work = Path(config.BUILD_DIR) / "smoke-test-veo"
+    config.BUDGET_EUR = min(config.BUDGET_EUR, ledger.spent_eur() + 4.0)
+    scene = {"id": 1, "concept": "sky", "narration": "", "visual_type": "ai_video",
+             "visual_description": "A slow drift over a calm night sky full of faint stars"}
+    clip = ai_video.render_scene(scene, work)
+    assert duration(clip) > 2

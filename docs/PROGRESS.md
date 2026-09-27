@@ -150,3 +150,29 @@ literally now (it wasn't with the first fix, which compared to the `-t` target i
 NEXT — P0-6 (Google model retirements). Then P0-7 (Veo daily cap), then P1. New: P1-8
 (closing fade also dims the last narration, from the review). `pipeline.py` now builds the
 bed to the video length, not the container's.
+
+## 2026-09-27 P0-6 Google model retirements: stills and Veo defaults
+CHANGED — `agents/image_agent.py`: stills via `generate_content` on `IMAGE_MODEL`
+(`response_modalities=["IMAGE"]`, `ImageConfig(aspect_ratio, image_size)`); last finished (non-"thought") inline image is used; non-PNG answers converted to PNG with FFmpeg inside `atomic_output`; no image →
+RuntimeError → Manim fallback (D7); cache key adds `IMAGE_SIZE`. `config.py`: `IMAGE_MODEL`
+`gemini-3.1-flash-image`, `IMAGE_SIZE` 1K, `VEO_MODEL` `veo-3.1-generate-preview`,
+`IMAGE_USD_PER_IMAGE` per size (1K 0.067) — all "verify"; the AFC log noise is off. `.env.example`, README, D13, NEEDS_PIETRO (smoke run
+now worthwhile). New `tests/test_images.py` (5, real SDK on a mock transport); opt-in `live_veo` test; fakes in
+test_cache/test_budget moved to `generate_content`. (Veo's `source=` call landed in P0-4.)
+CHECKED — verified: red first: both success-path tests failed with google-genai 2.25.0's
+"only supported in Gemini Enterprise Agent Platform mode" for `generate_images`; the
+no-image → Manim test passed before too (kept as a guard). Request body asserted:
+`responseModalities ["IMAGE"]`, `imageConfig.aspectRatio 16:9`, prompt text; a 503 then success
+= 2 requests and 1 ledger entry. Reviewer subagent (first attempt cut off by a usage limit, rerun): no Critical; it ran five
+response shapes (text+image, WebP, blocked prompt, IMAGE_SAFETY, thought image) through the real
+SDK. Its Warning (the Veo name isn't live-checked) → opt-in `live_veo` test + NEEDS_PIETRO; its
+suggestions applied (thought filter proven by a test that fails without it, price per size,
+imageSize/model URL asserted). Fakes in older tests lacked the SDK's `thought` field; fixed
+there, not in the code. `make check`: 59 passed.
+Not verified: the retirement dates, the new model names and prices (secondary sources; Google's
+pages unreachable here). P0-3's live run checks the image model; the Veo name needs the opt-in test.
+ASSUMED — `gemini-3.1-flash-image` (not `-preview`) is the GA name Google's deprecation table
+maps Imagen 4 to; 1K images are sharp enough for a 10% slow drift at 1080p.
+DIVERGED — none from DECISIONS (D3 is restored, not changed). CLAUDE.md still says "Imagen" in
+its flow line and file table; left for Pietro since it's his instruction file.
+NEXT — P0-7 (Veo daily cap from the ledger).

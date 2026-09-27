@@ -36,11 +36,21 @@ the ElevenLabs Voice Library) and `GOOGLE_API_KEY` (Gemini API).
 see BACKLOG). None of the four variables is set here and there is no `.env`.
 **Tried:** checked presence only (never printed). `tests/test_live.py` is written and skips
 until the keys exist.
-**Recommend:** wait until P0-6 (Imagen → Gemini image model) is done: with google-genai
-2.25 the current still code refuses API-key mode, so the image check would fail and waste
-the one run. Then, on your machine: `cp .env.example .env`, fill it in, then `make smoke` once
+**Recommend:** P0-6 is done (stills now use the Gemini image model; the old Imagen call
+could never succeed with google-genai 2.25), so the one smoke run is now worth doing. It
+also checks the new default model names, which are unverified. On your machine: `cp .env.example .env`, fill it in, then `make smoke` once
 (expected cost well under €1; `--estimate` shows it). If you want this cloud session to run it
 instead: add the four as environment variables in the cloud environment's settings (environment
 menu in the session title bar → Edit), and allow network access to `api.anthropic.com`,
 `api.elevenlabs.io` and `generativelanguage.googleapis.com` (this environment's proxy
 already refused `elevenlabs.io` and `ai.google.dev`). A new session picks the variables up.
+
+## 2026-09-27 — Is the new Veo model name right? (money: ~€3 to find out)
+**What:** whether to spend one Veo clip (~€3, one of the 2 allowed per day) to verify
+`VEO_MODEL` (`veo-3.1-generate-preview`, from secondary sources).
+**Why:** `make smoke` runs without Veo, so a wrong Veo name would only show as every Veo
+scene quietly becoming a still.
+**Tried:** wrote `test_veo_model_makes_one_clip` in `tests/test_live.py`, marked `live_veo`;
+it never runs by default (not in `make check` or `make smoke`).
+**Recommend:** only if you want Veo in films at all (see the first entry): after `make smoke`
+passes, run `pytest -m live_veo tests/test_live.py` once.

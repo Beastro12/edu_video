@@ -10,8 +10,10 @@ PROJECT_DIR = Path(__file__).resolve().parent  # build/ and music/ don't depend 
 
 # --- Models (names change often; override in .env if a call fails) -----
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
-IMAGE_MODEL = os.getenv("IMAGE_MODEL", "imagen-4.0-generate-001")
-VEO_MODEL = os.getenv("VEO_MODEL", "veo-3.0-generate-001")
+# Imagen 4 and Veo 3.0 were retired from the Gemini API in 2026 (D13). Verify these names.
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gemini-3.1-flash-image")   # verify
+IMAGE_SIZE = "1K"                                                  # verify; 2K/4K cost more per image
+VEO_MODEL = os.getenv("VEO_MODEL", "veo-3.1-generate-preview")      # verify
 
 # --- Keys ---------------------------------------------------------------
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -83,7 +85,7 @@ CLAUDE_USD_PER_MTOK = {                 # (input, output) per million tokens; ve
 }
 CLAUDE_USD_PER_MTOK_UNLISTED = (10.00, 50.00)  # a model not listed above: assume the priciest tier
 TTS_USD_PER_1K_CHARS = 0.10             # verify: ElevenLabs API, Multilingual v2
-IMAGE_USD_PER_IMAGE = 0.04              # verify: Imagen 4 Standard
+IMAGE_USD_PER_IMAGE = {"1K": 0.067, "2K": 0.101, "4K": 0.151}  # verify: Gemini 3.1 Flash Image, by IMAGE_SIZE
 VEO_USD_PER_SECOND = 0.40               # verify
 VEO_CLIP_S = 8                          # verify: length of one Veo clip, billed per second
 

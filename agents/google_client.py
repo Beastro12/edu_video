@@ -1,4 +1,4 @@
-"""One place that builds the Google GenAI client (Imagen stills, Veo clips)."""
+"""One place that builds the Google GenAI client (still images, Veo clips)."""
 import config
 import retries
 

@@ -1,6 +1,6 @@
 """P0-1: cached files are keyed by the inputs that produced them, not by scene number.
 
-ElevenLabs and Imagen are faked at the HTTP/SDK boundary, so the agents' own cache
+ElevenLabs and the image model are faked at the HTTP/SDK boundary, so the agents' own cache
 logic runs for real and every paid call is counted. FFmpeg runs for real at low
 resolution to keep the test fast."""
 import hashlib
@@ -26,7 +26,7 @@ def speech_s(text: str) -> float:
 @pytest.fixture
 def film(tmp_path, monkeypatch):
     paid = {"tts": [], "image": []}
-    made = {}  # prompt -> image bytes the fake Imagen returned for it
+    made = {}  # prompt -> image bytes the fake image model returned for it
     spoken = {}  # text -> mp3 bytes the fake ElevenLabs returned for it
     renders = []  # output paths of every FFmpeg render in assembly and music
 
@@ -40,14 +40,15 @@ def film(tmp_path, monkeypatch):
         return SimpleNamespace(status_code=200, content=spoken[text], text="")
 
     class FakeModels:
-        def generate_images(self, model, prompt, config):
+        def generate_content(self, model, contents, config):
+            prompt = contents
             paid["image"].append(prompt)
             colour = hashlib.sha256(prompt.encode()).hexdigest()[:6]
             out = tmp_path / f"img_{len(paid['image'])}.png"
             ff("-f", "lavfi", "-i", f"color=c=0x{colour}:s=64x36", "-frames:v", "1", str(out))
             made[prompt] = out.read_bytes()
-            image = SimpleNamespace(image_bytes=made[prompt])
-            return SimpleNamespace(generated_images=[SimpleNamespace(image=image)])
+            image = SimpleNamespace(data=made[prompt], mime_type="image/png")
+            return SimpleNamespace(parts=[SimpleNamespace(inline_data=image, thought=None)])
 
     class FakeClient:
         def __init__(self, api_key, **kwargs):

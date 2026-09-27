@@ -101,3 +101,17 @@ it should (tests measure decoded samples via `decoded_audio`, never container du
 Voice level is kept (−18.2 vs −18.6 LUFS on a test tone; D2 holds). Side effect: `loudnorm`
 after a lead-in lifts each scene's first ~1.5 s by ~1 dB (reviewer, steady noise); harmless
 to ducking. Scenes are now up to one frame (33 ms) longer than lead-in + narration + tail.
+
+**D13 — Stills from the Gemini image model; Veo 3.1.** Stills are generated with
+`generate_content` (`response_modalities=["IMAGE"]`, 16:9, `IMAGE_SIZE` 1K) on
+`IMAGE_MODEL` (default `gemini-3.1-flash-image`); a non-PNG answer is converted to PNG; an
+answer without an image falls back to Manim (D7). Veo defaults to `veo-3.1-generate-preview`
+and is called with `source=GenerateVideosSource(...)`. Evidence: verified locally,
+google-genai 2.25.0 refuses `generate_images` (Imagen) in Gemini-API-key mode before sending
+anything, so with the old code every still silently became Manim, undoing D3. Not verified
+(Google's pages are unreachable from the sandbox; several secondary sources agree): the Gemini
+API shut down Imagen 4 on 2026-08-17 and Veo 3.0 on 2026-06-30; model names and prices
+(~$0.067 per 1K image, Veo $0.40/s) — all marked "verify" in config.py, checked by P0-3.
+Veo's clip length is left at the model default (8 s assumed in the ledger) rather than
+sending `duration_seconds`, which isn't verified for Veo 3.1 and isn't covered by the smoke
+test (it runs without Veo).

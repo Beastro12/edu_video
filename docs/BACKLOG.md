@@ -47,7 +47,7 @@ Work top to bottom within a priority.
   (±1 AAC frame) and narration onset is at `LEAD_IN_S` (±20 ms); narrated.mp4 decoded
   audio matches its video (±0.05 s). Tests measure decoded samples, not container duration.
 
-- [ ] P0-6 — Google model retirements: stills and Veo defaults no longer exist
+- [x] P0-6 — Google model retirements: stills and Veo defaults no longer exist
   Found during P0-2 research (NOT verified at Google's own pages, which the sandbox can't
   reach; several independent secondary sources agree): the Gemini API shut down
   `imagen-4.0-*-generate-001` on 2026-08-17 (successor `gemini-3.1-flash-image`, served

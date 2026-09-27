@@ -38,10 +38,10 @@ def providers(monkeypatch):
             open(path, "wb").write(b"mp4")
 
     class FakeModels:
-        def generate_images(self, model, prompt, config):
-            calls.append("imagen")
-            image = SimpleNamespace(image_bytes=b"png")
-            return SimpleNamespace(generated_images=[SimpleNamespace(image=image)])
+        def generate_content(self, model, contents, config):
+            calls.append("image")
+            image = SimpleNamespace(data=b"png", mime_type="image/png")
+            return SimpleNamespace(parts=[SimpleNamespace(inline_data=image, thought=None)])
 
         def generate_videos(self, model, source, config):
             calls.append("veo")
@@ -83,7 +83,7 @@ def test_every_paid_call_is_logged_with_its_estimated_cost(providers, tmp_path):
     assert log[1]["est_cost_eur"] == pytest.approx(
         len(SCENE["narration"]) / 1000 * config.TTS_USD_PER_1K_CHARS * rate)
     assert (log[2]["model"], log[2]["units"]) == (config.IMAGE_MODEL, {"images": 1})
-    assert log[2]["est_cost_eur"] == pytest.approx(config.IMAGE_USD_PER_IMAGE * rate)
+    assert log[2]["est_cost_eur"] == pytest.approx(config.IMAGE_USD_PER_IMAGE[config.IMAGE_SIZE] * rate)
     assert (log[3]["model"], log[3]["units"]) == (config.VEO_MODEL, {"seconds": config.VEO_CLIP_S})
     assert log[3]["est_cost_eur"] == pytest.approx(config.VEO_CLIP_S * config.VEO_USD_PER_SECOND * rate)
     assert ledger.spent_eur() == pytest.approx(sum(e["est_cost_eur"] for e in log))
@@ -166,7 +166,7 @@ def test_estimate_prices_uncached_work_without_calling_anything(monkeypatch, tmp
     rate = config.USD_TO_EUR
     assert est["claude"] == 0  # script exists; no Manim scenes
     assert est["elevenlabs"] == pytest.approx(500 / 1000 * config.TTS_USD_PER_1K_CHARS * rate)
-    assert est["images"] == pytest.approx(1 * config.IMAGE_USD_PER_IMAGE * rate)
+    assert est["images"] == pytest.approx(1 * config.IMAGE_USD_PER_IMAGE[config.IMAGE_SIZE] * rate)
     assert est["veo"] == pytest.approx(config.VEO_CLIP_S * config.VEO_USD_PER_SECOND * rate)
 
     monkeypatch.setattr(sys, "argv", ["pipeline.py", "topic", "--estimate"])

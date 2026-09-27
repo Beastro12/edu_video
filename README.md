@@ -10,7 +10,7 @@ Several AI agents make one narrated, slow-paced science documentary:
 | 2 | Writer (Claude) | Writes one chapter at a time, continuing from the last lines of the previous one |
 | 3 | Critic (Claude) | Reviews each chapter for scientific accuracy and calm tone, up to 2 rounds |
 | 4 | Voice (ElevenLabs) | Soft, slow narration per scene. **Its length sets each scene's length** |
-| 5a | Stills (Google Imagen) | ~60% of scenes: one dark, calm image with a slow drift (zoom or pan) |
+| 5a | Stills (Google Gemini image model) | ~60% of scenes: one dark, calm image with a slow drift (zoom or pan) |
 | 5b | Manim (Claude writes code) | ~30%: gentle diagrams; render errors are fed back to Claude for up to 3 fixes |
 | 5c | Veo (Google) | At most one moving shot per chapter |
 | 6 | Assembly (FFmpeg) | Crossfades between scenes, seamless music bed ducked under the voice, −16 LUFS |
@@ -55,7 +55,7 @@ python pipeline.py "What happens inside a neutron star" --no-ai-video
 
 ## Money
 
-Every paid call (Claude, ElevenLabs, Imagen, Veo) is checked against `BUDGET_EUR` (env,
+Every paid call (Claude, ElevenLabs, Google images, Veo) is checked against `BUDGET_EUR` (env,
 default 10) before it's made and logged to `build/ledger.jsonl` after it succeeds, with
 its estimated cost. The budget is the total across all runs: when the next call would
 pass it, the run stops with `BudgetExceeded` (it never falls back to a cheaper visual).

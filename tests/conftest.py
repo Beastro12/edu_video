@@ -53,7 +53,7 @@ def onset_s(levels: list[float], threshold_db: float = -40) -> float:
 def offline(request, monkeypatch, tmp_path):
     """Every offline test gets its own build dir, so the spend ledger never touches build/,
     and fails loudly if it reaches a paid API it didn't mock."""
-    if request.node.get_closest_marker("live"):
+    if request.node.get_closest_marker("live") or request.node.get_closest_marker("live_veo"):
         return
     import requests
 

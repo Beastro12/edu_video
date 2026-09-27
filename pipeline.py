@@ -108,7 +108,7 @@ def make_visual(scene: dict, target_s: float, out_dir: Path, allow_veo: bool) ->
         except ledger.BudgetExceeded:
             raise
         except Exception as e:  # noqa: BLE001
-            print(f"    Imagen failed ({str(e)[:100]}); falling back to Manim")
+            print(f"    Image model failed ({str(e)[:100]}); falling back to Manim")
     atmospheric = vt != "manim"
     return manim_agent.render_scene(scene, target_s, out_dir, atmospheric), "manim"
 
