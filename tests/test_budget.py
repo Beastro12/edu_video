@@ -43,13 +43,13 @@ def providers(monkeypatch):
             image = SimpleNamespace(image_bytes=b"png")
             return SimpleNamespace(generated_images=[SimpleNamespace(image=image)])
 
-        def generate_videos(self, model, prompt, config):
+        def generate_videos(self, model, source, config):
             calls.append("veo")
             response = SimpleNamespace(generated_videos=[SimpleNamespace(video=FakeVideo())])
             return SimpleNamespace(done=True, error=None, response=response)
 
     class FakeClient:
-        def __init__(self, api_key):
+        def __init__(self, api_key, **kwargs):
             self.models = FakeModels()
             self.files = SimpleNamespace(download=lambda file: None)
 
@@ -126,11 +126,11 @@ def test_veo_over_budget_stops_the_run_even_if_a_still_would_fit(providers, monk
 
 def test_veo_timeout_is_recorded_as_spent(providers, monkeypatch, tmp_path):
     class NeverDone:
-        def generate_videos(self, model, prompt, config):
+        def generate_videos(self, model, source, config):
             providers.append("veo")
             return SimpleNamespace(done=False)
 
-    monkeypatch.setattr("google.genai.Client", lambda api_key: SimpleNamespace(models=NeverDone()))
+    monkeypatch.setattr("google.genai.Client", lambda api_key, **kwargs: SimpleNamespace(models=NeverDone()))
     with pytest.raises(RuntimeError, match="timed out"):
         ai_video.render_scene(SCENE, tmp_path, timeout_s=-1)
     assert [(e["provider"], e["units"]["seconds"]) for e in entries()] == [("google", config.VEO_CLIP_S)]

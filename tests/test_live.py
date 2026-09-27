@@ -35,8 +35,13 @@ def film():
                    "Light from distant galaxies has had only a finite time to reach us.",
         "key_ideas": ["Olbers' paradox", "finite age of the universe", "expansion redshifts light"]}]})
     before = len(ledger_entries())
-    script = pipeline.get_script(TOPIC, 1, work, skip_critic=False)
-    final = pipeline.render_film(script, work, allow_veo=False, seed=TOPIC)
+    # Cap this run at €1 on top of the lifetime budget.
+    config.BUDGET_EUR = min(config.BUDGET_EUR, ledger.spent_eur() + 1.0)
+    try:
+        script = pipeline.get_script(TOPIC, 1, work, skip_critic=False)
+        final = pipeline.render_film(script, work, allow_veo=False, seed=TOPIC)
+    except Exception as e:  # noqa: BLE001 - name what failed instead of a fixture error
+        pytest.fail(f"live run failed: {type(e).__name__}: {str(e)[:500]}")
     return {"work": work, "script": script, "final": final, "calls": ledger_entries()[before:]}
 
 
@@ -50,6 +55,7 @@ def test_claude_model_name_is_accepted(film):
 
 
 def test_elevenlabs_accepts_voice_settings_including_speed(film):
+    # Proves the request with `speed` is accepted, not that speed is applied: listen to it.
     assert "speed" in config.VOICE_SETTINGS
     assert any(e["provider"] == "elevenlabs" for e in film["calls"])
 

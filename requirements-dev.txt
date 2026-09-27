@@ -1,2 +1,4 @@
 pytest>=8
 ruff>=0.5
+httpx>=0.28     # mock transports in tests (google-genai's HTTP client)
+httpx2>=2.13    # mock transports in tests (anthropic's HTTP client)

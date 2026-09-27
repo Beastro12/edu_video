@@ -30,7 +30,7 @@ Work top to bottom within a priority.
   (`generated_images[0].image.image_bytes`). Fix config/code for anything that fails.
   If keys are missing, log it in NEEDS_PIETRO.md, mark `[~]`, and continue with other tasks.
 
-- [ ] P0-4 — Retry with backoff on transient errors
+- [x] P0-4 — Retry with backoff on transient errors
   Accept: 429/5xx/timeouts from Anthropic, ElevenLabs and Google retry with jittered
   exponential backoff (max 4). Non-transient errors fail fast. Tested with mocks.
 
@@ -55,6 +55,10 @@ Work top to bottom within a priority.
   `generated_images[0].image.image_bytes`) and `veo-3.0-generate-001` on 2026-06-30
   (successor `veo-3.1-generate-preview`). With today's defaults every still would fall
   back to Manim, so D3's ~60% stills silently becomes 0%.
+  Verified locally during P0-4 (google-genai 2.25.0): `generate_images` raises "only supported
+  in Gemini Enterprise Agent Platform mode, not in Gemini Developer API mode" before sending
+  any request, so with a `GOOGLE_API_KEY` today's code never produces a still. Also
+  `generate_videos(prompt=...)` is deprecated in favour of `source=`.
   Accept: `image_agent` generates stills with the Gemini image model via the SDK's
   documented `generate_content` path (16:9, image-only output), mocked offline test of the
   new response shape including "no image part" → fallback; `IMAGE_MODEL`/`VEO_MODEL`

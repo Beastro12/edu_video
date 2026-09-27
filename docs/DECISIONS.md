@@ -58,3 +58,23 @@ work could overshoot by the calls in flight; P1-5 must reserve the cost under a 
 calls are assumed unbilled and not recorded, except a Veo job that times out: it keeps
 running on Google's side, so it is recorded as spent. `build/` is anchored to the project
 folder so a different cwd can't start a fresh ledger.
+
+**D11 — Use each SDK's own retry loop; one small helper for the rest.** Transient errors
+are retried up to `MAX_RETRIES` (4) with jittered exponential backoff; anything else
+(400/401/403/404/422, safety refusals) fails on the first try.
+- Anthropic: the SDK's built-in retries with `max_retries=4` (408/409/429/5xx, timeouts and
+  connection errors; its own 0.5 s → 8 s curve; honours `retry-after`).
+- Google: google-genai's `HttpRetryOptions` (off unless configured — verified in 2.25.0) from
+  the same config values: 408/429/5xx, timeouts and failed connects (not other dropped
+  connections). Requests time out after `GOOGLE_TIMEOUT_S`; the SDK has no timeout otherwise.
+- ElevenLabs (`requests`) and Veo file downloads (which bypass the SDK's retry loop):
+  `retries.py`, honouring `Retry-After`, capped at `RETRY_MAX_S`.
+- The POST that starts a Veo job is retried only on 429 (job refused). A 5xx can arrive after
+  Google accepted the job, and a retry would start and bill a second one (~€2.94). Once a job
+  has started, losing it (poll failure, timeout) records it as spent (D10).
+Why not one wrapper around everything: the SDKs already classify errors and retry inside the
+call; wrapping them again would multiply attempts. Evidence: `tests/test_retries.py` drives
+the real Anthropic and Google SDKs through mock HTTP transports and counts requests, and
+checks that one call is recorded once however many attempts it took. Residual risk: a
+Claude, ElevenLabs or image POST that times out after the provider did the work is retried
+and may be billed twice; the ledger records it once.

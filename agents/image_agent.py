@@ -3,6 +3,7 @@ from pathlib import Path
 
 import config
 import ledger
+from agents import google_client
 from utils import atomic_output, content_key
 
 STYLE = (" Calm, dark, low-contrast, cinematic, deep blues and soft warm highlights, "
@@ -24,10 +25,9 @@ def render_still(scene: dict, out_dir: Path) -> Path:
     if out.exists():
         return out
     ledger.check("google", ledger.image_eur())
-    from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=config.GOOGLE_API_KEY)
+    client = google_client.make()
     resp = client.models.generate_images(
         model=config.IMAGE_MODEL,
         prompt=scene["visual_description"] + STYLE,

@@ -7,7 +7,14 @@ import anthropic
 import config
 import ledger
 
-_client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+
+def make_client(**kwargs) -> anthropic.Anthropic:
+    # The SDK retries 408/409/429/5xx and timeouts with jittered exponential backoff and
+    # honours retry-after; other errors raise at once.
+    return anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY, max_retries=config.MAX_RETRIES, **kwargs)
+
+
+_client = make_client()
 
 
 def _create(**kwargs):

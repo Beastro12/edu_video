@@ -4,6 +4,8 @@ from pathlib import Path
 
 import config
 import ledger
+import retries
+from agents import google_client
 from utils import atomic_output, content_key
 
 STYLE = (" Calm documentary footage, one continuous slow camera move, soft natural "
@@ -26,24 +28,28 @@ def render_scene(scene: dict, out_dir: Path, timeout_s: int = 600) -> Path:
         return out
     cost = ledger.video_eur(config.VEO_CLIP_S)
     ledger.check("google", cost)
-    from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=config.GOOGLE_API_KEY)
+    client = google_client.make()
     op = client.models.generate_videos(
         model=config.VEO_MODEL,
-        prompt=scene["visual_description"] + STYLE,
-        config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO),
+        source=types.GenerateVideosSource(prompt=scene["visual_description"] + STYLE),
+        config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO,
+                                          http_options=google_client.start_job_options()),
     )
+    # From here the job is running on Google's side and is likely billed even if we lose it.
     start = time.time()
-    while not op.done:
-        if time.time() - start > timeout_s:
-            # The job keeps running on Google's side and is likely billed: count it (D10).
-            ledger.record("google", config.VEO_MODEL,
-                          {"seconds": config.VEO_CLIP_S, "note": "timed out; assumed billed"}, cost)
-            raise RuntimeError("Veo timed out")
-        time.sleep(10)
-        op = client.operations.get(op)
+    try:
+        while not op.done:
+            if time.time() - start > timeout_s:
+                raise RuntimeError("Veo timed out")
+            time.sleep(10)
+            op = client.operations.get(op)
+    except Exception as e:
+        ledger.record("google", config.VEO_MODEL,
+                      {"seconds": config.VEO_CLIP_S, "note": f"lost track of job ({type(e).__name__}); assumed billed"},
+                      cost)
+        raise
 
     if getattr(op, "error", None):
         raise RuntimeError(f"Veo error: {op.error}")
@@ -51,7 +57,8 @@ def render_scene(scene: dict, out_dir: Path, timeout_s: int = 600) -> Path:
     if not videos:
         raise RuntimeError("Veo returned no video (often a safety filter on the prompt)")
     ledger.record("google", config.VEO_MODEL, {"seconds": config.VEO_CLIP_S}, cost)
-    client.files.download(file=videos[0].video)
+    # The SDK's own retry loop doesn't cover downloads; the clip is already paid for.
+    retries.call(lambda: client.files.download(file=videos[0].video), "Veo download")
     with atomic_output(out) as tmp:
         videos[0].video.save(str(tmp))
     return out

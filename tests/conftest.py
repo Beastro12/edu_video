@@ -8,6 +8,14 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import anthropic.resources.messages  # noqa: E402
+import google.genai  # noqa: E402
+
+# Saved before the guard below replaces them, for tests that run the real SDKs against a
+# mock HTTP transport (see `real_anthropic`, `real_google`).
+_REAL_ANTHROPIC_CREATE = anthropic.resources.messages.Messages.create
+_REAL_GENAI_CLIENT = google.genai.Client
+
 
 def ff(*args):
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args], check=True)
@@ -19,7 +27,6 @@ def offline(request, monkeypatch, tmp_path):
     and fails loudly if it reaches a paid API it didn't mock."""
     if request.node.get_closest_marker("live"):
         return
-    import anthropic.resources.messages
     import requests
 
     import config
@@ -31,11 +38,20 @@ def offline(request, monkeypatch, tmp_path):
     monkeypatch.setattr(requests.Session, "request", blocked)  # requests.post and friends
     monkeypatch.setattr(requests, "post", blocked)
     monkeypatch.setattr(anthropic.resources.messages.Messages, "create", blocked)  # any client
-    try:
-        import google.genai
-    except ImportError:  # optional dependency: nothing to guard
-        return
     monkeypatch.setattr(google.genai, "Client", blocked)
+
+
+@pytest.fixture
+def real_anthropic(monkeypatch):
+    """Lift the guard for the Anthropic SDK only. For tests whose client is wired to a mock
+    HTTP transport, so nothing leaves the machine."""
+    monkeypatch.setattr(anthropic.resources.messages.Messages, "create", _REAL_ANTHROPIC_CREATE)
+
+
+@pytest.fixture
+def real_google(monkeypatch):
+    """Same, for the Google GenAI SDK only."""
+    monkeypatch.setattr(google.genai, "Client", _REAL_GENAI_CLIENT)
 
 
 @pytest.fixture(scope="session")

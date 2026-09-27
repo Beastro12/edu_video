@@ -50,46 +50,77 @@ suggestion not taken: keying `narrated.mp4` by clip names instead of hashing ~1 
 run; kept byte hashes for robustness (measure the cost at the first long render).
 
 ## 2026-09-27 P0-2 Spend ledger and hard cap
-CHANGED — New \`ledger.py\`: \`check()\` before every paid call (raises \`BudgetExceeded\` when
-spent + this call > \`BUDGET_EUR\`), \`record()\` appends \`{time, provider, model, units,
-est_cost_eur}\` to \`build/ledger.jsonl\` after success; price helpers. \`config.py\`: \`BUDGET_EUR\`
-from env (default 10, must be finite ≥ 0), prices marked "verify", \`EST_*\` sizes; \`BUILD_DIR\`
-and \`MUSIC_DIR\` anchored to the project folder. \`agents/llm.py\`: one \`_create()\` that checks
-(estimated input + full \`max_tokens\`) and records actual token usage. \`voice.py\`,
-\`image_agent.py\`, \`ai_video.py\`: check + record; \`cache_path()\` helpers (also Manim). A Veo
-timeout is recorded as spent. \`pipeline.py\`: \`make_visual\` re-raises \`BudgetExceeded\` instead
-of falling back; \`estimate_cost()\` (cache-aware, typical and worst case) and \`--estimate\`.
-\`tests/conftest.py\`: autouse guard: per-test build dir, and Anthropic (class level), requests,
-google-genai blocked unless a test mocks them. \`tests/test_budget.py\` (13 tests). README
-"Money" section, \`.env.example\`, DECISIONS D10, NEEDS_PIETRO.md (new).
-CHECKED — verified: \`make check\` ruff clean, 27 passed (60 s). Mutations each fail a test:
-no re-raise in the Veo or still branch; no TTS pre-check; \`atmospheric=False\` in the estimate;
-\`skip_critic\` ignored; the old env test body with a fake \`.env\` \`BUDGET_EUR=20\` (the fixed
-one passes). \`--estimate\` for 15 min: €2.06 typical / €3.94 worst without a Google key;
-€16.87 with one (Veo €14.72). Run from another cwd it creates no \`build/\` there. Reviewer
-subagent: 1 Critical (env test broke once \`.env\` sets \`BUDGET_EUR\`) fixed; warnings fixed
+CHANGED — New `ledger.py`: `check()` before every paid call (raises `BudgetExceeded` when
+spent + this call > `BUDGET_EUR`), `record()` appends `{time, provider, model, units,
+est_cost_eur}` to `build/ledger.jsonl` after success; price helpers. `config.py`: `BUDGET_EUR`
+from env (default 10, must be finite ≥ 0), prices marked "verify", `EST_*` sizes; `BUILD_DIR`
+and `MUSIC_DIR` anchored to the project folder. `agents/llm.py`: one `_create()` that checks
+(estimated input + full `max_tokens`) and records actual token usage. `voice.py`,
+`image_agent.py`, `ai_video.py`: check + record; `cache_path()` helpers (also Manim). A Veo
+timeout is recorded as spent. `pipeline.py`: `make_visual` re-raises `BudgetExceeded` instead
+of falling back; `estimate_cost()` (cache-aware, typical and worst case) and `--estimate`.
+`tests/conftest.py`: autouse guard: per-test build dir, and Anthropic (class level), requests,
+google-genai blocked unless a test mocks them. `tests/test_budget.py` (13 tests). README
+"Money" section, `.env.example`, DECISIONS D10, NEEDS_PIETRO.md (new).
+CHECKED — verified: `make check` ruff clean, 27 passed (60 s). Mutations each fail a test:
+no re-raise in the Veo or still branch; no TTS pre-check; `atmospheric=False` in the estimate;
+`skip_critic` ignored; the old env test body with a fake `.env` `BUDGET_EUR=20` (the fixed
+one passes). `--estimate` for 15 min: €2.06 typical / €3.94 worst without a Google key;
+€16.87 with one (Veo €14.72). Run from another cwd it creates no `build/` there. Reviewer
+subagent: 1 Critical (env test broke once `.env` sets `BUDGET_EUR`) fixed; warnings fixed
 or logged (P0-7 Veo daily cap; P1-5 must reserve under a lock).
 ASSUMED — The cap is cumulative across all runs (CLAUDE.md: "only if the spend ledger shows
 budget left"). Failed calls aren't billed (not recorded), except Veo timeouts. Prices from
 secondary sources (Claude: Anthropic's own model table): not verified. USD→EUR 0.92.
 DIVERGED — Git branch as in P0-1. The reviewer's suggestions to add a CLAUDE.md rule and
-deny rules to \`.claude/settings.json\` were not applied: those are Pietro's to change, and
+deny rules to `.claude/settings.json` were not applied: those are Pietro's to change, and
 are written up in NEEDS_PIETRO.md.
 NEXT — P0-3 (live smoke): keys are missing in this environment, so it will be logged and
-marked blocked. Then P0-4 (retries: Anthropic SDK \`max_retries\`, google-genai
-\`HttpRetryOptions\`, own helper for ElevenLabs).
+marked blocked. Then P0-4 (retries: Anthropic SDK `max_retries`, google-genai
+`HttpRetryOptions`, own helper for ElevenLabs).
 
 ## 2026-09-27 P0-3 Live smoke test — BLOCKED (no keys)
-CHANGED — \`tests/test_live.py\` (marked \`live\`): seeds a 1-chapter, 1-minute outline, runs the
-real writer + critic + render with \`allow_veo=False\` into \`build/smoke-test/\` (spend goes to
+CHANGED — `tests/test_live.py` (marked `live`): seeds a 1-chapter, 1-minute outline, runs the
+real writer + critic + render with `allow_veo=False` into `build/smoke-test/` (spend goes to
 the real ledger), then checks: Claude model in the ledger, an ElevenLabs call succeeded with
-\`speed\` in voice_settings, at least one still came from \`IMAGE_MODEL\` (not all fell back to
-Manim), film length 30-150 s. NEEDS_PIETRO.md: keys + network hosts. BACKLOG: P0-3 \`[~]\`.
-CHECKED — verified: \`pytest -m live tests/test_live.py\` → 4 skipped ("missing ..."); \`make
-check\` deselects it (27 passed). Key presence checked with \`test -n\`, values never printed.
+`speed` in voice_settings, at least one still came from `IMAGE_MODEL` (not all fell back to
+Manim), film length 30-150 s. NEEDS_PIETRO.md: keys + network hosts. BACKLOG: P0-3 `[~]`.
+CHECKED — verified: `pytest -m live tests/test_live.py` → 4 skipped ("missing ..."); `make
+check` deselects it (27 passed). Key presence checked with `test -n`, values never printed.
 Not verified: anything live.
 ASSUMED — Seeding outline.json is how to get "1 chapter": the outline agent is told to plan
-4-6 chapters, so \`--minutes 1\` alone wouldn't give one.
-DIVERGED — The reviewer subagent was not run for this blocked task; \`tests/test_live.py\` is
+4-6 chapters, so `--minutes 1` alone wouldn't give one.
+DIVERGED — The reviewer subagent was not run for this blocked task; `tests/test_live.py` is
 included in the P0-4 review instead (it adds no offline code path).
 NEXT — P0-4. One blocked task so far (stop rule: 3 in a row).
+
+## 2026-09-27 P0-4 Retry with backoff on transient errors
+CHANGED — `config.py`: MAX_RETRIES=4, RETRY_BASE_S/RETRY_JITTER_S/RETRY_MAX_S, GOOGLE_TIMEOUT_S.
+`agents/llm.py`: `make_client()` with the SDK's `max_retries=4`. New `agents/google_client.py`:
+one client with `HttpRetryOptions` + request timeout; `start_job_options()` retries only 429
+for the Veo POST. New `retries.py`: `call()` with jittered exponential backoff, honours
+`Retry-After` (clamped to 0..RETRY_MAX_S), `is_transient()` (TransientError, requests timeouts
+and connection errors, google-genai 408/429/5xx, httpx timeouts/connect errors).
+`agents/voice.py`: ElevenLabs POST through `retries.call`. `agents/image_agent.py`,
+`ai_video.py`: client from `google_client`; Veo uses `source=GenerateVideosSource` (the
+`prompt=` form is deprecated), records a started job it loses while polling as spent, and
+retries the download (the SDK's retry loop skips downloads). `tests/test_retries.py` (19),
+conftest `real_anthropic` / `real_google` fixtures (lift one guard each, for mock-transport
+tests), fakes accept the new kwargs. `requirements*.txt`: floors raised to the tested versions
+(anthropic 1.8, google-genai 2.25); httpx/httpx2 declared for tests. D11. test_live: €1 cap
+per run and named failures. Doc backticks unescaped (a quoted-heredoc slip in earlier entries).
+CHECKED — verified: red run first: Claude stopped after 3 attempts (SDK default), ElevenLabs
+raised on the first 429. The two Google tests failed for another reason at first:
+google-genai 2.25.0 refuses `generate_images` in API-key mode before sending anything (now in
+P0-6); they were retargeted at `generate_content`/Veo. `make check`: ruff clean, 46 passed, no
+warnings. Reviewer subagent: no Critical; its mutations (no retry options, default retries,
+400 treated as transient, Retry-After ignored, no jitter/growth, no timeout retry) each fail a
+test; `real_*` fixtures made 0 socket connects. My mutations after its warnings, each caught:
+Veo POST retried on 5xx, lost job unrecorded, download unretried, no timeout, negative
+Retry-After.
+ASSUMED — A Veo 5xx on start may mean the job was accepted (hence no retry); a job lost while
+polling is billed. GOOGLE_TIMEOUT_S=120 is enough for one image or a clip download.
+DIVERGED — Anthropic retries use the SDK's own backoff curve (0.5 s → 8 s), not RETRY_BASE_S/
+RETRY_MAX_S: reimplementing the SDK's loop would duplicate it (D11).
+NEXT — P0-5 (A/V drift): root cause and fix already measured (adelay before loudnorm).
+Reviewer note kept for later: a Google-image success-after-retry ledger test belongs in P0-6.

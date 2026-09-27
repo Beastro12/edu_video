@@ -29,16 +29,18 @@ says only you raise the budget, but nothing technically stops a file edit.
 `build/ledger.jsonl`, and never set or raise `BUDGET_EUR`."
 
 ## 2026-09-27 — API keys (and network access) for the live smoke test, P0-3
-**What:** \`ANTHROPIC_API_KEY\`, \`ELEVENLABS_API_KEY\`, \`ELEVENLABS_VOICE_ID\` (a calm voice from
-the ElevenLabs Voice Library) and \`GOOGLE_API_KEY\` (Gemini API).
+**What:** `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` (a calm voice from
+the ElevenLabs Voice Library) and `GOOGLE_API_KEY` (Gemini API).
 **Why:** P0-3 must confirm live, once: the Claude model name is accepted, ElevenLabs accepts
-\`speed\` in voice_settings, and the image model works (P0-6: Imagen 4 appears to be retired;
-see BACKLOG). None of the four variables is set here and there is no \`.env\`.
-**Tried:** checked presence only (never printed). \`tests/test_live.py\` is written and skips
+`speed` in voice_settings, and the image model works (P0-6: Imagen 4 appears to be retired;
+see BACKLOG). None of the four variables is set here and there is no `.env`.
+**Tried:** checked presence only (never printed). `tests/test_live.py` is written and skips
 until the keys exist.
-**Recommend:** on your machine: \`cp .env.example .env\`, fill it in, then \`make smoke\` once
-(expected cost well under €1; \`--estimate\` shows it). If you want this cloud session to run it
+**Recommend:** wait until P0-6 (Imagen → Gemini image model) is done: with google-genai
+2.25 the current still code refuses API-key mode, so the image check would fail and waste
+the one run. Then, on your machine: `cp .env.example .env`, fill it in, then `make smoke` once
+(expected cost well under €1; `--estimate` shows it). If you want this cloud session to run it
 instead: add the four as environment variables in the cloud environment's settings (environment
-menu in the session title bar → Edit), and allow network access to \`api.anthropic.com\`,
-\`api.elevenlabs.io\` and \`generativelanguage.googleapis.com\` (this environment's proxy
-already refused \`elevenlabs.io\` and \`ai.google.dev\`). A new session picks the variables up.
+menu in the session title bar → Edit), and allow network access to `api.anthropic.com`,
+`api.elevenlabs.io` and `generativelanguage.googleapis.com` (this environment's proxy
+already refused `elevenlabs.io` and `ai.google.dev`). A new session picks the variables up.

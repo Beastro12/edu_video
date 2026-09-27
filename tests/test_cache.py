@@ -50,7 +50,7 @@ def film(tmp_path, monkeypatch):
             return SimpleNamespace(generated_images=[SimpleNamespace(image=image)])
 
     class FakeClient:
-        def __init__(self, api_key):
+        def __init__(self, api_key, **kwargs):
             self.models = FakeModels()
 
     def spy(real):

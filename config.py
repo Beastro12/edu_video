@@ -55,6 +55,13 @@ TARGET_LUFS = -16            # final master
 # --- Pipeline ---------------------------------------------------------------
 MAX_CRITIC_ROUNDS = 2
 MAX_MANIM_ATTEMPTS = 3
+# Transient API errors (429, 5xx, timeouts): retried with jittered exponential backoff,
+# wait = min(base * 2**n + random(0, jitter), max). Other errors fail on the first try.
+MAX_RETRIES = 4
+RETRY_BASE_S = 1.0
+RETRY_JITTER_S = 1.0
+RETRY_MAX_S = 30.0
+GOOGLE_TIMEOUT_S = 120        # per HTTP request to Google (the SDK has none by default)
 BUILD_DIR = str(PROJECT_DIR / "build")
 
 # --- Money --------------------------------------------------------------------
