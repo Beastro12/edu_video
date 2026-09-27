@@ -78,3 +78,26 @@ the real Anthropic and Google SDKs through mock HTTP transports and counts reque
 checks that one call is recorded once however many attempts it took. Residual risk: a
 Claude, ElevenLabs or image POST that times out after the provider did the work is retried
 and may be billed twice; the ledger records it once.
+
+**D12 — Sample-exact scene timing; test audio as decoded samples.** Each scene is a whole
+number of video frames (`scene_frames`: lead-in + narration + tail, rounded up) and its audio
+exactly that many samples (48 kHz / 30 fps = 1600 per frame): `adelay` → `loudnorm` →
+`asetpts=N/SR/TB` → `apad`/`atrim` to the sample, video capped with `-frames:v`.
+`crossfade_concat` trims each clip's audio to its video length (dropping AAC's end padding)
+and counts offsets in whole frames (an offset printed as "2.067" for 2.0667 s started the
+fade a frame late). The final mix re-stamps after `loudnorm` too.
+Evidence (FFmpeg 6.1.1): `loudnorm`'s output timestamps are not continuous: after a short
+final frame the next timestamp jumps a whole 100 ms block (`ashowinfo`), and with `adelay`
+after it the lead-in silence had no timestamps at all. FFmpeg drops samples when cutting by
+time, so clip audio decoded short (a 3.39 s clip to 2.84 s, voice at 0.04 s instead of
+0.60 s; with only the reorder, 3.06 / 3.344 s narrations still lost 27 / 40 ms) and the final
+mix lost 39-75 ms. Players honour the timestamps, so one clip sounds right; the crossfade
+chain works on samples, so every scene moved the next one's voice: 3 scenes gave narrated.mp4
+10.26 s of audio under 11.93 s of video, and the reviewer measured 1.06 s over 40 scenes.
+Even with exact clips, AAC end padding (≤ 21 ms per clip) added up to +0.22 s over 40 scenes
+until the crossfade trimmed it. Now: every clip's decoded audio equals its video within one
+AAC frame, onset 0.60 s, and in a 12-scene chain the last voice starts within 30 ms of where
+it should (tests measure decoded samples via `decoded_audio`, never container durations).
+Voice level is kept (−18.2 vs −18.6 LUFS on a test tone; D2 holds). Side effect: `loudnorm`
+after a lead-in lifts each scene's first ~1.5 s by ~1 dB (reviewer, steady noise); harmless
+to ducking. Scenes are now up to one frame (33 ms) longer than lead-in + narration + tail.

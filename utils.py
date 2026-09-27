@@ -24,6 +24,14 @@ def duration(path: str | Path) -> float:
     return float(json.loads(out)["format"]["duration"])
 
 
+def video_duration(path: str | Path) -> float:
+    """Length of the video stream alone. The container duration also counts the audio,
+    which AAC pads to a whole 1024-sample frame."""
+    out = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=duration",
+               "-of", "json", str(path)]).stdout
+    return float(json.loads(out)["streams"][0]["duration"])
+
+
 def slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:60]
 

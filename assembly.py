@@ -1,13 +1,36 @@
-"""FFmpeg assembly: fit each visual to its narration, crossfade scenes, duck music under the voice."""
+"""FFmpeg assembly: fit each visual to its narration, crossfade scenes, duck music under the voice.
+
+Timing is exact to the sample (D12): each scene is a whole number of video frames, its audio
+is exactly that many samples, and the crossfade chain works from video lengths, so nothing
+drifts however many scenes a film has."""
+import math
 from pathlib import Path
 
 import config
-from utils import atomic_output, content_key, duration, file_hash, is_fresh, run, stamped_output
+from utils import (
+    atomic_output,
+    content_key,
+    duration,
+    file_hash,
+    is_fresh,
+    run,
+    stamped_output,
+    video_duration,
+)
 
 W, H, FPS = config.WIDTH, config.HEIGHT, config.FPS
+RATE = config.AUDIO_RATE
 BG = "0x0f1419"
 VIDEO_ENC = ["-c:v", "libx264", "-preset", "medium", "-crf", "18"]
-AUDIO_ENC = ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"]
+AUDIO_ENC = ["-c:a", "aac", "-b:a", "192k", "-ar", str(RATE)]
+# loudnorm's output timestamps skip at the end of its input; FFmpeg then drops samples
+# under a duration limit. Re-stamping from the sample count after it fixes that (D12).
+RESTAMP = "asetpts=N/SR/TB"
+
+
+def scene_frames(narration_s: float) -> int:
+    """Lead-in + narration + tail, rounded up to whole video frames."""
+    return math.ceil(round((config.LEAD_IN_S + narration_s + config.TAIL_S) * FPS, 6))
 
 
 def _still_filter(target: float, scene_id: int) -> str:
@@ -38,20 +61,22 @@ def _moving_filter(target: float, v_len: float, is_ai: bool) -> str:
 
 
 def build_scene_clip(visual: Path, narration: Path, out_dir: Path, kind: str, scene_id: int) -> Path:
-    """Scene length is set by the voice: lead-in + narration + tail.
+    """Scene length is set by the voice: lead-in + narration + tail, in whole frames.
     kind: 'still' | 'manim' | 'ai'. The clip is named by a hash of its input files and
     the exact filters, so a changed narration or visual can never reuse an old clip."""
-    target = config.LEAD_IN_S + duration(narration) + config.TAIL_S
+    n = scene_frames(duration(narration))
+    target, samples = n / FPS, n * RATE // FPS
     vf = (_still_filter(target, scene_id) if kind == "still"
           else _moving_filter(target, duration(visual), kind == "ai"))
-    # Level the voice first: the ducking threshold is absolute, so it only behaves
-    # predictably if every scene's narration arrives at the same loudness.
-    af = (f"loudnorm=I={config.VOICE_LUFS}:TP=-2:LRA=7,"
-          f"aresample=48000,aformat=channel_layouts=stereo,"
+    # Level the voice: the ducking threshold is absolute, so it only behaves predictably if
+    # every scene's narration arrives at the same loudness (D2). The lead-in is added before
+    # loudnorm, and the result is re-stamped and cut to exactly `samples` (D12).
+    af = (f"aresample={RATE},aformat=channel_layouts=stereo,"
           f"adelay=delays={int(config.LEAD_IN_S * 1000)}:all=1,"
-          f"apad=whole_dur={target:.2f}")
+          f"loudnorm=I={config.VOICE_LUFS}:TP=-2:LRA=7,aresample={RATE},{RESTAMP},"
+          f"apad=whole_len={samples},atrim=end_sample={samples}")
     args = ["-filter_complex", f"[0:v]{vf}[v];[1:a]{af}[a]",
-            "-map", "[v]", "-map", "[a]", "-t", f"{target:.2f}",
+            "-map", "[v]", "-map", "[a]", "-frames:v", str(n),
             *VIDEO_ENC, "-r", str(FPS), *AUDIO_ENC]
     out = out_dir / f"{content_key('clip', file_hash(visual), file_hash(narration), args)}.mp4"
     if out.exists():
@@ -61,27 +86,34 @@ def build_scene_clip(visual: Path, narration: Path, out_dir: Path, kind: str, sc
     return out
 
 
+def xfade_offsets(durs: list[float]) -> list[str]:
+    """Where each crossfade starts, as FFmpeg option text: previous scenes minus overlaps,
+    counted in whole frames so rounding never starts a fade a frame late."""
+    offsets, frames = [], 0
+    for d in durs[:-1]:
+        frames += round(d * FPS) - round(config.XFADE_S * FPS)
+        offsets.append(f"{frames / FPS:.6f}")
+    return offsets
+
+
 def crossfade_concat(clips: list[Path], out: Path) -> Path:
     """Chain xfade/acrossfade. The overlap sits in each scene's silent tail, so
     narration never overlaps. Fades in from and out to black at the very ends.
-    Rebuilt whenever any clip changes."""
+    Offsets come from each clip's video length, and each clip's audio is trimmed to it
+    first (dropping AAC's end padding), so audio and video stay locked. Rebuilt whenever
+    any clip changes."""
     xf = config.XFADE_S
-    durs = [duration(c) for c in clips]
+    durs = [video_duration(c) for c in clips]
     total = sum(durs) - xf * (len(clips) - 1)
 
-    if len(clips) == 1:
-        graph, v, a = "", "0:v", "0:a"
-    else:
-        parts, v, a, offset = [], "0:v", "0:a", 0.0
-        for i in range(1, len(clips)):
-            offset += durs[i - 1] - xf
-            parts.append(f"[{v}][{i}:v]xfade=transition=fade:duration={xf}:offset={offset:.3f}[v{i}]")
-            parts.append(f"[{a}][{i}:a]acrossfade=d={xf}[a{i}]")
-            v, a = f"v{i}", f"a{i}"
-        graph = ";".join(parts) + ";"
-    graph += f"[{v}]fade=t=in:d=1.5,fade=t=out:st={total - 2.5:.2f}:d=2.5[vout]"
-    args = ["-filter_complex", graph,
-            "-map", "[vout]", "-map", f"[{a}]" if len(clips) > 1 else a,
+    trims = [f"[{i}:a]atrim=end_sample={round(d * RATE)},asetpts=PTS-STARTPTS[s{i}]" for i, d in enumerate(durs)]
+    parts, v, a = trims, "0:v", "s0"
+    for i, offset in enumerate(xfade_offsets(durs), start=1):
+        parts.append(f"[{v}][{i}:v]xfade=transition=fade:duration={xf}:offset={offset}[v{i}]")
+        parts.append(f"[{a}][s{i}]acrossfade=d={xf}[a{i}]")
+        v, a = f"v{i}", f"a{i}"
+    graph = ";".join(parts) + f";[{v}]fade=t=in:d=1.5,fade=t=out:st={total - 2.5:.2f}:d=2.5[vout]"
+    args = ["-filter_complex", graph, "-map", "[vout]", "-map", f"[{a}]",
             *VIDEO_ENC, "-r", str(FPS), *AUDIO_ENC]
     key = content_key("xfade", [file_hash(c) for c in clips], args)
     if is_fresh(out, key):
@@ -93,24 +125,25 @@ def crossfade_concat(clips: list[Path], out: Path) -> Path:
 
 
 def add_music(narrated: Path, bed: Path | None, out: Path) -> Path:
-    total = duration(narrated)
+    total = video_duration(narrated)
+    master = f"loudnorm=I={config.TARGET_LUFS}:TP=-1.5:LRA=11,aresample={RATE},{RESTAMP}"
     if bed is None:
-        args = ["-c:v", "copy", "-af", f"loudnorm=I={config.TARGET_LUFS}:TP=-1.5:LRA=11",
-                "-c:a", "aac", "-b:a", "192k"]
+        args = ["-map", "0:v", "-map", "0:a", "-c:v", "copy", "-af", master,
+                *AUDIO_ENC, "-t", f"{total:.3f}"]
     else:
         fc = (
             "[0:a]asplit=2[voice][key];"
-            f"[1:a]aresample=48000,aformat=channel_layouts=stereo,"
+            f"[1:a]aresample={RATE},aformat=channel_layouts=stereo,"
             f"volume={config.MUSIC_VOLUME},afade=t=in:d={config.MUSIC_FADE_S}[mus];"
             # sidechain: the voice pushes the music down while it speaks
             f"[mus][key]sidechaincompress=threshold=0.03:ratio={config.DUCK_RATIO}"
             ":attack=80:release=900[duck];"
             "[voice][duck]amix=inputs=2:duration=first:normalize=0,"
             f"afade=t=out:st={max(total - config.MUSIC_FADE_S, 0):.2f}:d={config.MUSIC_FADE_S},"
-            f"loudnorm=I={config.TARGET_LUFS}:TP=-1.5:LRA=11[aout]"
+            f"{master}[aout]"
         )
         args = ["-filter_complex", fc, "-map", "0:v", "-map", "[aout]",
-                "-c:v", "copy", *AUDIO_ENC, "-t", f"{total:.2f}"]
+                "-c:v", "copy", *AUDIO_ENC, "-t", f"{total:.3f}"]
     key = content_key("mix", file_hash(narrated), file_hash(bed) if bed else None, args)
     if is_fresh(out, key):
         return out

@@ -32,7 +32,7 @@ def build_bed(tracks: list[Path], total_s: float, out: Path, seed: str) -> Path:
             if length >= total_s + 2 * xf:
                 break
 
-    norm = "".join(f"[{i}:a]aresample=48000,aformat=channel_layouts=stereo[m{i}];"
+    norm = "".join(f"[{i}:a]aresample={config.AUDIO_RATE},aformat=channel_layouts=stereo[m{i}];"
                    for i in range(len(order)))
     if len(order) == 1:
         chain, last = "", "m0"
@@ -56,7 +56,7 @@ def build_bed(tracks: list[Path], total_s: float, out: Path, seed: str) -> Path:
 def placeholder_pad(out: Path, seconds: float = 180) -> Path:
     """Soft synthetic chord for testing the pipeline. Not meant for publishing."""
     chord = "+".join(f"0.18*sin(2*PI*{f}*t)" for f in (110, 164.81, 220, 277.18))
-    args = ["-f", "lavfi", "-i", f"aevalsrc='{chord}':s=48000:d={seconds}",
+    args = ["-f", "lavfi", "-i", f"aevalsrc='{chord}':s={config.AUDIO_RATE}:d={seconds}",
             "-af", "tremolo=f=0.15:d=0.4,aecho=0.8:0.7:600:0.3,lowpass=f=1200", "-ac", "2"]
     key = content_key("pad", args)
     if is_fresh(out, key):

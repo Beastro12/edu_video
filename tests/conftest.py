@@ -1,6 +1,10 @@
+import math
 import shutil
+import struct
 import subprocess
 import sys
+import tempfile
+import wave
 from pathlib import Path
 
 import pytest
@@ -19,6 +23,30 @@ _REAL_GENAI_CLIENT = google.genai.Client
 
 def ff(*args):
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args], check=True)
+
+
+def decoded_audio(path) -> tuple[float, list[float]]:
+    """The audio as real samples, not as the container claims: (seconds, RMS dBFS per 10 ms).
+    A timestamp gap in the stream plays as silence in a player but vanishes here, exactly as it
+    does inside FFmpeg filter graphs such as the crossfade chain."""
+    with tempfile.TemporaryDirectory() as d:
+        wav = Path(d) / "a.wav"
+        ff("-i", str(path), "-map", "0:a", "-ac", "1", "-ar", "8000", "-c:a", "pcm_s16le", str(wav))
+        with wave.open(str(wav)) as w:
+            n, rate = w.getnframes(), w.getframerate()
+            samples = struct.unpack(f"<{n}h", w.readframes(n))
+    step = rate // 100
+    levels = []
+    for i in range(0, n, step):
+        window = samples[i:i + step]
+        rms = math.sqrt(sum(x * x for x in window) / len(window)) / 32768
+        levels.append(20 * math.log10(max(rms, 1e-9)))
+    return n / rate, levels
+
+
+def onset_s(levels: list[float], threshold_db: float = -40) -> float:
+    """When sound first rises above the threshold (10 ms resolution)."""
+    return next(i for i, db in enumerate(levels) if db > threshold_db) / 100
 
 
 @pytest.fixture(autouse=True)

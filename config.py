@@ -35,6 +35,8 @@ VOICE_SETTINGS = {
 
 # --- Video & pacing -------------------------------------------------------
 WIDTH, HEIGHT, FPS = 1920, 1080, 30
+AUDIO_RATE = 48000            # every scene is a whole number of frames = AUDIO_RATE / FPS samples each
+assert AUDIO_RATE % FPS == 0, "a video frame must be a whole number of audio samples"
 ASPECT_RATIO = "16:9"         # what the image/video models are asked for; matches WIDTH x HEIGHT
 LEAD_IN_S = 0.6              # silence before each scene's narration
 TAIL_S = 1.8                 # silence after it
@@ -42,6 +44,7 @@ XFADE_S = 1.2                # crossfade between scenes; must stay below TAIL_S
 KEN_BURNS_ZOOM = 0.10        # how far stills drift (10%) over a scene
 MAX_AI_SLOWDOWN = 1.6        # stretch Veo clips up to this before holding the last frame
 assert XFADE_S < TAIL_S, "crossfade would overlap narration"
+assert abs(XFADE_S * FPS - round(XFADE_S * FPS)) < 1e-9, "crossfade must be whole frames (D12)"
 
 # --- Music ----------------------------------------------------------------
 MUSIC_DIR = str(PROJECT_DIR / "music")

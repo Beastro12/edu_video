@@ -124,3 +124,29 @@ DIVERGED — Anthropic retries use the SDK's own backoff curve (0.5 s → 8 s), 
 RETRY_MAX_S: reimplementing the SDK's loop would duplicate it (D11).
 NEXT — P0-5 (A/V drift): root cause and fix already measured (adelay before loudnorm).
 Reviewer note kept for later: a Google-image success-after-retry ledger test belongs in P0-6.
+
+## 2026-09-27 P0-5 Scene audio loses its lead-in; narration drifts ahead of the visuals
+CHANGED — `assembly.py`: scenes are whole video frames (`scene_frames`), audio exactly
+frames × 1600 samples (`adelay` → `loudnorm` → `asetpts=N/SR/TB` → `apad`/`atrim`), video
+capped with `-frames:v`; `crossfade_concat` counts offsets in whole frames
+(`xfade_offsets`) and trims each clip's audio to its video before `acrossfade`; `add_music` re-stamps after `loudnorm` and cuts
+to the video length. `utils.video_duration`. `config.AUDIO_RATE` (48000, divisible by FPS),
+used by assembly and music. Tests: `decoded_audio`/`onset_s` helpers in conftest; per-clip
+timing over 4 narration lengths × still/manim; a 12-scene chain; final mix at two lengths.
+DECISIONS D12.
+CHECKED — verified: red first (clip decoded 3.883 s vs 4.44 s target; narrated audio 10.26 s
+vs video 11.93 s). My first fix (only moving `adelay` before `loudnorm`) passed the fixture
+lengths; the reviewer subagent marked it Critical with evidence that `loudnorm` itself skips
+timestamps (19 of 43 lengths short by up to 87 ms; 1.06 s drift over 40 scenes). I reproduced
+it (3.06 / 3.344 s narrations lost 27 / 40 ms) before changing code, then fixed the rest.
+Mutations, each caught: no re-stamp in the scene chain; no audio trim in the crossfade; no
+re-stamp in the final mix (lost 39-75 ms at most lengths, measured); HEAD's assembly.py.
+Re-review: no Critical; 44 lengths within one AAC frame, onset drift ≤ 7 ms over 40 scenes
+(was −1.06 s). Its one Warning (offsets printed to 3 decimals start some fades a frame late)
+fixed with a red-first test. `make check`: 54 passed. Voice level −18.2 LUFS vs −18.6 before (target −18; test tone).
+ASSUMED — Up to one extra frame (33 ms) per scene is acceptable pacing-wise.
+DIVERGED — Acceptance said "decoded audio equals the video duration (±1 AAC frame)"; met
+literally now (it wasn't with the first fix, which compared to the `-t` target instead).
+NEXT — P0-6 (Google model retirements). Then P0-7 (Veo daily cap), then P1. New: P1-8
+(closing fade also dims the last narration, from the review). `pipeline.py` now builds the
+bed to the video length, not the container's.

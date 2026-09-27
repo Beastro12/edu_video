@@ -34,7 +34,7 @@ Work top to bottom within a priority.
   Accept: 429/5xx/timeouts from Anthropic, ElevenLabs and Google retry with jittered
   exponential backoff (max 4). Non-transient errors fail fast. Tested with mocks.
 
-- [ ] P0-5 — Scene audio loses its lead-in; narration drifts ahead of the visuals
+- [x] P0-5 — Scene audio loses its lead-in; narration drifts ahead of the visuals
   Found during P0-1 (verified, FFmpeg 6.1.1): in `build_scene_clip`, `loudnorm` followed
   by `adelay` emits the lead-in silence frames without valid timestamps (`ashowinfo`
   shows `pts:NOPTS`); with `-t` on the AAC encode those samples are lost, so each clip's
@@ -114,6 +114,13 @@ Work top to bottom within a priority.
   Accept: a failed generation is recorded per content key in `build/<slug>/failures.json`
   with the error; reruns go straight to the fallback unless `--retry-failed` is passed.
   Mocked test: second run makes no provider call for a previously failed scene.
+
+- [ ] P1-8 — The closing fade dims the last narration
+  Found in the P0-5 review (measured by the reviewer): in `add_music`, `afade=t=out` runs
+  after `amix`, so it fades the voice as well as the music; with a steady tone the voice is
+  ~10 dB down by the end of the last scene.
+  Accept: only the music bed fades out (the voice isn't touched); a test measures the last
+  narration's level against an earlier one (within 1 dB) and the bed's level falling.
 
 ## P2 — scale and polish
 

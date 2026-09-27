@@ -10,7 +10,7 @@ import config
 import ledger
 from agents import ai_video, critic, image_agent, manim_agent, music, script_agent, voice
 from assembly import add_music, build_scene_clip, crossfade_concat
-from utils import content_key, duration, load_json, save_json, slugify
+from utils import content_key, duration, load_json, save_json, slugify, video_duration
 
 
 def _chapter_sources(work: Path) -> str | None:
@@ -210,7 +210,7 @@ def render_film(script: dict, work: Path, allow_veo: bool, seed: str) -> Path:
 
     print("• assembling (crossfades)")
     narrated = crossfade_concat(clips, work / "narrated.mp4")
-    total = duration(narrated)
+    total = video_duration(narrated)  # the container also counts AAC's end padding
     tracks = music.list_tracks()
     if tracks:
         bed = music.build_bed(tracks, total, work / "music_bed.wav", seed)
