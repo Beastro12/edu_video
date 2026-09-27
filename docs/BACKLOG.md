@@ -103,7 +103,9 @@ Work top to bottom within a priority.
   (Added after the P0-2 review:) the budget check must reserve each call's cost under
   a lock before the call and settle it after, so concurrent calls can't overshoot.
 
-- [ ] P1-6 — Faster still rendering
+- [x] P1-6 — Faster still rendering (done for the still scene clip, −44% / −48%, with jitter
+  unchanged (within 0.01 px); a still scene end to end is −26% / −24% because the film's own
+  encode is unchanged: P1-9; whether the drift's existing stop-go is visible: P1-10. D18)
   Accept: still-scene render time drops ≥40% without visible jitter. Measure the
   current 3× upscale approach vs alternatives; record numbers in DECISIONS.
 
@@ -122,6 +124,25 @@ Work top to bottom within a priority.
   Accept: only the music bed fades out (the voice isn't touched); a test measures the last
   narration's level against an earlier one (within 1 dB) and the bed's level falling.
 
+- [ ] P1-9 — Faster final film encode
+  Found in P1-6 (D18): once scene clips are fast, the film's own encode (`FILM_X264`, x264
+  medium crf 18 in `crossfade_concat`) is 61–65% of a still scene's render time, and every
+  scene pays it.
+  Accept: with `scripts/bench_stills.py`, pick film x264 settings that cut the film encode
+  ≥40% with SSIM (against the lossless reference) within 0.0005 of today's for stills, Manim
+  and Veo clips, and file size up ≤25%; record the numbers in a new DECISIONS entry (this
+  changes the file that is uploaded). Test: the film is encoded with the chosen settings.
+
+- [~] P1-10 — Smooth sub-pixel drift on stills [blocked: needs Pietro's eyes, see NEEDS_PIETRO]
+  Found in P1-6 (D18): zoompan keeps the crop on the yuv420p chroma grid, so even on the 3×
+  upscale the slow drift moves in 0.73 px jumps with the picture standing still in between
+  (stop-go), and a push-in moves back and forth. FFmpeg's `perspective` filter positions to
+  1/256 px and removes it, but makes the still clip step about twice as slow (cubic; linear is
+  cheaper but softer); zoompan in yuv444p costs nearly as much per clip and only halves the
+  jumps (D18).
+  Accept (once Pietro says the difference is visible): stills drift with jitter ≤ 0.1 px in
+  the benchmark, same framing and motion as today; D18 updated with the new render time.
+
 ## P2 — scale and polish
 
 - [ ] P2-1 — Batch mode from `topics.txt`, with a variety check against past titles
@@ -131,3 +152,12 @@ Work top to bottom within a priority.
 - [ ] P2-3 — Structured run log and a `run_report.md` per video (costs, timings, QA,
   fallbacks used).
 - [ ] P2-4 — README refresh reflecting everything above.
+- [ ] P2-5 — Prune per-scene files no film uses any more
+  Found in the P1-6 review: files are named by a hash of their inputs, so any change of
+  settings (e.g. D18's clip encoder) leaves the old clips behind; `clips/` roughly doubles.
+  Accept: `python pipeline.py "<topic>" --prune` deletes the free intermediates (`clips/`)
+  that the current `manifest.json` doesn't reference and prints the space freed. Paid files
+  (`audio/`, `visuals/`) no manifest references are only listed, with what they cost; they
+  are deleted only with `--prune-paid` (a reverted script edit would otherwise pay again).
+  Nothing in `music/` is touched. Test: after a settings change and rebuild, `--prune` leaves
+  exactly the referenced clips and every paid file.

@@ -332,3 +332,42 @@ ASSUMED — 4 workers; clip rendering stays sequential (FFmpeg is already multi-
 DIVERGED — D10's "check-then-call is not atomic" limit is now closed within one process (D17);
 two processes sharing the ledger still aren't coordinated.
 NEXT — P1-6 (faster still rendering). Risk: Manim renders may now run 4 at a time (CPU heavy).
+
+## 2026-09-27 P1-6 Faster still rendering
+CHANGED — `assembly.py`: `clip_encoder(kind)`: still and Manim scene clips are encoded with
+`config.CLIP_X264` (x264 veryfast crf 14); Veo clips and the film keep `FILM_X264` (medium crf 18,
+as before); `_still_filter` takes its upscale from `config.KEN_BURNS_UPSCALE` (3, unchanged).
+New `scripts/bench_stills.py`: the benchmark every D18 number comes from (times the real
+`build_scene_clip` / `crossfade_concat`; SSIM against lossless renders; motion per frame;
+`--compare IMAGE` renders the drifts to watch). `tests/test_assembly.py`: which encoder each clip
+kind and the film get, and that the upscale comes from config. D18 written; README render times;
+numpy in requirements-dev (the benchmark); BACKLOG P1-9, P1-10 (`[~]`), P2-5; NEEDS_PIETRO: look at
+the drift.
+CHECKED — verified with the benchmark (D18, one run, 4 cores, 20 s scenes): still clip step
+15.06 → 8.42 s (pan), 18.01 → 9.31 s (push-in), −44% / −48% (43–49% in all five runs made);
+film SSIM −0.00007 / −0.00034; motion unchanged (jitter 0.685 → 0.683, 0.470 → 0.465 px); Manim
+clip −13%, SSIM −0.00003. NOT met end to end: a still scene including the film's encode is
+−26% / −24% (P1-9). Go/no-go gates fixed before the last runs (clip ≥ −40%, film SSIM within
+0.0005, jitter within 0.01 px) passed. The test fails when every kind gets the fast encoder and
+when the upscale is hard-coded (both mutations run). `--compare` run: 2 min 10 s. Reviewer:
+pass 1, one Critical (D18's numbers could not be reproduced from the script) plus warnings; while
+fixing it I found three mistakes of my own, each diagnosed before changing anything: unseeded test
+sources (numbers moved between runs; seeds now fixed and checked by hash), a shift estimator pulled
+to whole pixels (0.06 px error; the phase-slope one is off by ≤ 0.0022 px), and a push-in jitter
+measure that mixed speeds (0.54 → 0.65 for identical motion; now 240 px strips). Pass 2: no
+Critical; 5 warnings, all fixed (the stop-go is on even pixels because zoompan runs in yuv420p —
+checked with showinfo — and the yuv444p variant it suggested is now measured; step statistics
+printed by the script; 3 repeats and the observed ±8% timing spread stated; scope of the tick;
+film/clip ratio) and 4 suggestions taken. Those fixes were checked by me against the benchmark
+output, not re-reviewed. `make check`: 116 passed (4 min 1 s) on the committed state.
+ASSUMED — "still-scene render time" in the criterion means the still's clip step (the README had
+named the drift as the heaviest step); by that reading ≥40% is met, end to end it isn't.
+"Without visible jitter": the motion is unchanged; whether the drift's existing stop-go is visible
+is not verified (P1-10, needs Pietro). Veo clips keep the old encoder (grain: −0.0067 SSIM).
+DIVERGED — nothing in DECISIONS reversed (no entry fixed the encoder). From my own earlier output:
+`_still_filter`'s docstring claim that 3× keeps zoompan's positioning "from producing visible
+jitter" is only partly true (D18); reworded. From my own gate: the push-in jitter gate I set first
+failed (0.540 → 0.649) on a 480 px strip; I diagnosed the instrument (identical motion in narrow
+strips), replaced it, and re-measured everything with the replacement.
+NEXT — P1-7 (don't re-attempt failed paid generations). Risk: none known from P1-6; existing
+builds re-render their clips once (free), and old clips stay on disk until P2-5.

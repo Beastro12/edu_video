@@ -21,7 +21,7 @@ from utils import (
 W, H, FPS = config.WIDTH, config.HEIGHT, config.FPS
 RATE = config.AUDIO_RATE
 BG = "0x0f1419"
-VIDEO_ENC = ["-c:v", "libx264", "-preset", "medium", "-crf", "18"]
+VIDEO_ENC = ["-c:v", "libx264", "-preset", config.FILM_X264[0], "-crf", str(config.FILM_X264[1])]
 AUDIO_ENC = ["-c:a", "aac", "-b:a", "192k", "-ar", str(RATE)]
 # loudnorm's output timestamps skip at the end of its input; FFmpeg then drops samples
 # under a duration limit. Re-stamping from the sample count after it fixes that (D12).
@@ -34,9 +34,11 @@ def scene_frames(narration_s: float) -> int:
 
 
 def _still_filter(target: float, scene_id: int) -> str:
-    """Slow Ken Burns drift. Upscaling 3x first keeps zoompan's integer
-    positioning from producing visible jitter at this slow speed."""
+    """Slow Ken Burns drift. zoompan moves the crop in whole pixels (even ones: it runs in
+    yuv420p), so the still is upscaled first (KEN_BURNS_UPSCALE) to make those steps small:
+    0.73 px on screen at 3x. The drift is still stop-go at this speed (D18, P1-10)."""
     n = max(int(round(target * FPS)), 1)
+    k = config.KEN_BURNS_UPSCALE
     z = config.KEN_BURNS_ZOOM
     centre_x, centre_y = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
     motion = scene_id % 3
@@ -46,8 +48,8 @@ def _still_filter(target: float, scene_id: int) -> str:
         zexpr, x, y = f"{1 + z}-{z}*on/{n}", centre_x, centre_y
     else:              # slow pan left to right
         zexpr, x, y = f"{1 + z}", f"(iw-iw/zoom)*on/{n}", centre_y
-    return (f"scale={W * 3}:{H * 3}:force_original_aspect_ratio=increase,"
-            f"crop={W * 3}:{H * 3},"
+    return (f"scale={W * k}:{H * k}:force_original_aspect_ratio=increase,"
+            f"crop={W * k}:{H * k},"
             f"zoompan=z='{zexpr}':x='{x}':y='{y}':d={n}:s={W}x{H}:fps={FPS},"
             f"setsar=1,format=yuv420p")
 
@@ -58,6 +60,14 @@ def _moving_filter(target: float, v_len: float, is_ai: bool) -> str:
             f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
             f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color={BG},setsar=1,fps={FPS},"
             f"tpad=stop_mode=clone:stop_duration={target:.2f},format=yuv420p")
+
+
+def clip_encoder(kind: str) -> list[str]:
+    """Scene clips are intermediates that the film re-encodes (D18). Stills and Manim get the
+    fast CLIP_X264. Veo footage keeps FILM_X264: its grain loses detail through two fast
+    encodes, and there are at most VEO_MAX_PER_DAY such clips, so their speed doesn't matter."""
+    preset, crf = config.FILM_X264 if kind == "ai" else config.CLIP_X264
+    return ["-c:v", "libx264", "-preset", preset, "-crf", str(crf)]
 
 
 def build_scene_clip(visual: Path, narration: Path, out_dir: Path, kind: str, scene_id: int) -> Path:
@@ -77,7 +87,7 @@ def build_scene_clip(visual: Path, narration: Path, out_dir: Path, kind: str, sc
           f"apad=whole_len={samples},atrim=end_sample={samples}")
     args = ["-filter_complex", f"[0:v]{vf}[v];[1:a]{af}[a]",
             "-map", "[v]", "-map", "[a]", "-frames:v", str(n),
-            *VIDEO_ENC, "-r", str(FPS), *AUDIO_ENC]
+            *clip_encoder(kind), "-r", str(FPS), *AUDIO_ENC]
     out = out_dir / f"{content_key('clip', file_hash(visual), file_hash(narration), args)}.mp4"
     if out.exists():
         return out

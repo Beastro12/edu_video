@@ -108,5 +108,8 @@ Everything is in `config.py`: voice calmness and speed, pauses, crossfade length
 far stills drift, music level and ducking. Model names can be overridden in `.env`
 (`CLAUDE_MODEL`, `IMAGE_MODEL`, `VEO_MODEL`), since Google renames them often.
 
-Render time: the slow drift on stills is the heaviest step, roughly 1–3× real time per
-still scene depending on your CPU, so a 15-minute video takes a while to assemble.
+Render time (4 cores; DECISIONS D18, measured with `scripts/bench_stills.py`): each second
+of a still scene costs about 1.1–1.3 s of FFmpeg in all (its clip plus its share of the film's
+final encode), of a Manim scene about 0.4 s (plus Manim's own render), of a Veo scene about
+2.3 s. A 15-minute film therefore spends roughly 15–20 minutes in FFmpeg (an estimate for a
+typical scene mix, not a measured run).

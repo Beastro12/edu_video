@@ -172,3 +172,62 @@ process. Veo jobs run one at a time so the daily cap can't be raced. Evidence: 8
 narrations with room for 3 bought 8 before, exactly 3 now; 8 scenes (TTS + image, 0.2 s fake
 latency) took ~3.5 s sequentially and ~1.35 s on 4 workers. Still open: two separate
 processes share the ledger file but not the lock.
+
+**D18 — Scene clips are fast intermediates; the drift keeps zoompan on a 3× upscale.**
+The numbers here come from one run of `scripts/bench_stills.py` (4 cores; a 20 s scene at
+1080p30; the still is a seeded, textured 1344×768 test image, a hard case). Times are the
+fastest of 3 runs and vary up to ~8% between runs; SSIM, sizes and motion repeat exactly. "Clip"
+is `build_scene_clip`, "film" the film's own encode of that clip in `crossfade_concat` (medium
+crf 18, unchanged). Film SSIM is against a lossless render of the same drift, on the frames
+between the film's fades; "detail" is the variance of the Laplacian of the middle frame
+(higher = sharper). Cells are pan / push-in.
+
+| drift, clip encoder | clip s | film s | jitter px | film SSIM | detail | clip MB |
+|---|---|---|---|---|---|---|
+| 3× zoompan, lossless (reference) | 8.13 / 8.10 | 15.10 / 19.56 | 0.682 / 0.457 | – | 1746 / 1995 | 368 / 785 |
+| 3× zoompan, medium crf 18 (was) | 15.06 / 18.01 | 14.30 / 17.35 | 0.685 / 0.470 | 0.99752 / 0.99670 | 1684 / 1848 | 15.7 / 25.0 |
+| 2× zoompan, medium crf 18 | 17.51 / 16.86 | 16.36 / 17.27 | 0.833 / 0.530 | – | 1702 / 1892 | 20.8 / 29.0 |
+| 1× zoompan, medium crf 18 | 12.17 / 15.16 | 13.12 / 16.17 | 1.181 / 0.733 | – | 1688 / 1922 | 16.1 / 27.1 |
+| 3× zoompan, veryfast crf 18 | 8.37 / 9.10 | 14.63 / 17.20 | 0.686 / 0.456 | 0.99585 / 0.99480 | 1694 / 1769 | 11.8 / 20.9 |
+| 3× zoompan, veryfast crf 16 | 8.47 / 8.88 | 13.59 / 16.76 | 0.684 / 0.463 | 0.99679 / 0.99582 | 1688 / 1799 | 14.5 / 28.5 |
+| **3× zoompan, veryfast crf 14 (now)** | **8.42 / 9.31** | 13.18 / 17.46 | 0.683 / 0.465 | 0.99745 / 0.99636 | 1680 / 1821 | 18.1 / 39.8 |
+| 3× zoompan in yuv444p, veryfast crf 14 | 15.95 / 15.99 | 14.62 / 17.65 | 0.199 / 0.289 | 0.99761 / 0.99605 | 1784 / 1923 | 21.1 / 40.4 |
+| `perspective` cubic, veryfast crf 14 | 17.81 / 17.88 | 16.55 / 24.36 | 0.050 / 0.020 | 0.99721 / 0.99690 | 1716 / 2231 | 38.3 / 123 |
+| `perspective` linear, veryfast crf 14 | 13.72 / 12.77 | 16.15 / 23.83 | 0.059 / 0.021 | – | 1313 / 1647 | 41.5 / 116 |
+
+- **Speed.** The clip's x264 encode, not zoompan, was most of the clip step (lossless
+  ultrafast: 8.1 s). Chosen: still and Manim clips use `CLIP_X264` = veryfast crf 14: clip step
+  −44% / −48% (43–49% in each of the five runs made, two of them with unseeded images); Manim
+  −13% (3.61 → 3.15 s). The film's encode is unchanged and now takes 1.6–1.9× as long as the
+  clip, so a still scene end to end (clip + film) is −26% / −24% (29.4 → 21.6 s, 35.4 → 26.8 s).
+  A faster film encode is P1-9.
+- **Quality.** Film SSIM −0.00007 / −0.00034 (Manim 0.99987 → 0.99984). veryfast crf 16 and 18
+  were as fast but lost 0.0007–0.0019. Veo-like footage (grainy 720p24, stretched) loses 0.0067
+  through two fast encodes (0.96858 → 0.96191), so Veo clips keep `FILM_X264`: at most
+  `VEO_MAX_PER_DAY` per film, their speed doesn't matter (`assembly.clip_encoder`).
+- **Motion.** Jitter is set by the drift filter, not the encoder (was and now within 0.01 px of
+  each other, and within 0.013 px of the lossless render). zoompan keeps its crop on the
+  chroma grid of its input, which the pipeline's `format=yuv420p` makes yuv420p, so even at 3×
+  the drift moves in steps of 2 px of the upscale: on the pan the picture stands still on 57%
+  of frames and jumps 0.733 px on the rest (mean 0.318 px/frame); in the push-in it moves back
+  and forth (in the worst of the 8 strips, 75% of its moves go against the drift). A smaller
+  upscale saves at most 20% (measured at the old encoder) and is jerkier (2×: +22% / +13%;
+  1×: +72% / +56%), so 3× stays (`KEN_BURNS_UPSCALE`). Alternatives, each at 1.4–2.1× the
+  clip time: zoompan in yuv444p halves the jumps (0.366 px; jitter 0.20 / 0.29); FFmpeg's
+  `perspective` (positions to 1/256 px) glides (moves on every frame of the pan, never
+  backwards; jitter 0.05 / 0.02), with cubic interpolation as sharp as today and with linear
+  cheaper but softer (detail −22% / −10%). Whether today's stop-go is visible needs eyes on a
+  screen: P1-10, NEEDS_PIETRO.
+- **Disk.** Intermediate clips +15% / +59%. The clip cache key includes the encoder, so an
+  existing build re-renders its clips once (no paid call) and the old ones stay until pruned
+  (P2-5).
+- **How motion is measured**, and three mistakes not to repeat. Per frame, the column means of
+  the middle third; per 240 px strip, the shift between consecutive frames from the slope of the
+  cross-spectrum's phase (checked on each run against independently made known shifts: off by
+  ≤ 0.0001 px full width, ≤ 0.0022 px on a strip); jitter = std of the frame-to-frame change of
+  that shift, median over 8 strips; shifts past 3 px are failed estimates (< 1%), dropped and
+  counted. The first benchmark (i) fitted a parabola to the correlation peak at 480 px width,
+  which pulls towards whole pixels, (ii) used unseeded test sources, so its numbers could not
+  be reproduced (the P1-6 review's Critical), and (iii) an intermediate version measured the
+  push-in on a 480 px strip, where motion isn't uniform, so the estimate moved with wherever the
+  encoder left detail (0.54 → 0.65 px for identical motion).

@@ -75,3 +75,22 @@ chapter timestamps (P1-4).
 **Why:** a placeholder I chose; the channel's voice is yours.
 **Recommend:** replace it with your channel's standard text (and any music credits your
 licences require). Keep it under YouTube's 5,000 bytes; the pipeline refuses longer.
+
+## 2026-09-27 — Look: does the still drift stutter? (P1-10; taste vs render time)
+**What:** a still's slow drift doesn't glide. zoompan places the picture on the chroma grid of
+its 3× upscale (steps of 2 px there), so on a pan it stands still on 57% of frames and jumps
+0.73 px on the rest, and a push-in moves back and forth (measured frame by frame, D18). This has been
+so since the start; P1-6 didn't change it. FFmpeg's `perspective` filter glides (jitter
+0.02–0.05 px vs 0.47–0.68) and is at least as sharp, but costs render time: its clip is about
+twice as slow and the film encodes it more slowly, together +0.6–0.8 s per second of still
+scene, roughly +6–8 min per 15-min film (estimate, assuming ~10 min of still scenes). Two cheaper
+middle ways each give something up: `perspective` with linear interpolation (+4–5 min) glides
+but is measurably softer (detail −10 to −22%); zoompan in yuv444p (+3–5 min) only halves the jumps (jitter 0.20–0.29).
+**Why it needs you:** the jumps are under a pixel; whether they show on a real screen needs
+eyes. I can measure motion but not watch it.
+**Tried:** measured them (D18). `.venv/bin/python scripts/bench_stills.py --compare IMAGE`
+renders a pan and a push-in of your image both ways in about two minutes and prints the four
+files (their sound is a test tone: mute it).
+**Recommend:** run it on one of your stills (e.g. `build/<slug>/visuals/still_*.png`) and watch
+the films in pairs, full-screen, on your largest display. If you see a difference, say so and I'll do
+P1-10; if not, nothing to do.

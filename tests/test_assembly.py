@@ -140,3 +140,24 @@ def test_every_crossfade_starts_on_a_frame():
     xf = round(config.XFADE_S * config.FPS)
     expected = [sum(frames[:i]) - xf * i for i in range(1, len(frames))]
     assert [round(float(o) * config.FPS, 4) for o in offsets] == expected
+
+
+def test_scene_clips_are_fast_intermediates_and_the_film_gets_the_final_encode(media, tmp_path, monkeypatch):
+    """P1-6 / D18: the scene clip encode dominated still-scene render time; clips are
+    re-encoded by the crossfade anyway, so still and Manim clips use CLIP_X264. Veo clips
+    (grainy, few) and the film use FILM_X264."""
+    import assembly
+    commands = []
+    real = assembly.run
+    monkeypatch.setattr(assembly, "run", lambda cmd, cwd=None: commands.append(cmd) or real(cmd, cwd))
+    monkeypatch.setattr(assembly, "W", 320)
+    monkeypatch.setattr(assembly, "H", 180)
+    monkeypatch.setattr(config, "KEN_BURNS_UPSCALE", 2)  # not the default, so a hard-coded factor fails
+    clips = [build_scene_clip(media / visual, media / "n_short.mp3", tmp_path, kind, 1)
+             for visual, kind in (("still.png", "still"), ("manim.mp4", "manim"), ("ai.mp4", "ai"))]
+    crossfade_concat(clips, tmp_path / "n.mp4")
+    encodes = [c for c in commands if "-preset" in c]
+    preset = lambda cmd: (cmd[cmd.index("-preset") + 1], cmd[cmd.index("-crf") + 1])  # noqa: E731
+    fast, film = (config.CLIP_X264[0], str(config.CLIP_X264[1])), (config.FILM_X264[0], str(config.FILM_X264[1]))
+    assert [preset(c) for c in encodes] == [fast, fast, film, film], "still, manim, ai clip; then the film"
+    assert "scale=640:360" in " ".join(encodes[0]), "the still is upscaled by KEN_BURNS_UPSCALE before zoompan"
