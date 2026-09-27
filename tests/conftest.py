@@ -13,6 +13,31 @@ def ff(*args):
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args], check=True)
 
 
+@pytest.fixture(autouse=True)
+def offline(request, monkeypatch, tmp_path):
+    """Every offline test gets its own build dir, so the spend ledger never touches build/,
+    and fails loudly if it reaches a paid API it didn't mock."""
+    if request.node.get_closest_marker("live"):
+        return
+    import anthropic.resources.messages
+    import requests
+
+    import config
+
+    def blocked(*args, **kwargs):
+        raise AssertionError("offline test reached a paid API without mocking it")
+
+    monkeypatch.setattr(config, "BUILD_DIR", str(tmp_path / "build"))
+    monkeypatch.setattr(requests.Session, "request", blocked)  # requests.post and friends
+    monkeypatch.setattr(requests, "post", blocked)
+    monkeypatch.setattr(anthropic.resources.messages.Messages, "create", blocked)  # any client
+    try:
+        import google.genai
+    except ImportError:  # optional dependency: nothing to guard
+        return
+    monkeypatch.setattr(google.genai, "Client", blocked)
+
+
 @pytest.fixture(scope="session")
 def media(tmp_path_factory):
     """Synthetic stand-ins for paid API outputs: narration, Manim clip, Veo clip, still, music."""

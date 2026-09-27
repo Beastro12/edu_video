@@ -41,7 +41,7 @@ def _render(py_file: Path, class_name: str, media_dir: Path) -> Path:
     return hits[-1]
 
 
-def render_scene(scene: dict, target_s: float, out_dir: Path, atmospheric: bool = False) -> Path:
+def _brief(scene: dict, target_s: float, atmospheric: bool) -> str:
     brief = (
         f"Class name: {CLASS_NAME}\nTarget duration: {target_s:.1f} seconds\n"
         f"Concept: {scene['concept']}\nNarration (for timing and content):\n{scene['narration']}\n\n"
@@ -51,11 +51,20 @@ def render_scene(scene: dict, target_s: float, out_dir: Path, atmospheric: bool 
         brief += ("\n\nThis was planned as live-action footage. Instead make a slow, "
                   "abstract, atmospheric animation that evokes it (drifting particles, "
                   "soft shapes). No labels needed.")
-    key = content_key("manim", SYSTEM, brief, config.CLAUDE_MODEL, QUALITY, config.FPS)
-    out = out_dir / f"manim_{key}.mp4"
+    return brief
+
+
+def cache_path(scene: dict, target_s: float, out_dir: Path, atmospheric: bool = False) -> Path:
+    brief = _brief(scene, target_s, atmospheric)
+    return out_dir / f"manim_{content_key('manim', SYSTEM, brief, config.CLAUDE_MODEL, QUALITY, config.FPS)}.mp4"
+
+
+def render_scene(scene: dict, target_s: float, out_dir: Path, atmospheric: bool = False) -> Path:
+    out = cache_path(scene, target_s, out_dir, atmospheric)
     if out.exists():
         return out
-    py_file = out_dir / f"manim_{key}.py"
+    brief = _brief(scene, target_s, atmospheric)
+    py_file = out.with_suffix(".py")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     messages = [{"role": "user", "content": brief}]

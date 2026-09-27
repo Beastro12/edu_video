@@ -43,3 +43,18 @@ see them, so a narration-only edit doesn't re-buy the image. Manim keys include 
 brief (narration and target length), so editing a Manim scene's narration also re-runs its
 Claude call and render. Two scenes with identical `visual_description` share one still or
 Veo clip. Cost: old versions stay on disk until `build/<slug>/` is cleaned.
+
+**D10 — One spend ledger, checked before every paid call.** `build/ledger.jsonl` is shared
+by all videos and `BUDGET_EUR` caps its total, so the cap holds across reruns and topics.
+A call is checked with its worst case (Claude: estimated input + full `max_tokens` output)
+and recorded only after it succeeds, with actual Claude token usage. `BudgetExceeded` is
+not a failed generation: the Veo → still → Manim fallback re-raises it (D7 unchanged for
+real failures). Prices (2026-09-27, secondary sources; verify): Claude Sonnet 5 $2/$10 per
+MTok (Anthropic's model table); ElevenLabs Multilingual v2 $0.10/1k chars; Imagen 4
+Standard $0.04/image; Veo $0.40/s; USD→EUR 0.92. Evidence: `--estimate` for a 15-min film
+gives ~€2 without Google, ~€17 with Veo (5 × 8 s clips ≈ €14.7), so Veo is most of the cost.
+Known limits: check-then-call is not atomic (across threads or processes), so parallel
+work could overshoot by the calls in flight; P1-5 must reserve the cost under a lock. Failed
+calls are assumed unbilled and not recorded, except a Veo job that times out: it keeps
+running on Google's side, so it is recorded as spent. `build/` is anchored to the project
+folder so a different cwd can't start a fresh ledger.

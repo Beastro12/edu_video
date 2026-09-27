@@ -48,3 +48,33 @@ NEXT — P0-2 (spend ledger). Risks found: P0-5 (verified A/V drift bug, pre-exi
 (Imagen 4 and Veo 3.0 retired per secondary sources, not verified) added to BACKLOG. Reviewer
 suggestion not taken: keying `narrated.mp4` by clip names instead of hashing ~1 GB of clips per
 run; kept byte hashes for robustness (measure the cost at the first long render).
+
+## 2026-09-27 P0-2 Spend ledger and hard cap
+CHANGED — New \`ledger.py\`: \`check()\` before every paid call (raises \`BudgetExceeded\` when
+spent + this call > \`BUDGET_EUR\`), \`record()\` appends \`{time, provider, model, units,
+est_cost_eur}\` to \`build/ledger.jsonl\` after success; price helpers. \`config.py\`: \`BUDGET_EUR\`
+from env (default 10, must be finite ≥ 0), prices marked "verify", \`EST_*\` sizes; \`BUILD_DIR\`
+and \`MUSIC_DIR\` anchored to the project folder. \`agents/llm.py\`: one \`_create()\` that checks
+(estimated input + full \`max_tokens\`) and records actual token usage. \`voice.py\`,
+\`image_agent.py\`, \`ai_video.py\`: check + record; \`cache_path()\` helpers (also Manim). A Veo
+timeout is recorded as spent. \`pipeline.py\`: \`make_visual\` re-raises \`BudgetExceeded\` instead
+of falling back; \`estimate_cost()\` (cache-aware, typical and worst case) and \`--estimate\`.
+\`tests/conftest.py\`: autouse guard: per-test build dir, and Anthropic (class level), requests,
+google-genai blocked unless a test mocks them. \`tests/test_budget.py\` (13 tests). README
+"Money" section, \`.env.example\`, DECISIONS D10, NEEDS_PIETRO.md (new).
+CHECKED — verified: \`make check\` ruff clean, 27 passed (60 s). Mutations each fail a test:
+no re-raise in the Veo or still branch; no TTS pre-check; \`atmospheric=False\` in the estimate;
+\`skip_critic\` ignored; the old env test body with a fake \`.env\` \`BUDGET_EUR=20\` (the fixed
+one passes). \`--estimate\` for 15 min: €2.06 typical / €3.94 worst without a Google key;
+€16.87 with one (Veo €14.72). Run from another cwd it creates no \`build/\` there. Reviewer
+subagent: 1 Critical (env test broke once \`.env\` sets \`BUDGET_EUR\`) fixed; warnings fixed
+or logged (P0-7 Veo daily cap; P1-5 must reserve under a lock).
+ASSUMED — The cap is cumulative across all runs (CLAUDE.md: "only if the spend ledger shows
+budget left"). Failed calls aren't billed (not recorded), except Veo timeouts. Prices from
+secondary sources (Claude: Anthropic's own model table): not verified. USD→EUR 0.92.
+DIVERGED — Git branch as in P0-1. The reviewer's suggestions to add a CLAUDE.md rule and
+deny rules to \`.claude/settings.json\` were not applied: those are Pietro's to change, and
+are written up in NEEDS_PIETRO.md.
+NEXT — P0-3 (live smoke): keys are missing in this environment, so it will be logged and
+marked blocked. Then P0-4 (retries: Anthropic SDK \`max_retries\`, google-genai
+\`HttpRetryOptions\`, own helper for ElevenLabs).

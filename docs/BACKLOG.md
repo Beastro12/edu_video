@@ -16,7 +16,7 @@ Work top to bottom within a priority.
   scene's audio, clip, and the final assembly. A test proves both cases. `narrated.mp4`
   and the final video are rebuilt when any clip changes.
 
-- [ ] P0-2 — Spend ledger and hard cap
+- [x] P0-2 — Spend ledger and hard cap
   Accept: every paid call appends `{time, provider, model, units, est_cost_eur}` to
   `build/ledger.jsonl`. Prices live in `config.py`, marked "verify". `BUDGET_EUR` from
   env (default 10) is checked before each paid call; exceeding it raises and stops
@@ -61,6 +61,13 @@ Work top to bottom within a priority.
   defaults updated, marked "verify"; prices updated; DECISIONS entry; P0-3's live check
   covers the new names. If the SDK installed doesn't expose the needed types, log it.
 
+- [ ] P0-7 — Enforce CLAUDE.md's "Veo: max 2 clips per day" in code
+  Found in the P0-2 review: a run with a Google key asks Veo for one clip per chapter (4-6),
+  and nothing enforces the daily limit.
+  Accept: `VEO_MAX_PER_DAY` in config (default 2) counts today's (UTC) Veo entries in the
+  ledger; past it, Veo is skipped with a log line and the scene falls back to a still
+  (not a run stop). `--estimate` counts only the Veo clips still allowed today. Mocked test.
+
 ## P1 — quality
 
 - [ ] P1-1 — Automated video QA report
@@ -89,6 +96,8 @@ Work top to bottom within a priority.
   Accept: TTS and image generation for independent scenes run concurrently
   (configurable workers, default 4), respecting P0-4 retries and P0-2 budget checks.
   Wall-clock time before/after recorded.
+  (Added after the P0-2 review:) the budget check must reserve each call's cost under
+  a lock before the call and settle it after, so concurrent calls can't overshoot.
 
 - [ ] P1-6 — Faster still rendering
   Accept: still-scene render time drops ≥40% without visible jitter. Measure the

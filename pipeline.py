@@ -7,6 +7,7 @@ import argparse
 from pathlib import Path
 
 import config
+import ledger
 from agents import ai_video, critic, image_agent, manim_agent, music, script_agent, voice
 from assembly import add_music, build_scene_clip, crossfade_concat
 from utils import content_key, duration, load_json, save_json, slugify
@@ -97,16 +98,97 @@ def make_visual(scene: dict, target_s: float, out_dir: Path, allow_veo: bool) ->
     if vt == "ai_video" and allow_veo:
         try:
             return ai_video.render_scene(scene, out_dir), "ai"
+        except ledger.BudgetExceeded:
+            raise  # out of money is not a failed generation: stop the run
         except Exception as e:  # noqa: BLE001
             print(f"    Veo failed ({str(e)[:100]}); trying a still")
     if vt in ("ai_video", "still") and image_agent.available():
         try:
             return image_agent.render_still(scene, out_dir), "still"
+        except ledger.BudgetExceeded:
+            raise
         except Exception as e:  # noqa: BLE001
             print(f"    Imagen failed ({str(e)[:100]}); falling back to Manim")
     atmospheric = vt != "manim"
     return manim_agent.render_scene(scene, target_s, out_dir, atmospheric), "manim"
 
+
+def _planned_scenes(minutes: float, work: Path) -> tuple[list[dict], list[tuple[str, int, int]]]:
+    """Scenes this run will voice and illustrate, and the script-stage Claude calls still to
+    make as (label, input_tokens, output_tokens). Real text where it exists; a synthetic
+    scene mix following D3 where it doesn't."""
+    if (work / "script.json").exists():
+        return load_json(work / "script.json")["scenes"], []
+    calls = []
+    outline_path = work / "outline.json"
+    if outline_path.exists():
+        chapters = load_json(outline_path)["chapters"]
+    else:
+        chapters = [{"number": i + 1, "minutes": minutes / config.EST_CHAPTERS}
+                    for i in range(config.EST_CHAPTERS)]
+        calls.append(("outline", config.EST_PROMPT_TOKENS, config.EST_OUTLINE_TOKENS_PER_CHAPTER * config.EST_CHAPTERS))
+    scenes = []
+    for ch in chapters:
+        ch_path = work / f"chapter_{ch['number']:02d}.json"
+        if ch_path.exists():
+            scenes += load_json(ch_path)
+            continue
+        words = ch["minutes"] * config.WORDS_PER_MIN
+        out_tokens = int(words * config.EST_SCRIPT_TOKENS_PER_WORD)
+        calls.append(("chapter", config.EST_PROMPT_TOKENS, out_tokens))
+        calls.append(("review", config.EST_PROMPT_TOKENS + out_tokens, out_tokens))
+        n = max(1, round(words / config.EST_WORDS_PER_SCENE))
+        n_manim = round(config.EST_MANIM_SHARE * (n - 1))
+        types = ["ai_video"] + ["manim"] * n_manim + ["still"] * (n - 1 - n_manim)
+        chars = int(words * config.EST_CHARS_PER_WORD / n)
+        scenes += [{"concept": "planned", "visual_type": vt, "narration": "x" * chars,
+                    "visual_description": f"planned {ch['number']}.{i}"} for i, vt in enumerate(types)]
+    return scenes, calls
+
+
+def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool,
+                  worst_case: bool = False) -> dict[str, float]:
+    """Projected spend in EUR for what this run would still have to buy. Cached work costs
+    nothing. Calls no paid API. Typical: one critic round, one Manim attempt; worst case:
+    every critic round and every Manim retry."""
+    scenes, calls = _planned_scenes(minutes, work)
+    model = config.CLAUDE_MODEL
+    reviews = 0 if skip_critic else (config.MAX_CRITIC_ROUNDS if worst_case else 1)
+    manim_tries = config.MAX_MANIM_ATTEMPTS if worst_case else 1
+    est = {"claude": sum(ledger.claude_eur(model, i, o) * (reviews if label == "review" else 1)
+                         for label, i, o in calls),
+           "elevenlabs": 0.0, "images": 0.0, "veo": 0.0}
+    for scene in scenes:
+        audio = voice.cache_path(scene["narration"], work / "audio")
+        if not audio.exists():
+            est["elevenlabs"] += ledger.tts_eur(len(scene["narration"]))
+        vt = scene["visual_type"]
+        if vt == "ai_video" and allow_veo:
+            if not ai_video.cache_path(scene, work / "visuals").exists():
+                est["veo"] += ledger.video_eur(config.VEO_CLIP_S)
+        elif vt in ("ai_video", "still") and image_agent.available():
+            if not image_agent.cache_path(scene, work / "visuals").exists():
+                est["images"] += ledger.image_eur()
+        else:
+            cached = audio.exists() and manim_agent.cache_path(
+                scene, config.LEAD_IN_S + duration(audio) + config.TAIL_S, work / "visuals",
+                atmospheric=vt != "manim").exists()
+            if not cached:
+                est["claude"] += manim_tries * ledger.claude_eur(model, *config.EST_MANIM_TOKENS)
+    return est
+
+
+def print_estimate(topic: str, est: dict[str, float], worst: dict[str, float]) -> None:
+    total, worst_total, spent = sum(est.values()), sum(worst.values()), ledger.spent_eur()
+    print(f'Projected cost for "{topic}" (estimate; prices marked "verify" in config.py; '
+          "cached work excluded):")
+    for name, eur in est.items():
+        print(f"  {name:<11} €{eur:.2f}")
+    print(f"  {'total':<11} €{total:.2f}   (worst case, every critic round and Manim retry: €{worst_total:.2f})")
+    verdict = "fits" if spent + worst_total <= config.BUDGET_EUR else "may EXCEED"
+    print(f"Spent so far €{spent:.2f} of the €{config.BUDGET_EUR:.2f} budget: this run {verdict} it.")
+    if not image_agent.available():
+        print("  (no GOOGLE_API_KEY: stills and Veo scenes are counted as Manim)")
 
 def render_film(script: dict, work: Path, allow_veo: bool, seed: str) -> Path:
     """Per-scene files live in audio/, visuals/ and clips/, named by a hash of their inputs.
@@ -148,9 +230,15 @@ def main():
     ap.add_argument("--script-only", action="store_true", help="stop after the reviewed script")
     ap.add_argument("--no-ai-video", action="store_true", help="skip Veo; use stills instead")
     ap.add_argument("--skip-critic", action="store_true")
+    ap.add_argument("--estimate", action="store_true", help="print the projected cost and exit; calls nothing")
     args = ap.parse_args()
 
     work = Path(config.BUILD_DIR) / slugify(args.topic)
+    allow_veo = ai_video.available() and not args.no_ai_video
+    if args.estimate:
+        print_estimate(args.topic, estimate_cost(args.minutes, work, allow_veo, args.skip_critic),
+                       estimate_cost(args.minutes, work, allow_veo, args.skip_critic, worst_case=True))
+        return
     work.mkdir(parents=True, exist_ok=True)
 
     script = get_script(args.topic, args.minutes, work, args.skip_critic)
@@ -158,7 +246,6 @@ def main():
         print(f"Script saved to {work / 'script.json'}. Edit it, then rerun without --script-only.")
         return
 
-    allow_veo = ai_video.available() and not args.no_ai_video
     render_film(script, work, allow_veo, args.topic)
 
 

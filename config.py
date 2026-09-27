@@ -1,9 +1,12 @@
 """All tunable settings in one place. Change these, not the agents."""
+import math
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+PROJECT_DIR = Path(__file__).resolve().parent  # build/ and music/ don't depend on the cwd
 
 # --- Models (names change often; override in .env if a call fails) -----
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
@@ -41,7 +44,7 @@ MAX_AI_SLOWDOWN = 1.6        # stretch Veo clips up to this before holding the l
 assert XFADE_S < TAIL_S, "crossfade would overlap narration"
 
 # --- Music ----------------------------------------------------------------
-MUSIC_DIR = "music"
+MUSIC_DIR = str(PROJECT_DIR / "music")
 MUSIC_VOLUME = 0.22          # base level before ducking (lower for sleep)
 DUCK_RATIO = 6
 MUSIC_FADE_S = 6.0           # fade in/out of the whole bed
@@ -52,4 +55,35 @@ TARGET_LUFS = -16            # final master
 # --- Pipeline ---------------------------------------------------------------
 MAX_CRITIC_ROUNDS = 2
 MAX_MANIM_ATTEMPTS = 3
-BUILD_DIR = "build"
+BUILD_DIR = str(PROJECT_DIR / "build")
+
+# --- Money --------------------------------------------------------------------
+# Total spend allowed across all runs, summed from build/ledger.jsonl. Checked before
+# every paid call; a call that would pass it stops the run.
+BUDGET_EUR = float(os.getenv("BUDGET_EUR", "10"))
+assert math.isfinite(BUDGET_EUR) and BUDGET_EUR >= 0, "BUDGET_EUR must be a number >= 0"
+
+# Prices are estimates for the ledger. VERIFY each against the provider's own price page
+# (last checked 2026-09-27 from secondary sources; see DECISIONS D10).
+USD_TO_EUR = 0.92                       # verify
+CLAUDE_USD_PER_MTOK = {                 # (input, output) per million tokens; verify
+    "claude-sonnet-5": (2.00, 10.00),
+    "claude-opus-5": (5.00, 25.00),
+    "claude-haiku-4-5": (1.00, 5.00),
+}
+CLAUDE_USD_PER_MTOK_UNLISTED = (10.00, 50.00)  # a model not listed above: assume the priciest tier
+TTS_USD_PER_1K_CHARS = 0.10             # verify: ElevenLabs API, Multilingual v2
+IMAGE_USD_PER_IMAGE = 0.04              # verify: Imagen 4 Standard
+VEO_USD_PER_SECOND = 0.40               # verify
+VEO_CLIP_S = 8                          # verify: length of one Veo clip, billed per second
+
+# Rough sizes used only by `--estimate` (and the pre-call check for Claude's input).
+EST_CHARS_PER_TOKEN = 3                 # conservative: more tokens than typical English
+EST_CHARS_PER_WORD = 6                  # narration characters per word, spaces included
+EST_WORDS_PER_SCENE = 55                # writer is asked for 40-70
+EST_CHAPTERS = 5                        # outline is asked for 4-6
+EST_OUTLINE_TOKENS_PER_CHAPTER = 300    # outline JSON out
+EST_MANIM_SHARE = 0.3                   # D3: ~30% of scenes are diagrams; plus one Veo scene per chapter
+EST_PROMPT_TOKENS = 2_000               # system prompt + outline sent with each script call
+EST_SCRIPT_TOKENS_PER_WORD = 3          # chapter JSON out: narration + visual descriptions
+EST_MANIM_TOKENS = (1_500, 2_500)       # (input, output) per Manim attempt

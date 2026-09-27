@@ -53,6 +53,25 @@ python pipeline.py "What happens inside a neutron star" --minutes 15
 python pipeline.py "What happens inside a neutron star" --no-ai-video
 ```
 
+## Money
+
+Every paid call (Claude, ElevenLabs, Imagen, Veo) is checked against `BUDGET_EUR` (env,
+default 10) before it's made and logged to `build/ledger.jsonl` after it succeeds, with
+its estimated cost. The budget is the total across all runs: when the next call would
+pass it, the run stops with `BudgetExceeded` (it never falls back to a cheaper visual).
+Only Pietro raises `BUDGET_EUR` in `.env` or archives the ledger; the unattended agent
+never touches either. `build/` and `music/` are resolved from the project folder, so the
+ledger is the same whatever directory you run from.
+
+```bash
+# What would this cost? Counts only work that isn't cached yet, prints a typical and a
+# worst-case total, calls nothing.
+python pipeline.py "What happens inside a neutron star" --minutes 15 --estimate
+```
+
+Prices are estimates in `config.py`, marked "verify": check them against each provider's
+price page. Veo dominates: about €3 per clip, up to one clip per chapter.
+
 Edit the script in `script.json`, or in a `chapter_XX.json` (script.json is then
 rebuilt from the chapters). If both were edited, the run stops and asks you to keep one.
 Editing a scene regenerates only that scene's narration, visual and clip, then the final
