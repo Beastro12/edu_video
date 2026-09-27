@@ -9,6 +9,7 @@ from pathlib import Path
 
 import config
 import ledger
+import metadata
 import qa
 from agents import ai_video, critic, image_agent, manim_agent, music, script_agent, voice
 from assembly import add_music, build_scene_clip, crossfade_concat
@@ -269,6 +270,8 @@ def main():
         return
 
     final = render_film(script, work, allow_veo, args.topic)
+    metadata.write_metadata(work)  # metadata.json + subtitles.srt for YouTube
+    print(f"• YouTube metadata: {work / 'metadata.json'}, {work / 'subtitles.srt'}")
     report = qa.run_qa(final)  # writes qa.json next to the film
     qa.print_report(report)
     if not report["passed"]:

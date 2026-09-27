@@ -91,7 +91,7 @@ Work top to bottom within a priority.
   Accept: if a render is >25% shorter than the target, ask Claude once to retime the
   scene. Measured before/after in a mocked test.
 
-- [ ] P1-4 — YouTube metadata
+- [x] P1-4 — YouTube metadata
   Accept: `build/<slug>/metadata.json` + `subtitles.srt`: title, description,
   chapter timestamps taken from real clip boundaries (YouTube needs 00:00 first and
   ≥10 s chapters), SRT from narration timing per scene.

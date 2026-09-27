@@ -93,6 +93,54 @@ def real_google(monkeypatch):
     monkeypatch.setattr(google.genai, "Client", _REAL_GENAI_CLIENT)
 
 
+SPEECH_S = [4.0, 5.5, 3.0, 6.0, 4.5, 5.0]  # six scenes: long enough to see ducking past the fades
+
+
+def build_film(work, media, visuals=None, narrations=None, chapters=None, **overrides):
+    """A small film in the pipeline's build-folder layout, made with the real assembly code
+    (use with the `small` fixture). Sine tones stand in for the voice, as long as their text
+    at WORDS_PER_MIN. `overrides` patch config for the build only (to inject a fault);
+    `visuals` swaps a scene's picture; `narrations` / `chapters` set the script."""
+    import assembly
+    import config
+    from agents.music import build_bed
+    from utils import save_json, video_duration
+    saved = {k: getattr(config, k) for k in overrides}
+    for k, v in overrides.items():
+        setattr(config, k, v)
+    try:
+        work.mkdir(parents=True, exist_ok=True)
+        scenes, manifest, clips = [], [], []
+        texts = narrations or [" ".join(["calm"] * round(secs * config.WORDS_PER_MIN / 60)) for secs in SPEECH_S]
+        for i, text in enumerate(texts, start=1):
+            secs = round(len(text.split()) * 60 / config.WORDS_PER_MIN, 2)
+            narration = work / f"n{i}.mp3"
+            ff("-f", "lavfi", "-i", f"sine=f={200 + 30 * i}:d={secs}:sample_rate=44100", str(narration))
+            visual, kind = (visuals or {}).get(i, (media / "manim.mp4", "manim"))
+            clip = assembly.build_scene_clip(visual, narration, work / "clips", kind, i)
+            scenes.append({"id": i, "chapter": (chapters or [1] * len(texts))[i - 1], "concept": f"c{i}",
+                           "narration": text, "visual_type": "manim", "visual_description": "d"})
+            manifest.append({"id": i, "concept": f"c{i}", "kind": kind, "audio": narration.name,
+                             "visual": str(visual), "clip": str(clip.relative_to(work))})
+            clips.append(clip)
+        save_json(work / "script.json", {"title": "QA test", "scenes": scenes})
+        save_json(work / "manifest.json", {"title": "QA test", "scenes": manifest})
+        narrated = assembly.crossfade_concat(clips, work / "narrated.mp4")
+        bed = build_bed([media / "music.wav"], video_duration(narrated), work / "music_bed.wav", "s")
+        return assembly.add_music(narrated, bed, work / "qa-test.mp4")
+    finally:
+        for k, v in saved.items():
+            setattr(config, k, v)
+
+
+@pytest.fixture
+def small(monkeypatch):
+    """Low resolution: tests about timing and sound, not pictures."""
+    import assembly
+    monkeypatch.setattr(assembly, "W", 320)
+    monkeypatch.setattr(assembly, "H", 180)
+
+
 @pytest.fixture(scope="session")
 def media(tmp_path_factory):
     """Synthetic stand-ins for paid API outputs: narration, Manim clip, Veo clip, still, music."""

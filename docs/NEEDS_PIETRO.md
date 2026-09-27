@@ -67,3 +67,11 @@ re-renders every Manim scene (their target length is part of the cache key: a Cl
 `XFADE_S` stays below both, and the pause between narrations (`LEAD_IN_S + TAIL_S − XFADE_S`)
 stays at least 1.2 s so the ducked music audibly comes back (config asserts both); a shorter
 crossfade (e.g. 0.6 s) would keep the old length but dissolve faster.
+
+## 2026-09-27 — FYI: YouTube description text (taste; change if you like)
+**What:** every `metadata.json` description starts with `YOUTUBE_DESCRIPTION` in `config.py`,
+currently "A calm, slow science documentary to relax or fall asleep to.", followed by the
+chapter timestamps (P1-4).
+**Why:** a placeholder I chose; the channel's voice is yours.
+**Recommend:** replace it with your channel's standard text (and any music credits your
+licences require). Keep it under YouTube's 5,000 bytes; the pipeline refuses longer.

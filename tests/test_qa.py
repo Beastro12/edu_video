@@ -5,51 +5,17 @@ import subprocess
 import sys
 
 import pytest
-from conftest import ROOT, ff
+from conftest import ROOT, build_film, ff
 
 import assembly
 import config
 import qa
-from agents.music import build_bed
 from utils import save_json, video_duration
-
-SPEECH_S = [4.0, 5.5, 3.0, 6.0, 4.5, 5.0]  # six scenes: long enough to see ducking past the fades
-
-
-def build_film(work, media, visuals=None, **overrides):
-    """A small film in the pipeline's build-folder layout. `overrides` patch config for the build
-    only (to inject a fault); `visuals` swaps a scene's picture."""
-    saved = {k: getattr(config, k) for k in overrides}
-    for k, v in overrides.items():
-        setattr(config, k, v)
-    try:
-        work.mkdir(parents=True, exist_ok=True)
-        scenes, manifest, clips = [], [], []
-        for i, secs in enumerate(SPEECH_S, start=1):
-            narration = work / f"n{i}.mp3"
-            ff("-f", "lavfi", "-i", f"sine=f={200 + 30 * i}:d={secs}:sample_rate=44100", str(narration))
-            visual, kind = (visuals or {}).get(i, (media / "manim.mp4", "manim"))
-            clip = assembly.build_scene_clip(visual, narration, work / "clips", kind, i)
-            words = round(secs * config.WORDS_PER_MIN / 60)  # narration text as long as the tone
-            scenes.append({"id": i, "concept": f"c{i}", "narration": " ".join(["calm"] * words),
-                           "visual_type": "manim", "visual_description": "d"})
-            manifest.append({"id": i, "concept": f"c{i}", "kind": kind, "audio": narration.name,
-                             "visual": str(visual), "clip": str(clip.relative_to(work))})
-            clips.append(clip)
-        save_json(work / "script.json", {"title": "QA test", "scenes": scenes})
-        save_json(work / "manifest.json", {"title": "QA test", "scenes": manifest})
-        narrated = assembly.crossfade_concat(clips, work / "narrated.mp4")
-        bed = build_bed([media / "music.wav"], video_duration(narrated), work / "music_bed.wav", "s")
-        return assembly.add_music(narrated, bed, work / "qa-test.mp4")
-    finally:
-        for k, v in saved.items():
-            setattr(config, k, v)
 
 
 @pytest.fixture(autouse=True)
-def small(monkeypatch):
-    monkeypatch.setattr(assembly, "W", 320)
-    monkeypatch.setattr(assembly, "H", 180)
+def _small(small):
+    pass
 
 
 @pytest.fixture(scope="module")
@@ -153,6 +119,8 @@ def test_pipeline_runs_qa_at_the_end_and_fails_the_run_on_a_bad_film(monkeypatch
     final = tmp_path / "film.mp4"
     monkeypatch.setattr(pipeline, "get_script", lambda *a: {"title": "T", "scenes": []})
     monkeypatch.setattr(pipeline, "render_film", lambda *a: final)
+    written = []
+    monkeypatch.setattr(pipeline.metadata, "write_metadata", written.append)
     checked = []
     report = {"video": final.name, "passed": False,
               "checks": {"loudness": {"passed": False, "value": -24.0, "target": "-16 LUFS"}}}
@@ -161,6 +129,8 @@ def test_pipeline_runs_qa_at_the_end_and_fails_the_run_on_a_bad_film(monkeypatch
     with pytest.raises(SystemExit) as stop:
         pipeline.main()
     assert stop.value.code == 1 and checked == [final]
+    from pathlib import Path
+    assert written == [Path(config.BUILD_DIR) / "topic"], "YouTube metadata is written for every film (P1-4)"
     assert "QA FAILED" in capsys.readouterr().out
 
 

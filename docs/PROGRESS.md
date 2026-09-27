@@ -279,3 +279,29 @@ threshold isn't in the cache key, which is fine: only new renders are affected).
 DIVERGED — none.
 NEXT — P1-4 (YouTube metadata + SRT). Not verified live: whether Claude's retimes land close
 to the target on real Manim code.
+
+## 2026-09-27 P1-4 YouTube metadata
+CHANGED — New `metadata.py`: `write_metadata(work)` → `metadata.json` (title, description =
+`YOUTUBE_DESCRIPTION` + chapter list, chapters, duration) and `subtitles.srt`. Chapter starts are
+each chapter's first scene start in the film (the crossfade arithmetic over the clips' video
+lengths); chapters under 10 s merge (a short opening keeps 00:00 and takes the next title,
+others go to the chapter before, the last is measured to the film's end); fewer than 3 →
+no list in the description. SRT: each scene's narration spans its measured audio after the
+lead-in, split into cues of whole sentences (≤ 84 chars, two lines near 42) timed by length.
+YouTube limits: `<`/`>` removed, title clipped to 100 chars, description > 5,000 bytes refused.
+`pipeline.main` writes it after rendering. The test film builder moved to `tests/conftest.py`
+(`build_film`, with narrations/chapters; `small` fixture). README, `config.YOUTUBE_DESCRIPTION`,
+NEEDS_PIETRO (FYI on the description text).
+CHECKED — verified: chapter starts and each scene's first/last cue match voice onsets/ends
+measured in the decoded narrated.mp4 (±30 ms / ±80 ms incl. mp3 padding); chapter rules unit-
+tested (short opening / middle / last / all short); hour timestamps; cue packing (no flash
+cues from "Dr." or "…"); YouTube limits. Reviewer subagent: no Critical; it measured onsets
+itself (all first cues within 10 ms of the voice, in narrated.mp4 and the final film). Its
+warnings fixed (tests re-derived the code's arithmetic → now measure the film; merge cases
+untested → unit tests; YouTube limits). Mutations caught: subtitles ignoring the lead-in; wrong
+crossfade arithmetic (a "container duration" mutant was equivalent: container = video length
+since P0-5). `make check`: 106 passed (3 min 49 s; metadata tests now build one film).
+ASSUMED — The title comes from script.json (what you'd edit), chapter titles from outline.json.
+The description opening line is a placeholder (NEEDS_PIETRO).
+DIVERGED — none.
+NEXT — P1-5 (parallel TTS and image generation, with budget reservation under a lock).

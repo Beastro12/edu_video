@@ -75,6 +75,10 @@ QA_ATTACK_S = 0.3             # skip this much of each speech onset (compressor 
 assert LEAD_IN_S + TAIL_S - XFADE_S >= QA_PAUSE_S + 0.2, \
     "pauses between narrations too short for the music to come back (and for qa.py to hear it)"
 
+# --- YouTube (metadata.py) --------------------------------------------------------
+# First lines of every description; chapter timestamps follow. Change to taste.
+YOUTUBE_DESCRIPTION = "A calm, slow science documentary to relax or fall asleep to."
+
 # --- Pipeline ---------------------------------------------------------------
 MAX_CRITIC_ROUNDS = 2
 MAX_MANIM_ATTEMPTS = 3

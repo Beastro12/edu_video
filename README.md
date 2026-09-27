@@ -90,6 +90,14 @@ the film misses a target: length vs the script, loudness (−16 LUFS ±1 LU), tr
 closing fades, and narration inside a crossfade. Run it on its own with
 `python qa.py build/<topic>/<film>.mp4` (exit code 1 on failure).
 
+## YouTube files
+
+Each run also writes `metadata.json` (title, description, chapter timestamps) and
+`subtitles.srt` into the build folder, timed from the clips and narration actually used.
+Chapters follow YouTube's rules: the first at 00:00, each at least 10 s, and at least three
+(otherwise the list is left out of the description). The description's opening line is
+`YOUTUBE_DESCRIPTION` in `config.py`.
+
 ## Tuning
 
 Everything is in `config.py`: voice calmness and speed, pauses, crossfade length, how
