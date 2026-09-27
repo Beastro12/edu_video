@@ -19,7 +19,9 @@ Failures fall back instead of stopping: Veo → still → Manim. Without a Googl
 every scene is rendered with Manim.
 
 Everything caches in `build/<topic>/` (outline, each chapter, audio, visuals). If a run
-crashes, rerun the same command and it resumes without paying again.
+crashes, rerun the same command and it resumes without paying again. Cached files are
+named by a hash of what produced them, so an edited scene is regenerated and nothing
+else is.
 
 ## Setup
 
@@ -51,8 +53,12 @@ python pipeline.py "What happens inside a neutron star" --minutes 15
 python pipeline.py "What happens inside a neutron star" --no-ai-video
 ```
 
-To redo one scene, delete its files in `build/<topic>/` (e.g. `scene_12_*`) and also
-`narrated.mp4` and the final video, then rerun.
+Edit the script in `script.json`, or in a `chapter_XX.json` (script.json is then
+rebuilt from the chapters). If both were edited, the run stops and asks you to keep one.
+Editing a scene regenerates only that scene's narration, visual and clip, then the final
+assembly. `manifest.json` lists the files each scene used: to re-roll one with unchanged
+text (say, a still you don't like), delete its file under `visuals/` and rerun. To have Claude
+rewrite a chapter, delete its `chapter_XX.json` and `script.json`.
 
 ## Tuning
 

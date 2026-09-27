@@ -5,7 +5,7 @@ Work top to bottom within a priority.
 
 ## P0 — correctness and safety
 
-- [ ] P0-1 — Content-hash cache keys (known bug)
+- [x] P0-1 — Content-hash cache keys (known bug)
   Cache files are keyed by scene number. Editing a narration after a render reuses
   the stale mp3/clip, and changing a chapter's scene count shifts every later ID onto
   the wrong cached files. Also: once `script.json` exists, edits to `chapter_XX.json`
@@ -33,6 +33,33 @@ Work top to bottom within a priority.
 - [ ] P0-4 — Retry with backoff on transient errors
   Accept: 429/5xx/timeouts from Anthropic, ElevenLabs and Google retry with jittered
   exponential backoff (max 4). Non-transient errors fail fast. Tested with mocks.
+
+- [ ] P0-5 — Scene audio loses its lead-in; narration drifts ahead of the visuals
+  Found during P0-1 (verified, FFmpeg 6.1.1): in `build_scene_clip`, `loudnorm` followed
+  by `adelay` emits the lead-in silence frames without valid timestamps (`ashowinfo`
+  shows `pts:NOPTS`); with `-t` on the AAC encode those samples are lost, so each clip's
+  audio holds ~0.55 s fewer samples than its container claims (3.39 s reported, 2.84 s
+  decoded). `crossfade_concat` works on decoded samples, so the loss accumulates: 3 scenes
+  gave narrated.mp4 audio 6.99 s vs video 8.67 s. In a 15-min film narration would drift
+  about a minute ahead of its visuals and run into crossfades (breaks D1 and D5). The
+  existing duration tests pass because they read container duration (= video).
+  Accept: for every scene clip, decoded audio duration equals the video duration
+  (±1 AAC frame) and narration onset is at `LEAD_IN_S` (±20 ms); narrated.mp4 decoded
+  audio matches its video (±0.05 s). Tests measure decoded samples, not container duration.
+
+- [ ] P0-6 — Google model retirements: stills and Veo defaults no longer exist
+  Found during P0-2 research (NOT verified at Google's own pages, which the sandbox can't
+  reach; several independent secondary sources agree): the Gemini API shut down
+  `imagen-4.0-*-generate-001` on 2026-08-17 (successor `gemini-3.1-flash-image`, served
+  through `generate_content`, response parts carry `inline_data` instead of
+  `generated_images[0].image.image_bytes`) and `veo-3.0-generate-001` on 2026-06-30
+  (successor `veo-3.1-generate-preview`). With today's defaults every still would fall
+  back to Manim, so D3's ~60% stills silently becomes 0%.
+  Accept: `image_agent` generates stills with the Gemini image model via the SDK's
+  documented `generate_content` path (16:9, image-only output), mocked offline test of the
+  new response shape including "no image part" → fallback; `IMAGE_MODEL`/`VEO_MODEL`
+  defaults updated, marked "verify"; prices updated; DECISIONS entry; P0-3's live check
+  covers the new names. If the SDK installed doesn't expose the needed types, log it.
 
 ## P1 — quality
 
@@ -66,6 +93,14 @@ Work top to bottom within a priority.
 - [ ] P1-6 — Faster still rendering
   Accept: still-scene render time drops ≥40% without visible jitter. Measure the
   current 3× upscale approach vs alternatives; record numbers in DECISIONS.
+
+- [ ] P1-7 — Don't re-attempt failed paid generations on every rerun
+  Found during P0-1: `make_visual` falls back Veo → still → Manim, but only successes are
+  cached, so every rerun of a film asks Veo (and Imagen) again for scenes that already
+  failed, paying or waiting up to 10 min each time.
+  Accept: a failed generation is recorded per content key in `build/<slug>/failures.json`
+  with the error; reruns go straight to the fallback unless `--retry-failed` is passed.
+  Mocked test: second run makes no provider call for a previously failed scene.
 
 ## P2 — scale and polish
 

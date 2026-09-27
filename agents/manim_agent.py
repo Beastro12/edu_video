@@ -5,9 +5,11 @@ from pathlib import Path
 
 import config
 from agents.llm import text
-from utils import run
+from utils import atomic_output, content_key, run
 
 HAS_LATEX = shutil.which("latex") is not None
+CLASS_NAME = "DocScene"  # fixed, so the scene's position never leaks into the cache key
+QUALITY = "-qh"
 
 SYSTEM = f"""You write Manim Community Edition (v0.18+) code for calm science explainer videos.
 
@@ -31,7 +33,7 @@ def _extract_code(reply: str) -> str:
 
 
 def _render(py_file: Path, class_name: str, media_dir: Path) -> Path:
-    run(["manim", "render", "-qh", "--fps", str(config.FPS), "--format", "mp4",
+    run(["manim", "render", QUALITY, "--fps", str(config.FPS), "--format", "mp4",
          "--media_dir", str(media_dir), str(py_file), class_name])
     hits = sorted(media_dir.glob(f"videos/{py_file.stem}/*/{class_name}.mp4"))
     if not hits:
@@ -39,15 +41,9 @@ def _render(py_file: Path, class_name: str, media_dir: Path) -> Path:
     return hits[-1]
 
 
-def render_scene(scene: dict, target_s: float, work_dir: Path, atmospheric: bool = False) -> Path:
-    out = work_dir / f"scene_{scene['id']:02d}_manim.mp4"
-    if out.exists():
-        return out
-    class_name = f"Scene{scene['id']:02d}"
-    py_file = work_dir / f"scene_{scene['id']:02d}.py"
-
+def render_scene(scene: dict, target_s: float, out_dir: Path, atmospheric: bool = False) -> Path:
     brief = (
-        f"Class name: {class_name}\nTarget duration: {target_s:.1f} seconds\n"
+        f"Class name: {CLASS_NAME}\nTarget duration: {target_s:.1f} seconds\n"
         f"Concept: {scene['concept']}\nNarration (for timing and content):\n{scene['narration']}\n\n"
         f"Visual description:\n{scene['visual_description']}"
     )
@@ -55,6 +51,12 @@ def render_scene(scene: dict, target_s: float, work_dir: Path, atmospheric: bool
         brief += ("\n\nThis was planned as live-action footage. Instead make a slow, "
                   "abstract, atmospheric animation that evokes it (drifting particles, "
                   "soft shapes). No labels needed.")
+    key = content_key("manim", SYSTEM, brief, config.CLAUDE_MODEL, QUALITY, config.FPS)
+    out = out_dir / f"manim_{key}.mp4"
+    if out.exists():
+        return out
+    py_file = out_dir / f"manim_{key}.py"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     messages = [{"role": "user", "content": brief}]
     last_error = ""
@@ -62,8 +64,9 @@ def render_scene(scene: dict, target_s: float, work_dir: Path, atmospheric: bool
         reply = text(SYSTEM, messages)
         py_file.write_text(_extract_code(reply))
         try:
-            rendered = _render(py_file, class_name, work_dir / "manim_media")
-            shutil.copy(rendered, out)
+            rendered = _render(py_file, CLASS_NAME, out_dir / "manim_media")
+            with atomic_output(out) as tmp:
+                shutil.copy(rendered, tmp)
             return out
         except RuntimeError as e:
             last_error = str(e)[-2500:]

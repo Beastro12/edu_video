@@ -24,9 +24,9 @@ def probe(path):
 def clips(media, tmp_path_factory):
     d = tmp_path_factory.mktemp("clips")
     return [
-        build_scene_clip(media / "still.png", media / "n_short.mp3", d / "a.mp4", "still", 1),
-        build_scene_clip(media / "manim.mp4", media / "n_long.mp3", d / "b.mp4", "manim", 2),
-        build_scene_clip(media / "ai.mp4", media / "n_short.mp3", d / "c.mp4", "ai", 3),
+        build_scene_clip(media / "still.png", media / "n_short.mp3", d, "still", 1),
+        build_scene_clip(media / "manim.mp4", media / "n_long.mp3", d, "manim", 2),
+        build_scene_clip(media / "ai.mp4", media / "n_short.mp3", d, "ai", 3),
     ]
 
 

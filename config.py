@@ -32,6 +32,7 @@ VOICE_SETTINGS = {
 
 # --- Video & pacing -------------------------------------------------------
 WIDTH, HEIGHT, FPS = 1920, 1080, 30
+ASPECT_RATIO = "16:9"         # what the image/video models are asked for; matches WIDTH x HEIGHT
 LEAD_IN_S = 0.6              # silence before each scene's narration
 TAIL_S = 1.8                 # silence after it
 XFADE_S = 1.2                # crossfade between scenes; must stay below TAIL_S

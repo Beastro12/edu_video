@@ -28,3 +28,18 @@ overlap never covers narration.
 **D7 — Fallback chain Veo → still → Manim.** One failed generation never stops a film.
 
 **D8 — Forced tool use for structured output** from Claude, not "reply in JSON".
+
+**D9 — Cache by content, not by scene number.** Per-scene files live in `audio/`,
+`visuals/` and `clips/`, named by a hash of the inputs that produced them (narration text
++ voice settings; prompt + model; input file bytes + exact FFmpeg filters). Fixed-name
+outputs (`narrated.mp4`, `music_bed.wav`, the final video) carry a `<name>.key` stamp and
+are rebuilt when it doesn't match. `script.json` records a hash of the chapter files it
+came from. Why: scene-number keys reused a stale mp3 after a narration edit, and a
+chapter gaining a scene shifted every later scene onto another scene's files (P0-1).
+Evidence: `tests/test_cache.py` — inserting a scene in front buys only that scene's audio
+and image; editing one narration rebuilds one clip, `narrated.mp4` and the final.
+Still/Veo keys leave out the scene type and target length because those generators never
+see them, so a narration-only edit doesn't re-buy the image. Manim keys include the whole
+brief (narration and target length), so editing a Manim scene's narration also re-runs its
+Claude call and render. Two scenes with identical `visual_description` share one still or
+Veo clip. Cost: old versions stay on disk until `build/<slug>/` is cleaned.

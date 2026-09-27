@@ -1,9 +1,12 @@
 """Offline test of the outline -> chapter -> critic flow with Claude mocked out."""
 import json
 
+import pytest
+
 import agents.critic as critic
 import agents.script_agent as script_agent
 import pipeline
+from utils import load_json, save_json
 
 
 def make_fake(calls):
@@ -39,3 +42,51 @@ def test_chapters_numbered_continuous_and_cached(tmp_path, monkeypatch):
     n = len(calls)
     pipeline.get_script("topic", 4, tmp_path, skip_critic=False)
     assert len(calls) == n, "rerun must not call Claude again"
+
+
+def _built_script(tmp_path, monkeypatch):
+    calls = []
+    fake = make_fake(calls)
+    monkeypatch.setattr(script_agent, "structured", fake)
+    monkeypatch.setattr(critic, "structured", fake)
+    pipeline.get_script("topic", 4, tmp_path, skip_critic=False)
+    return calls
+
+
+def test_chapter_edits_reach_script_json(tmp_path, monkeypatch):
+    calls = _built_script(tmp_path, monkeypatch)
+    n = len(calls)
+    ch2 = load_json(tmp_path / "chapter_02.json")
+    ch2[0]["narration"] = "an edited line"
+    del ch2[2]  # a chapter losing a scene renumbers everything after it
+    save_json(tmp_path / "chapter_02.json", ch2)
+
+    script = pipeline.get_script("topic", 4, tmp_path, skip_critic=False)
+
+    assert script["scenes"][3]["narration"] == "an edited line"
+    assert [s["id"] for s in script["scenes"]] == [1, 2, 3, 4, 5]
+    assert load_json(tmp_path / "script.json") == script
+    assert len(calls) == n, "rebuilding from edited chapters must not call Claude"
+
+
+def test_hand_edits_to_script_json_are_kept(tmp_path, monkeypatch):
+    _built_script(tmp_path, monkeypatch)
+    script = load_json(tmp_path / "script.json")
+    script["scenes"][0]["narration"] = "edited in script.json"
+    save_json(tmp_path / "script.json", script)
+
+    again = pipeline.get_script("topic", 4, tmp_path, skip_critic=False)
+    assert again["scenes"][0]["narration"] == "edited in script.json"
+
+
+def test_editing_both_script_and_chapter_refuses_to_guess(tmp_path, monkeypatch):
+    _built_script(tmp_path, monkeypatch)
+    script = load_json(tmp_path / "script.json")
+    script["scenes"][0]["narration"] = "edited in script.json"
+    save_json(tmp_path / "script.json", script)
+    ch1 = load_json(tmp_path / "chapter_01.json")
+    ch1[1]["narration"] = "edited in the chapter"
+    save_json(tmp_path / "chapter_01.json", ch1)
+
+    with pytest.raises(RuntimeError, match=r"Both .* and a chapter file were edited"):
+        pipeline.get_script("topic", 4, tmp_path, skip_critic=False)

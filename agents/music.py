@@ -5,7 +5,7 @@ import random
 from pathlib import Path
 
 import config
-from utils import duration, run
+from utils import content_key, duration, file_hash, is_fresh, run, stamped_output
 
 EXTS = {".mp3", ".wav", ".m4a", ".flac", ".ogg"}
 
@@ -15,8 +15,6 @@ def list_tracks() -> list[Path]:
 
 
 def build_bed(tracks: list[Path], total_s: float, out: Path, seed: str) -> Path:
-    if out.exists():
-        return out
     xf = config.MUSIC_XFADE_S
     usable = [(t, duration(t)) for t in tracks]
     usable = [(t, d) for t, d in usable if d > 3 * xf]
@@ -34,7 +32,6 @@ def build_bed(tracks: list[Path], total_s: float, out: Path, seed: str) -> Path:
             if length >= total_s + 2 * xf:
                 break
 
-    inputs = sum((["-i", str(t)] for t in order), [])
     norm = "".join(f"[{i}:a]aresample=48000,aformat=channel_layouts=stereo[m{i}];"
                    for i in range(len(order)))
     if len(order) == 1:
@@ -45,17 +42,25 @@ def build_bed(tracks: list[Path], total_s: float, out: Path, seed: str) -> Path:
             steps.append(f"[{last}][m{i}]acrossfade=d={xf}:c1=qsin:c2=qsin[x{i}]")
             last = f"x{i}"
         chain = ";".join(steps) + ";"
-    run(["ffmpeg", "-y", *inputs, "-filter_complex", f"{norm}{chain}[{last}]anull[out]",
-         "-map", "[out]", "-t", f"{total_s:.2f}", "-c:a", "pcm_s16le", str(out)])
+    args = ["-filter_complex", f"{norm}{chain}[{last}]anull[out]",
+            "-map", "[out]", "-t", f"{total_s:.2f}", "-c:a", "pcm_s16le"]
+    key = content_key("bed", [file_hash(t) for t in order], args)
+    if is_fresh(out, key):
+        return out
+    inputs = sum((["-i", str(t)] for t in order), [])
+    with stamped_output(out, key) as tmp:
+        run(["ffmpeg", "-y", *inputs, *args, str(tmp)])
     return out
 
 
 def placeholder_pad(out: Path, seconds: float = 180) -> Path:
     """Soft synthetic chord for testing the pipeline. Not meant for publishing."""
-    if out.exists():
-        return out
     chord = "+".join(f"0.18*sin(2*PI*{f}*t)" for f in (110, 164.81, 220, 277.18))
-    run(["ffmpeg", "-y", "-f", "lavfi", "-i", f"aevalsrc='{chord}':s=48000:d={seconds}",
-         "-af", "tremolo=f=0.15:d=0.4,aecho=0.8:0.7:600:0.3,lowpass=f=1200",
-         "-ac", "2", str(out)])
+    args = ["-f", "lavfi", "-i", f"aevalsrc='{chord}':s=48000:d={seconds}",
+            "-af", "tremolo=f=0.15:d=0.4,aecho=0.8:0.7:600:0.3,lowpass=f=1200", "-ac", "2"]
+    key = content_key("pad", args)
+    if is_fresh(out, key):
+        return out
+    with stamped_output(out, key) as tmp:
+        run(["ffmpeg", "-y", *args, str(tmp)])
     return out

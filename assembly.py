@@ -2,10 +2,12 @@
 from pathlib import Path
 
 import config
-from utils import duration, run
+from utils import atomic_output, content_key, duration, file_hash, is_fresh, run, stamped_output
 
 W, H, FPS = config.WIDTH, config.HEIGHT, config.FPS
 BG = "0x0f1419"
+VIDEO_ENC = ["-c:v", "libx264", "-preset", "medium", "-crf", "18"]
+AUDIO_ENC = ["-c:a", "aac", "-b:a", "192k", "-ar", "48000"]
 
 
 def _still_filter(target: float, scene_id: int) -> str:
@@ -35,11 +37,10 @@ def _moving_filter(target: float, v_len: float, is_ai: bool) -> str:
             f"tpad=stop_mode=clone:stop_duration={target:.2f},format=yuv420p")
 
 
-def build_scene_clip(visual: Path, narration: Path, out: Path, kind: str, scene_id: int) -> Path:
+def build_scene_clip(visual: Path, narration: Path, out_dir: Path, kind: str, scene_id: int) -> Path:
     """Scene length is set by the voice: lead-in + narration + tail.
-    kind: 'still' | 'manim' | 'ai'."""
-    if out.exists():
-        return out
+    kind: 'still' | 'manim' | 'ai'. The clip is named by a hash of its input files and
+    the exact filters, so a changed narration or visual can never reuse an old clip."""
     target = config.LEAD_IN_S + duration(narration) + config.TAIL_S
     vf = (_still_filter(target, scene_id) if kind == "still"
           else _moving_filter(target, duration(visual), kind == "ai"))
@@ -49,23 +50,24 @@ def build_scene_clip(visual: Path, narration: Path, out: Path, kind: str, scene_
           f"aresample=48000,aformat=channel_layouts=stereo,"
           f"adelay=delays={int(config.LEAD_IN_S * 1000)}:all=1,"
           f"apad=whole_dur={target:.2f}")
-    run(["ffmpeg", "-y", "-i", str(visual), "-i", str(narration),
-         "-filter_complex", f"[0:v]{vf}[v];[1:a]{af}[a]",
-         "-map", "[v]", "-map", "[a]", "-t", f"{target:.2f}",
-         "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-r", str(FPS),
-         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(out)])
+    args = ["-filter_complex", f"[0:v]{vf}[v];[1:a]{af}[a]",
+            "-map", "[v]", "-map", "[a]", "-t", f"{target:.2f}",
+            *VIDEO_ENC, "-r", str(FPS), *AUDIO_ENC]
+    out = out_dir / f"{content_key('clip', file_hash(visual), file_hash(narration), args)}.mp4"
+    if out.exists():
+        return out
+    with atomic_output(out) as tmp:
+        run(["ffmpeg", "-y", "-i", str(visual), "-i", str(narration), *args, str(tmp)])
     return out
 
 
 def crossfade_concat(clips: list[Path], out: Path) -> Path:
     """Chain xfade/acrossfade. The overlap sits in each scene's silent tail, so
-    narration never overlaps. Fades in from and out to black at the very ends."""
-    if out.exists():
-        return out
+    narration never overlaps. Fades in from and out to black at the very ends.
+    Rebuilt whenever any clip changes."""
     xf = config.XFADE_S
     durs = [duration(c) for c in clips]
     total = sum(durs) - xf * (len(clips) - 1)
-    inputs = sum((["-i", str(c)] for c in clips), [])
 
     if len(clips) == 1:
         graph, v, a = "", "0:v", "0:a"
@@ -78,33 +80,41 @@ def crossfade_concat(clips: list[Path], out: Path) -> Path:
             v, a = f"v{i}", f"a{i}"
         graph = ";".join(parts) + ";"
     graph += f"[{v}]fade=t=in:d=1.5,fade=t=out:st={total - 2.5:.2f}:d=2.5[vout]"
-    run(["ffmpeg", "-y", *inputs, "-filter_complex", graph,
-         "-map", "[vout]", "-map", f"[{a}]" if len(clips) > 1 else a,
-         "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-r", str(FPS),
-         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", str(out)])
+    args = ["-filter_complex", graph,
+            "-map", "[vout]", "-map", f"[{a}]" if len(clips) > 1 else a,
+            *VIDEO_ENC, "-r", str(FPS), *AUDIO_ENC]
+    key = content_key("xfade", [file_hash(c) for c in clips], args)
+    if is_fresh(out, key):
+        return out
+    inputs = sum((["-i", str(c)] for c in clips), [])
+    with stamped_output(out, key) as tmp:
+        run(["ffmpeg", "-y", *inputs, *args, str(tmp)])
     return out
 
 
 def add_music(narrated: Path, bed: Path | None, out: Path) -> Path:
     total = duration(narrated)
     if bed is None:
-        run(["ffmpeg", "-y", "-i", str(narrated), "-c:v", "copy",
-             "-af", f"loudnorm=I={config.TARGET_LUFS}:TP=-1.5:LRA=11",
-             "-c:a", "aac", "-b:a", "192k", str(out)])
+        args = ["-c:v", "copy", "-af", f"loudnorm=I={config.TARGET_LUFS}:TP=-1.5:LRA=11",
+                "-c:a", "aac", "-b:a", "192k"]
+    else:
+        fc = (
+            "[0:a]asplit=2[voice][key];"
+            f"[1:a]aresample=48000,aformat=channel_layouts=stereo,"
+            f"volume={config.MUSIC_VOLUME},afade=t=in:d={config.MUSIC_FADE_S}[mus];"
+            # sidechain: the voice pushes the music down while it speaks
+            f"[mus][key]sidechaincompress=threshold=0.03:ratio={config.DUCK_RATIO}"
+            ":attack=80:release=900[duck];"
+            "[voice][duck]amix=inputs=2:duration=first:normalize=0,"
+            f"afade=t=out:st={max(total - config.MUSIC_FADE_S, 0):.2f}:d={config.MUSIC_FADE_S},"
+            f"loudnorm=I={config.TARGET_LUFS}:TP=-1.5:LRA=11[aout]"
+        )
+        args = ["-filter_complex", fc, "-map", "0:v", "-map", "[aout]",
+                "-c:v", "copy", *AUDIO_ENC, "-t", f"{total:.2f}"]
+    key = content_key("mix", file_hash(narrated), file_hash(bed) if bed else None, args)
+    if is_fresh(out, key):
         return out
-    fc = (
-        "[0:a]asplit=2[voice][key];"
-        f"[1:a]aresample=48000,aformat=channel_layouts=stereo,"
-        f"volume={config.MUSIC_VOLUME},afade=t=in:d={config.MUSIC_FADE_S}[mus];"
-        # sidechain: the voice pushes the music down while it speaks
-        f"[mus][key]sidechaincompress=threshold=0.03:ratio={config.DUCK_RATIO}"
-        ":attack=80:release=900[duck];"
-        "[voice][duck]amix=inputs=2:duration=first:normalize=0,"
-        f"afade=t=out:st={max(total - config.MUSIC_FADE_S, 0):.2f}:d={config.MUSIC_FADE_S},"
-        f"loudnorm=I={config.TARGET_LUFS}:TP=-1.5:LRA=11[aout]"
-    )
-    run(["ffmpeg", "-y", "-i", str(narrated), "-i", str(bed),
-         "-filter_complex", fc, "-map", "0:v", "-map", "[aout]",
-         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
-         "-t", f"{total:.2f}", str(out)])
+    inputs = ["-i", str(narrated)] + (["-i", str(bed)] if bed else [])
+    with stamped_output(out, key) as tmp:
+        run(["ffmpeg", "-y", *inputs, *args, str(tmp)])
     return out

@@ -12,7 +12,8 @@ You inspect one finished video and its build folder. You don't change code.
    true peak (`ebur128=peak=true`), black segments (`blackdetect=d=0.5`), and the
    music level during narration vs during pauses.
 3. Extract one frame from the middle of each scene into `build/<slug>/frames/`
-   (use the scene clips `scene_XX_final.mp4`) and look at each image.
+   (`build/<slug>/manifest.json` lists each scene's clip under `clips/`) and look at
+   each image.
 4. Judge each frame for: text or letters in AI images, physically wrong depictions
    for the scene's concept, anything jarring for sleep viewing (bright flashes,
    harsh contrast, faces, unsettling imagery), Manim text cut off at frame edges.

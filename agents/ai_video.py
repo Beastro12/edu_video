@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 
 import config
+from utils import atomic_output, content_key
 
 STYLE = (" Calm documentary footage, one continuous slow camera move, soft natural "
          "light, muted colours, shallow depth of field. No text, no captions, no logos, "
@@ -13,8 +14,9 @@ def available() -> bool:
     return bool(config.GOOGLE_API_KEY)
 
 
-def render_scene(scene: dict, work_dir: Path, timeout_s: int = 600) -> Path:
-    out = work_dir / f"scene_{scene['id']:02d}_ai.mp4"
+def render_scene(scene: dict, out_dir: Path, timeout_s: int = 600) -> Path:
+    prompt = scene["visual_description"] + STYLE
+    out = out_dir / f"ai_{content_key('ai', prompt, config.VEO_MODEL, config.ASPECT_RATIO)}.mp4"
     if out.exists():
         return out
     from google import genai
@@ -23,8 +25,8 @@ def render_scene(scene: dict, work_dir: Path, timeout_s: int = 600) -> Path:
     client = genai.Client(api_key=config.GOOGLE_API_KEY)
     op = client.models.generate_videos(
         model=config.VEO_MODEL,
-        prompt=scene["visual_description"] + STYLE,
-        config=types.GenerateVideosConfig(aspect_ratio="16:9"),
+        prompt=prompt,
+        config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO),
     )
     start = time.time()
     while not op.done:
@@ -39,5 +41,6 @@ def render_scene(scene: dict, work_dir: Path, timeout_s: int = 600) -> Path:
     if not videos:
         raise RuntimeError("Veo returned no video (often a safety filter on the prompt)")
     client.files.download(file=videos[0].video)
-    videos[0].video.save(str(out))
+    with atomic_output(out) as tmp:
+        videos[0].video.save(str(tmp))
     return out
