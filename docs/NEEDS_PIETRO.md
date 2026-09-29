@@ -19,6 +19,8 @@ With it, `--estimate` for a 15-min film with Google now says €8.85 typical (Ve
 2 clips; the other Veo scenes get stills) and €15.16 worst case; without Veo, €2.06. So one
 film fits the €10 budget in the typical case but may not in the worst, and a second film
 would not. The decision is unchanged; the "about €20 per Veo film" becomes about €9–15.
+**Update 2026-09-29 (D20):** see the entry "Veo 3.1 or Veo 3.1 Lite" at the end: Lite would
+bring the same film to €4.14 typical and €10.45 worst case.
 
 ## 2026-09-27 — Lock the spend ledger against the agent (permissions: yours to change)
 **What:** two optional hardening changes that only you should make, because they change
@@ -59,6 +61,8 @@ scene quietly becoming a still.
 it never runs by default (not in `make check` or `make smoke`).
 **Recommend:** only if you want Veo in films at all (see the first entry): after `make smoke`
 passes, run `pytest -m live_veo tests/test_live.py` once.
+**Update 2026-09-29 (D20):** the same check verifies whichever `VEO_MODEL` is set: about €3
+with Veo 3.1, about €0.60 with Lite. It now also checks that the clip comes back at 1080p.
 
 ## 2026-09-27 — FYI: pauses between narrations are longer (taste; change if you like)
 **What:** `LEAD_IN_S` 0.6 → 1.4 s and `TAIL_S` 1.8 → 1.4 s in `config.py` (P1-1, D14).
@@ -117,3 +121,25 @@ the agent's own `make check`. A regression pushed by mistake would go unnoticed.
 **Tried:** nothing; the workflow is shared with the Next.js app, so I haven't touched it.
 **Recommend:** yes, and I'll write it if you say so (with the lock file from P1-11, so CI
 installs the tested versions).
+
+## 2026-09-29 — Veo 3.1 or Veo 3.1 Lite? (taste + money; you asked about Veo 4)
+**What:** which Veo model films use by default.
+**Why:** no Veo 4 was found: not in Google's latest SDK (2.25.0, released a week ago), and not
+announced according to several secondary sources (Google's pages are blocked from this
+sandbox). The options on the Gemini API are Veo 3.1 (the default, the full model) and Veo 3.1
+Lite (the cheapest tier), with prices from secondary sources:
+
+| | per 8 s clip | 15-min film, typical / worst (`--estimate`) |
+|---|---|---|
+| Veo 3.1 (default) | ~€2.94 | €8.85 / €15.16 |
+| Veo 3.1 Lite | ~€0.59 | €4.14 / €10.45 |
+
+Both are over the €10 budget in the worst case. Nobody has seen a Lite clip.
+**Tried:** checked the SDK's code and tests for model names and options (D20), and made Lite
+a one-line switch (priced, and 1080p is requested explicitly). Veo's audio can't be turned
+off on the Gemini API, so both prices include audio we throw away.
+**Recommend:** after `make smoke`, run the one-clip Veo check twice, once per model
+(`VEO_MODEL=... pytest -m live_veo tests/test_live.py`; about €3.50 and both of the day's 2
+clips), and compare the clips. If Lite looks good enough for calm B-roll, add
+`VEO_MODEL=veo-3.1-lite-generate-preview` to `.env`. If your `.env` already sets `VEO_MODEL`,
+that setting wins over the default.

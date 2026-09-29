@@ -98,7 +98,10 @@ def image_eur() -> float:
 
 
 def video_eur(seconds: float) -> float:
-    return seconds * config.VEO_USD_PER_SECOND * config.USD_TO_EUR
+    """A Veo clip of the configured model and resolution; an unlisted one at the priciest rate."""
+    usd = config.VEO_USD_PER_SECOND.get(config.VEO_MODEL, {}).get(config.VEO_RESOLUTION,
+                                                                   config.VEO_USD_PER_SECOND_UNLISTED)
+    return seconds * usd * config.USD_TO_EUR
 
 
 def claude_input_estimate(*texts: str) -> int:

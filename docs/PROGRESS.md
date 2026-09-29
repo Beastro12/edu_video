@@ -399,3 +399,32 @@ clear it (README says to use `--retry-failed`). A still rejected for good by Cla
 decision; `--retry-failed` doesn't reopen it (delete its `review_*.json` to).
 DIVERGED — none from DECISIONS.
 NEXT — P1-8 (the closing fade dims the last narration).
+
+## 2026-09-29 P1-12 Veo 4 as a substitute for Veo 3 (Pietro's request)
+CHANGED — `config.py`: `VEO_RESOLUTION` (the film's 1080p, asserted 720p/1080p);
+`VEO_USD_PER_SECOND` per model and resolution (Veo 3.1 and Veo 3.1 Lite) plus
+`VEO_USD_PER_SECOND_UNLISTED`; `VEO_MODEL` stays `veo-3.1-generate-preview`. `ai_video.py`:
+sends `resolution` (never `generate_audio`); resolution is in the clip's cache key.
+`ledger.video_eur` prices by model and resolution. New `tests/test_veo_model.py` (4);
+`test_budget.py` pinned to a listed model and freed from the "a clip costs over €1" premise;
+the live Veo check also asserts the clip's height. D20; README, PLAN, NEEDS_PIETRO (a new
+decision: Veo 3.1 or Lite), `.env.example`.
+CHECKED — verified: no "Veo 4"/"veo-4" string in google-genai 2.25.0, the latest release
+(PyPI JSON, fetched today); the SDK's Gemini-API path sends `resolution` and raises on
+`generate_audio`; its tests name `veo-3.1-generate-preview` and `veo-3.1-lite-generate-preview`
+"latest" in different files. What goes over the wire, checked through the real SDK on a mock
+transport: model path, `resolution`, `aspectRatio`, no `generateAudio`. `--estimate` for a
+15-min film: Veo 3.1 €8.85 / worst €15.16; Lite €4.14 / €10.45. 6 mutants killed. Not verified:
+Veo 4's absence beyond the SDK and secondary sources (Google's pages and Wikipedia are blocked
+here); all prices (secondary sources); whether the API accepts Lite at 1080p (only a live run
+can show). Reviewer: no Critical; its main warning reversed my first version, which had
+switched the default to Lite; see DIVERGED. Also fixed: wording that called unverified things
+verified; the plan's budget warning, which I had dropped although the worst case is still
+over €10; an unlisted `VEO_MODEL` in `.env` could break a test; a film height other than
+720/1080 would have made every Veo scene quietly fail. `make check`: 138 passed.
+ASSUMED — "substitute for Veo 3" meant something newer and at least as good. Nothing like that
+exists, so the default is unchanged.
+DIVERGED — my first version made Lite (the cheapest tier, never seen) the default, which is a
+taste and money call CLAUDE.md reserves for Pietro; reverted to Veo 3.1, with the choice in
+NEEDS_PIETRO. D13's Veo settings are updated by D20 (resolution now sent explicitly).
+NEXT — P1-8 (the closing fade dims the last narration).

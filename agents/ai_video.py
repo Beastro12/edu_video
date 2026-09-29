@@ -21,7 +21,7 @@ def available() -> bool:
 
 def cache_path(scene: dict, out_dir: Path) -> Path:
     prompt = scene["visual_description"] + STYLE
-    return out_dir / f"ai_{content_key('ai', prompt, config.VEO_MODEL, config.ASPECT_RATIO)}.mp4"
+    return out_dir / f"ai_{content_key('ai', prompt, config.VEO_MODEL, config.ASPECT_RATIO, config.VEO_RESOLUTION)}.mp4"
 
 
 _veo_lock = threading.Lock()
@@ -74,7 +74,8 @@ def _buy(scene: dict, out: Path, cost: float, timeout_s: int) -> Path:
         op = client.models.generate_videos(
             model=config.VEO_MODEL,
             source=types.GenerateVideosSource(prompt=scene["visual_description"] + STYLE),
-            config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO,
+            # No generate_audio: the Gemini API refuses it (the SDK raises); the audio is discarded.
+            config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO, resolution=config.VEO_RESOLUTION,
                                               http_options=google_client.start_job_options()),
         )
     except (errors.ServerError, httpx.TimeoutException) as e:

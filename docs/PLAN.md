@@ -21,7 +21,8 @@ Not verified, and why it matters:
 2. **With a Google key, the first film may stop partway.** Veo is on by default. A 15-min
    film is estimated at €8.85 typical and €15.16 worst case (`--estimate`, Veo capped at 2
    clips a day), against a €10 budget for all runs together. Until you decide (NEEDS_PIETRO),
-   check `--estimate` first, or run with `--no-ai-video` (€2.06 typical).
+   check `--estimate` first, or run with `--no-ai-video` (€2.06 typical). With Veo 3.1 Lite
+   (D20: no Veo 4 found) the film is €4.14 typical, still €10.45 in the worst case.
 3. **Every film has a known defect:** the closing fade also dims the last narration (P1-8).
 4. **Not publishable yet:** `music/` is empty (a synthetic placeholder bed is used), and the
    YouTube description is a placeholder.
@@ -48,8 +49,8 @@ chat and PROGRESS. The `STOP` file is git-ignored, so it exists only on the mach
 ## Phase 2 — Pietro (unblocks everything else)
 
 Most useful first:
-1. **Veo vs budget** (NEEDS_PIETRO, first entry): Veo on or off by default, and what
-   `BUDGET_EUR` should be. About 5 minutes.
+1. **Veo vs budget** (NEEDS_PIETRO, first and last entries): Veo on or off by default,
+   Veo 3.1 or the ~5× cheaper Lite, and what `BUDGET_EUR` should be. About 5 minutes.
 2. **Keys, then `make smoke` once** (NEEDS_PIETRO, keys entry): about €0.10–0.50, on your
    machine or in a cloud environment with the four variables and the three API hosts allowed.
    This is the gate for Phase 3.

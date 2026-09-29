@@ -251,3 +251,42 @@ fails again in that run isn't asked twice (two scenes sharing a picture pay once
 is redacted of API keys before it is saved or logged (`utils.redact`, applied in `log()`).
 `--estimate` counts the fallback for such scenes, including a failure on a later review
 attempt.
+
+**D20 — No Veo 4 found; Veo 3.1 stays the default, Veo 3.1 Lite is ready (P1-12; updates
+D13's Veo settings).** Pietro asked to look at Veo 4 as a substitute for Veo 3. Evidence,
+2026-09-29 (Google's own pages are unreachable from this sandbox):
+- **No Veo 4 found.** google-genai 2.25.0 is the latest release (PyPI's JSON API, fetched
+  2026-09-29: released 2026-09-22). No "Veo 4" or "veo-4" string appears anywhere in it,
+  though that only shows its tests don't use one. Several secondary sources say Google hasn't
+  announced a Veo 4.
+- **Veo models in the SDK's tests:** `veo-3.1-generate-preview` (called "latest" in
+  `tests/models`, including the only 1080p test on the Gemini API path),
+  `veo-3.1-lite-generate-preview` (called "latest" for the Gemini API in `tests/shared`), and
+  `veo-3.1-lite-generate-001` (Vertex only).
+- **The request** (verified in the SDK's code; not verified live): the Gemini API path sends
+  `resolution` (720p/1080p), `duration_seconds` and `negative_prompt`. It raises on
+  `generate_audio` ("only supported in Gemini Enterprise Agent Platform"), so every Veo clip
+  is paid with audio even though assembly discards it. The SDK doesn't check options per model,
+  so whether the API accepts Lite at 1080p is not verified.
+- **Prices** (not verified, secondary sources that agree; USD per second, with audio):
+
+  | model | 720p | 1080p |
+  |---|---|---|
+  | Veo 3.1 Lite | 0.05 | 0.08 |
+  | Veo 3.1 Fast | ~0.10 | not found |
+  | Veo 3.1 | 0.40 | 0.40 |
+
+  Gemini Omni Flash (~$0.10/s at 720p) uses a different API (Interactions) that the SDK's
+  `generate_videos` doesn't cover, so it would need new code: not pursued.
+
+Chosen: **no substitute is better than what we have.** `veo-3.1-generate-preview` stays the
+default (the full model); Lite is the cheapest tier and nobody has seen its picture, so
+choosing it is Pietro's call (NEEDS_PIETRO). Prepared either way:
+- `VEO_RESOLUTION` (the film's 1080p) is sent explicitly and is part of the clip's cache key;
+  a height other than 720/1080 fails at start-up.
+- Prices are kept per model and resolution (`VEO_USD_PER_SECOND`); an unlisted pair is priced
+  at the priciest rate.
+
+Numbers from `--estimate` for a 15-min film: Veo 3.1 is €8.85 typical, €15.16 worst case
+(Veo €5.89 for 2 clips); Lite is €4.14 and €10.45 (Veo €1.18). One 8 s clip costs ~€2.94 with
+Veo 3.1 and ~€0.59 with Lite. The daily cap counts every Veo clip whatever the model.

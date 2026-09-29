@@ -154,6 +154,14 @@ Work top to bottom within a priority.
   install uses; `requirements.txt` keeps the ranges; `make check` passes in a fresh venv
   installed from the lock; a test fails if an installed version differs from the lock.
 
+- [x] P1-12 — Veo 4 as a substitute for Veo 3 (Pietro, 2026-09-29)
+  Accept: find out whether Veo 4 exists and what it costs; if something newer or cheaper than
+  `veo-3.1-generate-preview` is available on the Gemini API with our request shape, switch the
+  default with a DECISIONS entry, prices per model, and tests on the request actually sent.
+  Outcome (D20): no Veo 4 found; Veo 3.1 stays the default (nothing better is available);
+  Veo 3.1 Lite (~1/5 the price, the cheapest tier) is priced and one line in `.env` away;
+  choosing it is Pietro's call (NEEDS_PIETRO).
+
 ## P2 — scale and polish
 
 Order set by docs/PLAN.md (2026-09-27): the run report first (the first live run needs

@@ -13,7 +13,9 @@ CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-5")
 # Imagen 4 and Veo 3.0 were retired from the Gemini API in 2026 (D13). Verify these names.
 IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gemini-3.1-flash-image")   # verify
 IMAGE_SIZE = "1K"                                                  # verify; 2K/4K cost more per image
-VEO_MODEL = os.getenv("VEO_MODEL", "veo-3.1-generate-preview")      # verify
+# No Veo 4 found (D20). VEO_MODEL=veo-3.1-lite-generate-preview in .env costs ~1/5 as much
+# (the cheapest tier; its picture is unseen): which one is the default is Pietro's call.
+VEO_MODEL = os.getenv("VEO_MODEL", "veo-3.1-generate-preview")       # verify
 
 # --- Keys ---------------------------------------------------------------
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -37,6 +39,8 @@ VOICE_SETTINGS = {
 
 # --- Video & pacing -------------------------------------------------------
 WIDTH, HEIGHT, FPS = 1920, 1080, 30
+VEO_RESOLUTION = f"{HEIGHT}p"  # Veo makes 720p or 1080p; the film's size (720p costs less, D20)
+assert VEO_RESOLUTION in ("720p", "1080p"), "Veo makes only 720p or 1080p: set VEO_RESOLUTION"
 AUDIO_RATE = 48000            # every scene is a whole number of frames = AUDIO_RATE / FPS samples each
 assert AUDIO_RATE % FPS == 0, "a video frame must be a whole number of audio samples"
 ASPECT_RATIO = "16:9"         # what the image/video models are asked for; matches WIDTH x HEIGHT
@@ -118,7 +122,13 @@ CLAUDE_USD_PER_MTOK = {                 # (input, output) per million tokens; ve
 CLAUDE_USD_PER_MTOK_UNLISTED = (10.00, 50.00)  # a model not listed above: assume the priciest tier
 TTS_USD_PER_1K_CHARS = 0.10             # verify: ElevenLabs API, Multilingual v2
 IMAGE_USD_PER_IMAGE = {"1K": 0.067, "2K": 0.101, "4K": 0.151}  # verify: Gemini 3.1 Flash Image, by IMAGE_SIZE
-VEO_USD_PER_SECOND = 0.40               # verify
+# Veo on the Gemini API always includes audio (it can't be turned off there; we discard it),
+# so these are the with-audio prices, by model and VEO_RESOLUTION. Verify (D20).
+VEO_USD_PER_SECOND = {
+    "veo-3.1-lite-generate-preview": {"720p": 0.05, "1080p": 0.08},
+    "veo-3.1-generate-preview": {"720p": 0.40, "1080p": 0.40},
+}
+VEO_USD_PER_SECOND_UNLISTED = 0.40      # a model or resolution not listed: assume the priciest
 VEO_CLIP_S = 8                          # verify: length of one Veo clip, billed per second
 VEO_MAX_PER_DAY = 2                     # CLAUDE.md hard rule; counted from the ledger, per UTC day
 

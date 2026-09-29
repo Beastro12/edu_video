@@ -12,7 +12,7 @@ import pytest
 import config
 import ledger
 import pipeline
-from utils import duration, save_json
+from utils import duration, run, save_json
 
 pytestmark = pytest.mark.live
 
@@ -81,8 +81,9 @@ def test_film_passes_qa(film):
 
 @pytest.mark.live_veo
 def test_veo_model_makes_one_clip():
-    """Opt-in, NOT part of `make smoke`: costs about €3 and counts toward CLAUDE.md's 2 Veo
-    clips per day. Run with `pytest -m live_veo tests/test_live.py` to verify VEO_MODEL."""
+    """Opt-in, NOT part of `make smoke`: costs about €3 with the default Veo 3.1 (about €0.60
+    with Veo 3.1 Lite, D20) and counts toward CLAUDE.md's 2 Veo clips per day. Run with
+    `pytest -m live_veo tests/test_live.py` to verify VEO_MODEL and VEO_RESOLUTION."""
     if not config.GOOGLE_API_KEY:
         pytest.skip("missing GOOGLE_API_KEY")
     from agents import ai_video
@@ -92,3 +93,6 @@ def test_veo_model_makes_one_clip():
              "visual_description": "A slow drift over a calm night sky full of faint stars"}
     clip = ai_video.render_scene(scene, work)
     assert duration(clip) > 2
+    height = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=height",
+                  "-of", "csv=p=0", str(clip)]).stdout.strip()
+    assert f"{height}p" == config.VEO_RESOLUTION, "the model honoured the requested resolution"

@@ -65,7 +65,9 @@ SCENE = {"id": 1, "concept": "c", "narration": "The sky darkens slowly.",
          "visual_type": "still", "visual_description": "a dark sky"}
 
 
-def test_every_paid_call_is_logged_with_its_estimated_cost(providers, tmp_path):
+def test_every_paid_call_is_logged_with_its_estimated_cost(providers, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "VEO_MODEL", "veo-3.1-generate-preview")  # a listed price, whatever .env says
+    monkeypatch.setattr(config, "VEO_RESOLUTION", "1080p")
     llm.structured("system", "prompt", "thing", {"type": "object"})
     voice.narrate(SCENE["narration"], tmp_path)
     image_agent.render_still(SCENE, tmp_path)
@@ -85,7 +87,8 @@ def test_every_paid_call_is_logged_with_its_estimated_cost(providers, tmp_path):
     assert (log[2]["model"], log[2]["units"]) == (config.IMAGE_MODEL, {"images": 1})
     assert log[2]["est_cost_eur"] == pytest.approx(config.IMAGE_USD_PER_IMAGE[config.IMAGE_SIZE] * rate)
     assert (log[3]["model"], log[3]["units"]) == (config.VEO_MODEL, {"seconds": config.VEO_CLIP_S})
-    assert log[3]["est_cost_eur"] == pytest.approx(config.VEO_CLIP_S * config.VEO_USD_PER_SECOND * rate)
+    veo_usd = config.VEO_USD_PER_SECOND[config.VEO_MODEL][config.VEO_RESOLUTION]
+    assert log[3]["est_cost_eur"] == pytest.approx(config.VEO_CLIP_S * veo_usd * rate)
     assert ledger.spent_eur() == pytest.approx(sum(e["est_cost_eur"] for e in log))
 
     voice.narrate(SCENE["narration"], tmp_path)  # cached: no call, no entry
@@ -117,8 +120,9 @@ def test_budget_stop_is_not_swallowed_by_the_visual_fallbacks(providers, monkeyp
 
 
 def test_veo_over_budget_stops_the_run_even_if_a_still_would_fit(providers, monkeypatch, tmp_path):
-    ledger.record("elevenlabs", "earlier run", {"characters": 1}, 9.0)  # €1 left: a still fits, a clip doesn't
-    assert ledger.image_eur() < 1 < ledger.video_eur(config.VEO_CLIP_S)
+    left = (ledger.image_eur() + ledger.video_eur(config.VEO_CLIP_S)) / 2  # a still fits, a clip doesn't
+    ledger.record("elevenlabs", "earlier run", {"characters": 1}, config.BUDGET_EUR - left)
+    assert ledger.image_eur() < left < ledger.video_eur(config.VEO_CLIP_S)
     with pytest.raises(ledger.BudgetExceeded):
         pipeline.make_visual({**SCENE, "visual_type": "ai_video"}, 5.0, tmp_path, allow_veo=True)
     assert providers == [], "must not quietly buy a still instead"
@@ -172,7 +176,7 @@ def test_estimate_prices_uncached_work_without_calling_anything(monkeypatch, tmp
     assert est["claude"] == pytest.approx(ledger.claude_eur(config.CLAUDE_MODEL, *config.EST_STILL_REVIEW_TOKENS))
     assert est["elevenlabs"] == pytest.approx(500 / 1000 * config.TTS_USD_PER_1K_CHARS * rate)
     assert est["images"] == pytest.approx(1 * config.IMAGE_USD_PER_IMAGE[config.IMAGE_SIZE] * rate)
-    assert est["veo"] == pytest.approx(config.VEO_CLIP_S * config.VEO_USD_PER_SECOND * rate)
+    assert est["veo"] == pytest.approx(ledger.video_eur(config.VEO_CLIP_S))
 
     monkeypatch.setattr(sys, "argv", ["pipeline.py", "topic", "--estimate"])
     monkeypatch.chdir(tmp_path)
