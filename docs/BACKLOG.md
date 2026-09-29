@@ -162,6 +162,14 @@ Work top to bottom within a priority.
   Veo 3.1 Lite (~1/5 the price, the cheapest tier) is priced and one line in `.env` away;
   choosing it is Pietro's call (NEEDS_PIETRO).
 
+- [x] P1-13 — ElevenLabs Eleven v4 as a substitute (Pietro, 2026-09-29: "ElevenLabs Veo 4")
+  Accept: find out what Eleven v4 is, what it costs and what it accepts; make it selectable
+  without breaking the current voice or its paid cache; decide the default (a taste call:
+  Pietro's), with a DECISIONS entry and tests on the request actually sent.
+  Outcome (D21): ready as `TTS_MODEL=eleven_v4`; the default stays Multilingual v2 because v4
+  reportedly has no speed control (unverified); the choice and a €0.12 listening check are in
+  NEEDS_PIETRO.
+
 ## P2 — scale and polish
 
 Order set by docs/PLAN.md (2026-09-27): the run report first (the first live run needs

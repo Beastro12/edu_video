@@ -68,6 +68,7 @@ SCENE = {"id": 1, "concept": "c", "narration": "The sky darkens slowly.",
 def test_every_paid_call_is_logged_with_its_estimated_cost(providers, tmp_path, monkeypatch):
     monkeypatch.setattr(config, "VEO_MODEL", "veo-3.1-generate-preview")  # a listed price, whatever .env says
     monkeypatch.setattr(config, "VEO_RESOLUTION", "1080p")
+    monkeypatch.setattr(config, "TTS_MODEL", "eleven_multilingual_v2")
     llm.structured("system", "prompt", "thing", {"type": "object"})
     voice.narrate(SCENE["narration"], tmp_path)
     image_agent.render_still(SCENE, tmp_path)
@@ -83,7 +84,7 @@ def test_every_paid_call_is_logged_with_its_estimated_cost(providers, tmp_path, 
     assert log[0]["est_cost_eur"] == pytest.approx((1200 * usd_in + 300 * usd_out) / 1e6 * rate)
     assert log[1]["units"] == {"characters": len(SCENE["narration"])}
     assert log[1]["est_cost_eur"] == pytest.approx(
-        len(SCENE["narration"]) / 1000 * config.TTS_USD_PER_1K_CHARS * rate)
+        len(SCENE["narration"]) / 1000 * config.TTS_USD_PER_1K_CHARS["eleven_multilingual_v2"] * rate)
     assert (log[2]["model"], log[2]["units"]) == (config.IMAGE_MODEL, {"images": 1})
     assert log[2]["est_cost_eur"] == pytest.approx(config.IMAGE_USD_PER_IMAGE[config.IMAGE_SIZE] * rate)
     assert (log[3]["model"], log[3]["units"]) == (config.VEO_MODEL, {"seconds": config.VEO_CLIP_S})
@@ -174,7 +175,7 @@ def test_estimate_prices_uncached_work_without_calling_anything(monkeypatch, tmp
     rate = config.USD_TO_EUR
     # script exists and there are no Manim scenes: Claude only reviews scene 1's still
     assert est["claude"] == pytest.approx(ledger.claude_eur(config.CLAUDE_MODEL, *config.EST_STILL_REVIEW_TOKENS))
-    assert est["elevenlabs"] == pytest.approx(500 / 1000 * config.TTS_USD_PER_1K_CHARS * rate)
+    assert est["elevenlabs"] == pytest.approx(ledger.tts_eur(500))
     assert est["images"] == pytest.approx(1 * config.IMAGE_USD_PER_IMAGE[config.IMAGE_SIZE] * rate)
     assert est["veo"] == pytest.approx(ledger.video_eur(config.VEO_CLIP_S))
 
@@ -192,8 +193,7 @@ def test_estimate_before_any_script_projects_all_stages(monkeypatch, tmp_path):
     assert est["claude"] > 0 and est["elevenlabs"] > 0 and est["images"] > 0
     assert est["veo"] == 0
     chars = 15 * config.WORDS_PER_MIN * config.EST_CHARS_PER_WORD
-    assert est["elevenlabs"] == pytest.approx(chars / 1000 * config.TTS_USD_PER_1K_CHARS * config.USD_TO_EUR,
-                                              rel=0.05)
+    assert est["elevenlabs"] == pytest.approx(ledger.tts_eur(chars), rel=0.05)
 
 
 def test_estimate_without_google_counts_visuals_as_manim_and_skips_cached_ones(monkeypatch, tmp_path):

@@ -253,7 +253,8 @@ is redacted of API keys before it is saved or logged (`utils.redact`, applied in
 attempt.
 
 **D20 — No Veo 4 found; Veo 3.1 stays the default, Veo 3.1 Lite is ready (P1-12; updates
-D13's Veo settings).** Pietro asked to look at Veo 4 as a substitute for Veo 3. Evidence,
+D13's Veo settings).** Pietro asked to look at Veo 4 as a substitute for Veo 3. (He meant
+ElevenLabs' Eleven v4, D21; this entry stands as a check of the Veo options.) Evidence,
 2026-09-29 (Google's own pages are unreachable from this sandbox):
 - **No Veo 4 found.** google-genai 2.25.0 is the latest release (PyPI's JSON API, fetched
   2026-09-29: released 2026-09-22). No "Veo 4" or "veo-4" string appears anywhere in it,
@@ -290,3 +291,33 @@ choosing it is Pietro's call (NEEDS_PIETRO). Prepared either way:
 Numbers from `--estimate` for a 15-min film: Veo 3.1 is €8.85 typical, €15.16 worst case
 (Veo €5.89 for 2 clips); Lite is €4.14 and €10.45 (Veo €1.18). One 8 s clip costs ~€2.94 with
 Veo 3.1 and ~€0.59 with Lite. The daily cap counts every Veo clip whatever the model.
+
+**D21 — Eleven v4 ready as a switch; `eleven_multilingual_v2` stays the default (P1-13).**
+Pietro asked about "ElevenLabs Veo 4" as a substitute for v3: ElevenLabs' Eleven v4. Evidence,
+2026-09-29 (elevenlabs.io is blocked from this sandbox; ElevenLabs' own SDK 2.70.0, released
+2026-09-28, doesn't name it yet). From several secondary sources that agree, most quoting
+ElevenLabs' v4 docs (not verified):
+- Launched 2026-09-28, as `eleven_v4` and `eleven_v4_turbo`.
+- Built for long-form consistency ("a full audiobook sounds like a single take"); up to 10,000
+  characters a request; 90+ languages.
+- **Only two voice settings, Stability and Similarity: no speed control.** Pace comes from the
+  text: `[slowly]`, `[pause]`, an ellipsis.
+- $0.08 per 1,000 characters at list price, against the $0.10 in our config for Multilingual v2
+  (both "verify"); a launch price of $0.022 until 2026-10-12.
+
+Chosen: **the default stays `eleven_multilingual_v2`**, because our slow sleep pacing is its
+`speed` 0.85, and WORDS_PER_MIN (120), which sizes every script, assumes that pace. v4 might
+read faster, and nobody has heard it. Switching is `TTS_MODEL=eleven_v4` in `.env`:
+- a model's request carries only the settings it takes (`TTS_SETTINGS_ACCEPTED`), so v4 is sent
+  stability and similarity only, never a `speed` it may reject;
+- the cache key hashes the settings actually sent, so the default's key is byte-identical to
+  before and no narration already paid for is bought again; another model is another file;
+- prices are per model (an unlisted one at the priciest rate).
+
+An opt-in live A/B check (`pytest -s -m live_voice tests/test_live_optin.py`, about €0.12)
+renders the same line four ways: the current model; v4; v4 with a `[slowly]` tag; and v4 sent
+`speed` too, which tests the report that it has none. It prints each one's words per minute.
+The opt-in checks (this one and the one Veo clip) now live in their own module: in
+`test_live.py`, the module-wide `live` mark made `make smoke` run them too (P1-13 review; the
+Veo one had been exposed since P0-7). An offline test reads the Makefile and checks that `make
+smoke` selects neither.

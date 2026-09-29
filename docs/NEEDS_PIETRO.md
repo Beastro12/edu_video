@@ -57,10 +57,13 @@ already refused `elevenlabs.io` and `ai.google.dev`). A new session picks the va
 `VEO_MODEL` (`veo-3.1-generate-preview`, from secondary sources).
 **Why:** `make smoke` runs without Veo, so a wrong Veo name would only show as every Veo
 scene quietly becoming a still.
-**Tried:** wrote `test_veo_model_makes_one_clip` in `tests/test_live.py`, marked `live_veo`;
-it never runs by default (not in `make check` or `make smoke`).
+**Tried:** wrote `test_veo_model_makes_one_clip`, marked `live_veo`. It isn't in `make check`.
+**Correction 2026-09-29:** I wrote here that it wasn't in `make smoke` either. That was wrong:
+it sat in `tests/test_live.py`, whose module-wide `live` mark made `make smoke` select it (one
+Veo clip, ~€3). Found by the P1-13 review; it now lives in `tests/test_live_optin.py`, and an
+offline test checks that `make smoke` selects neither opt-in check.
 **Recommend:** only if you want Veo in films at all (see the first entry): after `make smoke`
-passes, run `pytest -m live_veo tests/test_live.py` once.
+passes, run `pytest -m live_veo tests/test_live_optin.py` once.
 **Update 2026-09-29 (D20):** the same check verifies whichever `VEO_MODEL` is set: about €3
 with Veo 3.1, about €0.60 with Lite. It now also checks that the clip comes back at 1080p.
 
@@ -122,7 +125,9 @@ the agent's own `make check`. A regression pushed by mistake would go unnoticed.
 **Recommend:** yes, and I'll write it if you say so (with the lock file from P1-11, so CI
 installs the tested versions).
 
-## 2026-09-29 — Veo 3.1 or Veo 3.1 Lite? (taste + money; you asked about Veo 4)
+## 2026-09-29 — Veo 3.1 or Veo 3.1 Lite? (taste + money)
+(I first read your "Veo 4" as Google's video model; you meant ElevenLabs' Eleven v4, see the
+next entry. This one still holds.)
 **What:** which Veo model films use by default.
 **Why:** no Veo 4 was found: not in Google's latest SDK (2.25.0, released a week ago), and not
 announced according to several secondary sources (Google's pages are blocked from this
@@ -139,7 +144,25 @@ Both are over the €10 budget in the worst case. Nobody has seen a Lite clip.
 a one-line switch (priced, and 1080p is requested explicitly). Veo's audio can't be turned
 off on the Gemini API, so both prices include audio we throw away.
 **Recommend:** after `make smoke`, run the one-clip Veo check twice, once per model
-(`VEO_MODEL=... pytest -m live_veo tests/test_live.py`; about €3.50 and both of the day's 2
+(`VEO_MODEL=... pytest -m live_veo tests/test_live_optin.py`; about €3.50 and both of the day's 2
 clips), and compare the clips. If Lite looks good enough for calm B-roll, add
 `VEO_MODEL=veo-3.1-lite-generate-preview` to `.env`. If your `.env` already sets `VEO_MODEL`,
 that setting wins over the default.
+
+## 2026-09-29 — Eleven v4 for the narration? (taste: listen first)
+**What:** whether narration moves from `eleven_multilingual_v2` to ElevenLabs' Eleven v4
+(reportedly launched 2026-09-28).
+**Why:** v4 is ElevenLabs' newest model, reportedly built for long-form consistency and a
+little cheaper at list price ($0.08 vs $0.10 per 1,000 characters; $0.022 until 12 October;
+secondary sources, D21). But reportedly it has no speed setting, and our calm pace is `speed`
+0.85. v4 may read faster, which makes films shorter than planned and less sleepy. Only
+listening can tell (D21).
+**Tried:** made it a one-line switch that sends v4 only the settings it reportedly takes, keeps
+every paid narration cached for the current model, and prices v4 separately. Nothing live (no
+keys here).
+**Recommend:** once the keys are in, run `pytest -s -m live_voice tests/test_live_optin.py`
+(about €0.12). It writes four versions of one calm line (current; v4; v4 with a `[slowly]` tag;
+v4 sent `speed` too, which shows whether v4 really ignores or refuses it) and prints their words
+per minute. `make smoke` never runs it. If v4 sounds calmer or better and its pace is close to
+120 words/min, add `TTS_MODEL=eleven_v4` to `.env` and tell me, so I can set WORDS_PER_MIN to
+the measured pace. If only the `[slowly]` version works, I'll add the tag to every scene.

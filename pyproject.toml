@@ -9,6 +9,7 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 markers = [
     "live: calls paid APIs (ElevenLabs, Google, Anthropic). Excluded from make check.",
-    "live_veo: one paid Veo clip (~EUR 3). Opt-in only: pytest -m live_veo tests/test_live.py",
+    "live_veo: one paid Veo clip (~EUR 3). Opt-in only: pytest -m live_veo tests/test_live_optin.py",
+    "live_voice: four short paid narrations (~EUR 0.12). Opt-in only: pytest -s -m live_voice tests/test_live_optin.py",
 ]
-addopts = "-m 'not live and not live_veo'"
+addopts = "-m 'not live and not live_veo and not live_voice'"

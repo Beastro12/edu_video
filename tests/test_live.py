@@ -2,7 +2,9 @@
 
 Costs real money (roughly €0.10-0.50). Run only via `make smoke`, once, under the budget rules
 in CLAUDE.md. Spend goes to the real build/ledger.jsonl, so BUDGET_EUR still holds. Skipped when
-a key is missing. Record the outcome of each check in docs/PROGRESS.md."""
+a key is missing. Record the outcome of each check in docs/PROGRESS.md.
+The opt-in paid checks (one Veo clip, the voice A/B) live in test_live_optin.py, so that
+`make smoke` (`-m live`) can never select them."""
 import json
 import shutil
 from pathlib import Path
@@ -12,7 +14,7 @@ import pytest
 import config
 import ledger
 import pipeline
-from utils import duration, run, save_json
+from utils import duration, save_json
 
 pytestmark = pytest.mark.live
 
@@ -55,9 +57,12 @@ def test_claude_model_name_is_accepted(film):
 
 
 def test_elevenlabs_accepts_voice_settings_including_speed(film):
-    # Proves the request with `speed` is accepted, not that speed is applied: listen to it.
-    assert "speed" in config.VOICE_SETTINGS
-    assert any(e["provider"] == "elevenlabs" for e in film["calls"])
+    # Proves the request is accepted with the settings this model is sent (with `speed` where
+    # the model takes it), not that they're applied: listen to it.
+    from agents import voice
+    if config.TTS_MODEL not in config.TTS_SETTINGS_ACCEPTED:  # a model that takes every setting
+        assert "speed" in voice.voice_settings()
+    assert any(e["provider"] == "elevenlabs" and e["model"] == config.TTS_MODEL for e in film["calls"])
 
 
 def test_image_model_returns_an_image(film):
@@ -77,22 +82,3 @@ def test_film_passes_qa(film):
     import qa
     report = qa.run_qa(film["final"])
     assert report["passed"], {k: v for k, v in report["checks"].items() if not v["passed"]}
-
-
-@pytest.mark.live_veo
-def test_veo_model_makes_one_clip():
-    """Opt-in, NOT part of `make smoke`: costs about €3 with the default Veo 3.1 (about €0.60
-    with Veo 3.1 Lite, D20) and counts toward CLAUDE.md's 2 Veo clips per day. Run with
-    `pytest -m live_veo tests/test_live.py` to verify VEO_MODEL and VEO_RESOLUTION."""
-    if not config.GOOGLE_API_KEY:
-        pytest.skip("missing GOOGLE_API_KEY")
-    from agents import ai_video
-    work = Path(config.BUILD_DIR) / "smoke-test-veo"
-    config.BUDGET_EUR = min(config.BUDGET_EUR, ledger.spent_eur() + 4.0)
-    scene = {"id": 1, "concept": "sky", "narration": "", "visual_type": "ai_video",
-             "visual_description": "A slow drift over a calm night sky full of faint stars"}
-    clip = ai_video.render_scene(scene, work)
-    assert duration(clip) > 2
-    height = run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=height",
-                  "-of", "csv=p=0", str(clip)]).stdout.strip()
-    assert f"{height}p" == config.VEO_RESOLUTION, "the model honoured the requested resolution"

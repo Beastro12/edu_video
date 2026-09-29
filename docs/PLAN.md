@@ -66,6 +66,7 @@ Most useful first:
    - music you have rights to (NEEDS_PIETRO);
    - the YouTube description text;
    - whether the drift stutters visibly (P1-10: a 2-minute look);
+   - Eleven v4 for the narration (NEEDS_PIETRO: a €0.12 listening check, once the keys work);
    - the pause lengths (FYI entry);
    - two stale "Imagen" lines in CLAUDE.md (the stills now use the Gemini image model).
 

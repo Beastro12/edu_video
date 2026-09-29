@@ -11,9 +11,17 @@ from utils import atomic_output, content_key, output_lock
 URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_128"
 
 
+def voice_settings() -> dict:
+    """The VOICE_SETTINGS this model is sent: the ones it takes (Eleven v4 reportedly has no
+    speed, D21)."""
+    accepted = config.TTS_SETTINGS_ACCEPTED.get(config.TTS_MODEL)
+    return {k: v for k, v in config.VOICE_SETTINGS.items() if accepted is None or k in accepted}
+
+
 def cache_path(text: str, out_dir: Path) -> Path:
-    key = content_key("tts", text, config.ELEVENLABS_VOICE_ID, config.TTS_MODEL,
-                      config.VOICE_SETTINGS, URL)
+    # What is sent, not VOICE_SETTINGS: for a model that takes them all it's the same dict, so
+    # narrations already paid for keep their key.
+    key = content_key("tts", text, config.ELEVENLABS_VOICE_ID, config.TTS_MODEL, voice_settings(), URL)
     return out_dir / f"{key}.mp3"
 
 
@@ -34,8 +42,7 @@ def _buy(text: str, out: Path, cost: float) -> Path:
             URL.format(voice=config.ELEVENLABS_VOICE_ID),
             headers={"xi-api-key": config.ELEVENLABS_API_KEY,
                      "Content-Type": "application/json"},
-            json={"text": text, "model_id": config.TTS_MODEL,
-                  "voice_settings": config.VOICE_SETTINGS},
+            json={"text": text, "model_id": config.TTS_MODEL, "voice_settings": voice_settings()},
             timeout=120,
         )
         if r.status_code in retries.TRANSIENT_STATUS:

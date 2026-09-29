@@ -57,7 +57,7 @@ class PaidCallInOfflineTest(BaseException):
 def offline(request, monkeypatch, tmp_path):
     """Every offline test gets its own build dir, so the spend ledger never touches build/,
     and fails loudly if it reaches a paid API it didn't mock."""
-    if request.node.get_closest_marker("live") or request.node.get_closest_marker("live_veo"):
+    if any(request.node.get_closest_marker(m) for m in ("live", "live_veo", "live_voice")):
         return
     import requests
 

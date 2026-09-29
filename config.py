@@ -28,13 +28,20 @@ DEFAULT_MINUTES = 15
 WORDS_PER_MIN = 120          # rough; slow voice. Real length is printed at the end.
 
 # --- Voice: sleep-soft ---------------------------------------------------
-TTS_MODEL = "eleven_multilingual_v2"
+# TTS_MODEL=eleven_v4 in .env switches to ElevenLabs' newer model (2026-09-28). It reportedly
+# has no speed control, so it may read faster than WORDS_PER_MIN assumes: listen first (D21).
+TTS_MODEL = os.getenv("TTS_MODEL", "eleven_multilingual_v2")
 VOICE_SETTINGS = {
     "stability": 0.75,          # higher = more even, less dramatic
     "similarity_boost": 0.75,
     "style": 0.0,
     "use_speaker_boost": True,
     "speed": 0.85,              # ElevenLabs accepts roughly 0.7-1.2
+}
+# The VOICE_SETTINGS a model takes, where it isn't all of them (D21: reported, not verified live).
+TTS_SETTINGS_ACCEPTED = {
+    "eleven_v4": ("stability", "similarity_boost"),
+    "eleven_v4_turbo": ("stability", "similarity_boost"),
 }
 
 # --- Video & pacing -------------------------------------------------------
@@ -120,7 +127,11 @@ CLAUDE_USD_PER_MTOK = {                 # (input, output) per million tokens; ve
     "claude-haiku-4-5": (1.00, 5.00),
 }
 CLAUDE_USD_PER_MTOK_UNLISTED = (10.00, 50.00)  # a model not listed above: assume the priciest tier
-TTS_USD_PER_1K_CHARS = 0.10             # verify: ElevenLabs API, Multilingual v2
+TTS_USD_PER_1K_CHARS = {                # verify: ElevenLabs API, by TTS_MODEL (D21)
+    "eleven_multilingual_v2": 0.10,
+    "eleven_v4": 0.08,                  # reported list price; a launch price of 0.022 to 2026-10-12
+}
+TTS_USD_PER_1K_CHARS_UNLISTED = max(TTS_USD_PER_1K_CHARS.values())  # a model not listed: the priciest
 IMAGE_USD_PER_IMAGE = {"1K": 0.067, "2K": 0.101, "4K": 0.151}  # verify: Gemini 3.1 Flash Image, by IMAGE_SIZE
 # Veo on the Gemini API always includes audio (it can't be turned off there; we discard it),
 # so these are the with-audio prices, by model and VEO_RESOLUTION. Verify (D20).

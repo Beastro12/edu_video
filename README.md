@@ -122,7 +122,10 @@ still holds with calls in flight: each paid call reserves its estimated cost bef
 
 Everything is in `config.py`: voice calmness and speed, pauses, crossfade length, how
 far stills drift, music level and ducking. Model names can be overridden in `.env`
-(`CLAUDE_MODEL`, `IMAGE_MODEL`, `VEO_MODEL`), since Google renames them often.
+(`CLAUDE_MODEL`, `IMAGE_MODEL`, `VEO_MODEL`, `TTS_MODEL`), since providers rename them often.
+`TTS_MODEL=eleven_v4` switches the narration to ElevenLabs' Eleven v4 (DECISIONS D21): it
+reportedly has no speed setting, so compare it first with
+`pytest -s -m live_voice tests/test_live_optin.py` (about €0.12, four short files to listen to).
 
 Render time (4 cores; DECISIONS D18, measured with `scripts/bench_stills.py`): each second
 of a still scene costs about 1.1–1.3 s of FFmpeg in all (its clip plus its share of the film's

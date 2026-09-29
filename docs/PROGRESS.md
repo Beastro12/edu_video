@@ -452,3 +452,34 @@ instead. Reviewer: no Critical, no Warning; 4 suggestions taken, one of them in 
 ASSUMED — none.
 DIVERGED — none.
 NEXT — P1-9 (faster final film encode).
+
+## 2026-09-29 P1-13 ElevenLabs Eleven v4 as a substitute (Pietro: "ElevenLabs Veo 4")
+CHANGED — `config.py`: `TTS_MODEL` overridable from `.env` (default `eleven_multilingual_v2`);
+`TTS_SETTINGS_ACCEPTED` (v4 and v4 turbo: stability, similarity_boost); `TTS_USD_PER_1K_CHARS`
+per model, with the unlisted price the priciest listed. `agents/voice.py`: `voice_settings()`
+sends a model only the settings it takes, and the cache key hashes what's sent.
+`ledger.tts_eur` prices by model. New `tests/test_voice_model.py` (5). The opt-in paid checks
+(one Veo clip; the new four-way voice A/B) moved to `tests/test_live_optin.py`. New offline
+`tests/test_live_selection.py` reads the Makefile's smoke recipe and checks what it selects.
+D21; D20 and its NEEDS_PIETRO entry note that I misread "Veo 4"; a new NEEDS_PIETRO entry (v4:
+listen first); README, `.env.example`, PLAN, `pyproject.toml` markers, conftest's offline guard.
+CHECKED — verified: the default model's request body and cache key are byte-identical to
+before (the test compares against the P0-1 key formula; reviewer checked against HEAD), so no
+paid narration is bought again; v4 is sent stability and similarity only; 6 mutants killed.
+`make smoke`'s selection: 5 smoke tests. Before, it was 7, including the Veo clip and the voice
+A/B. The selection test fails when a module-wide `live` mark is put back. `make check`: 146
+passed. Not verified: every fact about v4 (reported by secondary sources that agree;
+elevenlabs.io is blocked here and ElevenLabs' SDK 2.70.0 doesn't name v4): the model IDs, no
+speed setting, the price. Reviewer: 1 Critical, which predates this task: `make smoke` ran the
+"opt-in" Veo clip (~€3) because test_live.py marks its whole module `live`. I had added that
+test in P0-7, and my NEEDS_PIETRO note said it wasn't in `make smoke`; a dated correction is
+there now. Fixed by moving the opt-in checks, and confirmed by a re-review. Also fixed:
+unverified v4 claims stated as fact outside D21; `BUDGET_EUR` left lowered after the live
+tests; an outage past the retries would have been reported as a refusal. Suggestions taken:
+a v4-with-speed variant in the A/B, parsing every command of the smoke recipe, and checking
+pytest's exit code.
+ASSUMED — "ElevenLabs Veo 4" = Eleven v4 (the only "4" at ElevenLabs; its video product offers
+Veo up to 3.1). The default stays until Pietro has listened (taste, CLAUDE.md).
+DIVERGED — none from DECISIONS. My misreading of the earlier request (P1-12) is recorded in
+D20 and NEEDS_PIETRO rather than undone: that work stands as a check of the Veo options.
+NEXT — P1-9 (faster final film encode).

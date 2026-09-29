@@ -90,7 +90,9 @@ def claude_eur(model: str, input_tokens: int, output_tokens: int) -> float:
 
 
 def tts_eur(chars: int) -> float:
-    return chars / 1000 * config.TTS_USD_PER_1K_CHARS * config.USD_TO_EUR
+    """Narration by the configured TTS_MODEL; an unlisted model at the priciest rate."""
+    usd = config.TTS_USD_PER_1K_CHARS.get(config.TTS_MODEL, config.TTS_USD_PER_1K_CHARS_UNLISTED)
+    return chars / 1000 * usd * config.USD_TO_EUR
 
 
 def image_eur() -> float:
