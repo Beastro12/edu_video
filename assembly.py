@@ -161,8 +161,9 @@ def mix_graph(total: float, voice_gain: float = 1.0, master: bool = True) -> str
     as mixed, and with master=False to see what went into the final loudnorm."""
     return (duck_graph() + ";"
             f"[voice]volume={voice_gain}[v];"
-            "[v][duck]amix=inputs=2:duration=first:normalize=0,"
-            f"afade=t=out:st={max(total - config.MUSIC_FADE_S, 0):.2f}:d={config.MUSIC_FADE_S}"
+            # only the music fades out: the last narration keeps its level to its last word (P1-8)
+            f"[duck]afade=t=out:st={max(total - config.MUSIC_FADE_S, 0):.2f}:d={config.MUSIC_FADE_S}[bed];"
+            "[v][bed]amix=inputs=2:duration=first:normalize=0"
             f"{',' + master_chain() if master else ''}[aout]")
 
 

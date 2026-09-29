@@ -428,3 +428,27 @@ DIVERGED — my first version made Lite (the cheapest tier, never seen) the defa
 taste and money call CLAUDE.md reserves for Pietro; reverted to Veo 3.1, with the choice in
 NEEDS_PIETRO. D13's Veo settings are updated by D20 (resolution now sent explicitly).
 NEXT — P1-8 (the closing fade dims the last narration).
+
+## 2026-09-29 P1-8 The closing fade dims the last narration
+CHANGED — `assembly.mix_graph`: the closing `afade=t=out` moved from after `amix` (where it
+faded voice and music together) onto the ducked music branch, so only the bed fades. New
+`tests/test_closing_fade.py`: a narrow band-pass per scene pitch hears one narration alone in
+the finished film. BACKLOG: P1-8 ticked; new P2-6 (each narration's first second is louder)
+and P2-7 (the picture starts fading before the last word); P2-4 moved last. PLAN phase 1 list.
+CHECKED — verified: before the fix, the last narration faded ~13 dB by its last word (band
+levels in the film); the test fails on the old mix (whole narration −3.5 dB against the one
+before) and passes on the fix (reviewer measured +0.08 dB whole, −0.02 dB last second; music
+at the film's end 30.5 dB below the pause before). QA tests pass unchanged (the music-only
+render is the same; the fade windows stay excluded). `make check`: 139 passed. Two mistakes of
+my own while writing the test, each diagnosed from data before changing it: (1) a "within 20 dB
+of the peak" start caught another scene's click, misplacing the windows (now 6 dB); (2)
+comparing the last narration's end with its own start still showed 1.7 dB after the fix.
+Measured on the voice-only track, that 1.7 dB is in every narration before any mixing: the
+per-scene single-pass loudnorm plays the first second louder, then holds (P2-6). So the test
+compares with the narration before, as the criterion says. The reviewer suggested finding a
+narration's end from its level, which weakened the test on the old mix (−2.3 dB instead of
+−3.5, because a fade pulls a level-based end earlier). I used the narration file's own length
+instead. Reviewer: no Critical, no Warning; 4 suggestions taken, one of them in that changed form.
+ASSUMED — none.
+DIVERGED — none.
+NEXT — P1-9 (faster final film encode).

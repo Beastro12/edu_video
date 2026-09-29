@@ -40,7 +40,9 @@ In this order; each is a normal loop task (test, change, review, commit, PROGRES
 4. **P2-3**: run report per film (costs, timings, QA, fallbacks). The first live run needs it.
 5. **P2-5**: prune unused clips.
 6. **P2-2**: thumbnail.
-7. **P2-4**: README refresh.
+7. **P2-6**: even out each narration's louder first second (found in P1-8).
+8. **P2-7**: start the picture's fade to black after the last word (found in P1-8's review).
+9. **P2-4**: README refresh, last.
 
 P2-1 (batch mode) waits for Phase 3: producing many films makes sense only after one real
 film has been verified. When only Pietro-blocked tasks remain, Claude stops and says so in

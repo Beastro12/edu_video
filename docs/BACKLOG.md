@@ -120,7 +120,7 @@ Work top to bottom within a priority.
   with the error; reruns go straight to the fallback unless `--retry-failed` is passed.
   Mocked test: second run makes no provider call for a previously failed scene.
 
-- [ ] P1-8 — The closing fade dims the last narration
+- [x] P1-8 — The closing fade dims the last narration
   Found in the P0-5 review (measured by the reviewer): in `add_music`, `afade=t=out` runs
   after `amix`, so it fades the voice as well as the music; with a steady tone the voice is
   ~10 dB down by the end of the last scene.
@@ -180,7 +180,24 @@ it); batch mode waits for one verified live film.
   exactly the referenced clips and every paid file.
 - [ ] P2-2 — Thumbnail generation (1280×720, no text baked in by the image model; title
   text added by FFmpeg/Pillow).
-- [ ] P2-4 — README refresh reflecting everything above.
 - [~] P2-1 — Batch mode from `topics.txt`, with a variety check against past titles
   and outlines (avoid near-duplicate videos; YouTube demonetises mass-produced content).
   [blocked: needs one verified live film first, PLAN.md phase 3]
+- [ ] P2-6 — Each narration's first second is louder than the rest
+  Found in P1-8 (measured on the voice-only track, before mixing; confirmed by the reviewer):
+  each scene's single-pass `loudnorm` (dynamic mode) plays a steady narration's first second
+  ~1.7 dB louder, then holds it level (scene 5: −18.3 dB in the first second, −20.0 after);
+  the same in every scene. It's loudnorm's start-up, not a slow drift.
+  Accept: per-scene levelling that holds a steady tone within 0.5 dB from its first second on
+  (for example two-pass `loudnorm`: measure, then a linear gain), with every narration still at
+  `VOICE_LUFS` ± 0.5 LU, sample-exact timing (D12) unchanged, and QA passing; test on the
+  voice-only track.
+- [ ] P2-7 — The picture starts fading out before the last word
+  Found in the P1-8 review: `FADE_OUT_S` (2.5 s) is longer than `TAIL_S` (1.4 s), so the film's
+  closing fade to black starts ~1.1 s before the last narration ends. Nothing checks it; it
+  predates P1-8.
+  Accept: the fade to black starts no earlier than the last narration's end (e.g. `FADE_OUT_S`
+  ≤ `TAIL_S`, or a longer final tail), asserted in `config.py`; a test on a built film finds no
+  darkening while the last narration sounds. If a fade under the last words is wanted
+  instead, record that in DECISIONS and close this.
+- [ ] P2-4 — README refresh reflecting everything above.
