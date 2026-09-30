@@ -181,3 +181,29 @@ branch.
 **Recommend:** make it private if you didn't mean to publish the project (Settings → General →
 Danger Zone → Change visibility). Merge `auto/dev` into `main` when you like what's there, or
 tell me to push to `main` directly.
+
+## 2026-09-30 — Faster film encode: bigger files, or softer Veo scenes? (P1-9, D22)
+**What:** whether the film's final encode trades file size or Veo quality for speed.
+**Why:** today it's x264 medium crf 18, the slowest step left: 0.7–1.2 s of encoding per second
+of still scene (measured across runs). Only x264 veryfast halves it, and then something gives:
+
+| option (`FILM_X264`) | film encode, stills | quality (SSIM vs today) | file size (hard test image) |
+|---|---|---|---|
+| today: medium crf 18 | — | — | — |
+| veryfast crf 15.5 | −50% | stills and Manim the same (within 0.0005); Veo scenes −0.007 | +1% to +16% |
+| veryfast crf 13 | −47% to −51% | the same everywhere (Veo −0.0003) | +32% to +68% on stills, +26% on Veo |
+
+- **Time:** for a 15-min film that saves roughly 3.5–6 minutes per render. That's an estimate:
+  about 10 minutes of still scenes × 0.7–1.2 s per second × half.
+- **Veo:** Veo makes at most 2 new clips a day (`VEO_MAX_PER_DAY`), so a film has few Veo
+  scenes. A −0.007 SSIM on grainy footage means the grain
+  is rendered a little differently; whether you'd see it is not verified.
+- **Size:** real stills are darker and simpler than the test image, so the size growth is
+  probably smaller in real films; not measured either.
+
+**Tried:** 14 settings, including x264's `tune grain` (quality kept, files 1.5–3× bigger) and
+`tune film` (no help); none met the bar (D22). Veo clips now have their own encoder setting, so
+changing `FILM_X264` doesn't also degrade them. Nothing else changed.
+**Recommend:** keep today's setting until the first real film exists. Then, if render time
+matters, set `FILM_X264 = ("veryfast", 15.5)` in `config.py` for that film, watch a Veo scene,
+and compare file sizes. That one line is the whole change.

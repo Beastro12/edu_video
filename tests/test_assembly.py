@@ -145,7 +145,7 @@ def test_every_crossfade_starts_on_a_frame():
 def test_scene_clips_are_fast_intermediates_and_the_film_gets_the_final_encode(media, tmp_path, monkeypatch):
     """P1-6 / D18: the scene clip encode dominated still-scene render time; clips are
     re-encoded by the crossfade anyway, so still and Manim clips use CLIP_X264. Veo clips
-    (grainy, few) and the film use FILM_X264."""
+    (grainy, few) use VEO_CLIP_X264 and the film FILM_X264."""
     import assembly
     commands = []
     real = assembly.run
@@ -159,5 +159,16 @@ def test_scene_clips_are_fast_intermediates_and_the_film_gets_the_final_encode(m
     encodes = [c for c in commands if "-preset" in c]
     preset = lambda cmd: (cmd[cmd.index("-preset") + 1], cmd[cmd.index("-crf") + 1])  # noqa: E731
     fast, film = (config.CLIP_X264[0], str(config.CLIP_X264[1])), (config.FILM_X264[0], str(config.FILM_X264[1]))
-    assert [preset(c) for c in encodes] == [fast, fast, film, film], "still, manim, ai clip; then the film"
+    veo = (config.VEO_CLIP_X264[0], str(config.VEO_CLIP_X264[1]))
+    assert [preset(c) for c in encodes] == [fast, fast, veo, film], "still, manim, ai clip; then the film"
     assert "scale=640:360" in " ".join(encodes[0]), "the still is upscaled by KEN_BURNS_UPSCALE before zoompan"
+
+
+def test_a_faster_film_encode_leaves_veo_clips_alone(monkeypatch):
+    """D22: FILM_X264 is the one line to change for a faster film; Veo clips must not follow it
+    into a second fast encode (D18 measured the grain's loss)."""
+    import assembly
+    monkeypatch.setattr(config, "FILM_X264", ("veryfast", 13))
+    veo = assembly.clip_encoder("ai")
+    assert veo[veo.index("-preset") + 1:veo.index("-crf") + 2] == [config.VEO_CLIP_X264[0], "-crf",
+                                                                    str(config.VEO_CLIP_X264[1])]

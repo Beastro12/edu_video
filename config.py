@@ -57,8 +57,10 @@ XFADE_S = 1.2                # crossfade between scenes; must stay below LEAD_IN
 KEN_BURNS_ZOOM = 0.10        # how far stills drift (10%) over a scene
 KEN_BURNS_UPSCALE = 3        # stills are upscaled this much first: zoompan moves in whole (even, in yuv420p) pixels (D18)
 # x264 (preset, crf). Scene clips are intermediates that the crossfade re-encodes, so still and
-# Manim clips are made fast at higher quality; Veo clips and the film get FILM_X264 (D18).
+# Manim clips are made fast at higher quality (D18). Veo clips keep a slow encode, in a setting
+# of their own so that changing FILM_X264 leaves them alone (D22). The film gets FILM_X264.
 CLIP_X264 = ("veryfast", 14)
+VEO_CLIP_X264 = ("medium", 18)
 FILM_X264 = ("medium", 18)
 MAX_AI_SLOWDOWN = 1.6        # stretch Veo clips up to this before holding the last frame
 FADE_IN_S = 1.5              # the film fades in from black...

@@ -7,6 +7,8 @@ lossless references); takes ~50 min on 4 cores.
 
     .venv/bin/python scripts/bench_stills.py
     .venv/bin/python scripts/bench_stills.py --compare [IMAGE]   # ~2 min: the drifts to watch
+    .venv/bin/python scripts/bench_stills.py --film [KIND ...] [--repeats N] [--tunes | --encoders medium:18,...]
+                                                           # film encoder grid (P1-9, D22)
 
 --compare renders a pan and a push-in of IMAGE (e.g. a still from build/<slug>/visuals/, or
 the test image) with today's zoompan drift and with the sub-pixel `perspective` drift, as
@@ -60,8 +62,9 @@ def ff(*a):
     subprocess.run(["ffmpeg", "-y", "-v", "error", *a], check=True)
 
 
-def x264(preset, crf):
-    return ["-c:v", "libx264", "-preset", preset, *(["-qp", "0"] if crf is None else ["-crf", str(crf)])]
+def x264(preset, crf, tune=None):
+    return ["-c:v", "libx264", "-preset", preset, *(["-qp", "0"] if crf is None else ["-crf", str(crf)]),
+            *(["-tune", tune] if tune else [])]
 
 
 def cached(name: str, recipe: list[str], make=None) -> Path:
@@ -149,8 +152,10 @@ def timed(fn, out_dir: Path) -> tuple[float, Path]:
     return best, path
 
 
-def build(visual: Path, kind: str, scene_id: int, enc: tuple, name: str, factor: int = 3, drift=None) -> dict:
-    """The scene clip and the film made from it, with this clip encoder, upscale and drift filter."""
+def build(visual: Path, kind: str, scene_id: int, enc: tuple, name: str, factor: int = 3, drift=None,
+          film: bool = True) -> dict:
+    """The scene clip and (unless film=False) the film made from it, with this clip encoder,
+    upscale and drift filter."""
     voice = narration(SCENE_S - config.LEAD_IN_S - config.TAIL_S)
     saved = config.KEN_BURNS_UPSCALE, assembly.clip_encoder, assembly._still_filter
     config.KEN_BURNS_UPSCALE, assembly.clip_encoder = factor, lambda kind: x264(*enc)
@@ -160,8 +165,9 @@ def build(visual: Path, kind: str, scene_id: int, enc: tuple, name: str, factor:
                              D / name / "clip")
     finally:
         config.KEN_BURNS_UPSCALE, assembly.clip_encoder, assembly._still_filter = saved
-    film_s, film = timed(lambda: assembly.crossfade_concat([clip], D / name / "film" / "film.mp4"), D / name / "film")
-    return {"clip": clip, "film": film, "clip_s": clip_s, "film_s": film_s, "mb": clip.stat().st_size / 1e6}
+    film_s, made = (timed(lambda: assembly.crossfade_concat([clip], D / name / "film" / "film.mp4"), D / name / "film")
+                    if film else (None, None))
+    return {"clip": clip, "film": made, "clip_s": clip_s, "film_s": film_s, "mb": clip.stat().st_size / 1e6}
 
 
 def ssim(path: Path, ref: Path) -> float:
@@ -285,11 +291,85 @@ def compare(image: Path) -> None:
     print("(the sound is a test tone: mute it)")
 
 
+def encoder_of(kind: str) -> tuple:
+    """(preset, crf) of the pipeline's clip encoder for this kind, crf as written in config."""
+    args = assembly.clip_encoder(kind)
+    crf = args[args.index("-crf") + 1]
+    return args[args.index("-preset") + 1], float(crf) if "." in crf else int(crf)
+
+
+KINDS = {"pan": (still, "still", 2), "push-in": (still, "still", 0),
+         "manim": (manim_clip, "manim", 1), "ai": (veo_like, "ai", 1)}
+
+
+def current_clips(only: list[str] | None = None) -> dict:
+    """Each kind's scene clip as the pipeline makes it now, with a lossless reference: pan and
+    push-in stills, a Manim render, a Veo-like clip. (clip, reference) by kind. Built once:
+    only the film encodes that follow are timed."""
+    global REPEATS
+    unknown = set(only or ()) - set(KINDS)
+    if unknown:
+        raise SystemExit(f"unknown kind {sorted(unknown)}; choose from {list(KINDS)}")
+    saved, REPEATS = REPEATS, 1
+    clips = {}
+    try:
+        for kind, (source, pipeline_kind, scene_id) in KINDS.items():
+            if only and kind not in only:
+                continue
+            now = encoder_of(pipeline_kind)
+            ref = build(source(), pipeline_kind, scene_id, LOSSLESS, f"film_{kind}_lossless", film=False)["clip"]
+            clip = build(source(), pipeline_kind, scene_id, now, f"film_{kind}_now", film=False)["clip"]
+            clips[kind] = (clip, ref)
+    finally:
+        REPEATS = saved
+    return clips
+
+
+def film_encoders(clips: dict, encoders) -> None:
+    """The film's encode of each kind's clip with each x264 setting: time, SSIM against the
+    lossless reference, size per minute of film."""
+    print(f"{'film encoder':<28}{'kind':<9}{'film s':>7}{'SSIM film':>10}{'MB/min':>8}")
+    for kind, (clip, ref) in clips.items():
+        for enc in encoders:
+            saved, assembly.VIDEO_ENC = assembly.VIDEO_ENC, x264(*enc)
+            out = D / "film_enc" / f"{kind}_{slug(str(enc))}"
+            try:
+                t, film = timed(lambda c=clip, o=out: assembly.crossfade_concat([c], o / "film.mp4"), out)
+            finally:
+                assembly.VIDEO_ENC = saved
+            mb = film.stat().st_size / 1e6 * 60 / SCENE_S
+            name = f"{enc[0]} crf {enc[1]}" + (f" tune {enc[2]}" if len(enc) > 2 else "")
+            print(f"{name:<28}{kind:<9}{t:>7.2f}{ssim(film, ref):>10.5f}{mb:>8.1f}", flush=True)
+
+
+FILM_GRID = (("medium", 18), ("fast", 17), ("fast", 16), ("faster", 17), ("faster", 16), ("faster", 15),
+             ("veryfast", 16), ("veryfast", 15), ("veryfast", 14), ("veryfast", 13))
+FILM_TUNES = (("medium", 18), ("veryfast", 15, "grain"), ("veryfast", 14, "grain"),
+              ("veryfast", 15, "film"), ("veryfast", 14, "film"))
+
+
 if __name__ == "__main__":
     D.mkdir(parents=True, exist_ok=True)
     if "--compare" in sys.argv:
         args = sys.argv[sys.argv.index("--compare") + 1:]
         compare(Path(args[0]).resolve() if args else still())
+        sys.exit()
+    if "--repeats" in sys.argv:
+        REPEATS = int(sys.argv[sys.argv.index("--repeats") + 1])
+    if "--film" in sys.argv:  # P1-9: the film encoder grid only; optionally some kinds
+        kinds = [a for a in sys.argv[1:] if a in KINDS]
+        after = sys.argv[sys.argv.index("--film") + 1:]
+        for a in after:  # a typo right after --film is an error, not "every kind"
+            if a.startswith("-"):
+                break
+            kinds.append(a) if a not in kinds else None
+        print(f"Film encoder grid, {SCENE_S:.0f} s per kind, {W}x{H} at {FPS} fps; now {config.FILM_X264};"
+              f" times are the fastest of {REPEATS} runs")
+        encoders = FILM_TUNES if "--tunes" in sys.argv else FILM_GRID
+        if "--encoders" in sys.argv:  # e.g. medium:18,veryfast:15.5,veryfast:15:grain
+            encoders = [(p, float(c) if "." in c else int(c), *t)
+                        for p, c, *t in (e.split(":") for e in sys.argv[sys.argv.index("--encoders") + 1].split(","))]
+        film_encoders(current_clips(kinds or None), encoders)
         sys.exit()
     check_shift_x()
     now_still = config.CLIP_X264
@@ -319,8 +399,7 @@ if __name__ == "__main__":
 
     for kind, source, title in (("manim", manim_clip, "Manim clip (a real -qh render)"),
                                 ("ai", veo_like, "Veo-like clip (1280x720 24 fps, 8 s, grain), stretched to the scene")):
-        now = tuple(assembly.clip_encoder(kind)[3:6:2])
-        now = (now[0], int(now[1]))
+        now = encoder_of(kind)
         print(f"\n{title}")
         print(HEAD)
         ref = None
@@ -333,14 +412,4 @@ if __name__ == "__main__":
                 nows[kind] = (r["clip"], ref)
 
     print("\nFilm encoder options, on each kind's current clip (for a later task; D18 keeps FILM_X264)")
-    print(f"{'film encoder':<22}{'kind':<9}{'film s':>7}{'SSIM film':>10}{'MB/min':>8}")
-    for kind, (clip, ref) in nows.items():
-        for enc in (config.FILM_X264, ("fast", 17), ("faster", 17), ("veryfast", 16), ("veryfast", 15)):
-            saved, assembly.VIDEO_ENC = assembly.VIDEO_ENC, x264(*enc)
-            out = D / "film_enc" / f"{kind}_{slug(str(enc))}"
-            try:
-                t, film = timed(lambda c=clip, o=out: assembly.crossfade_concat([c], o / "film.mp4"), out)
-            finally:
-                assembly.VIDEO_ENC = saved
-            mb = film.stat().st_size / 1e6 * 60 / SCENE_S
-            print(f"{enc[0] + ' crf ' + str(enc[1]):<22}{kind:<9}{t:>7.2f}{ssim(film, ref):>10.5f}{mb:>8.1f}", flush=True)
+    film_encoders(nows, (config.FILM_X264, ("fast", 17), ("faster", 17), ("veryfast", 16), ("veryfast", 15)))

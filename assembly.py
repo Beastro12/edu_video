@@ -64,9 +64,10 @@ def _moving_filter(target: float, v_len: float, is_ai: bool) -> str:
 
 def clip_encoder(kind: str) -> list[str]:
     """Scene clips are intermediates that the film re-encodes (D18). Stills and Manim get the
-    fast CLIP_X264. Veo footage keeps FILM_X264: its grain loses detail through two fast
-    encodes, and there are at most VEO_MAX_PER_DAY such clips, so their speed doesn't matter."""
-    preset, crf = config.FILM_X264 if kind == "ai" else config.CLIP_X264
+    fast CLIP_X264. Veo footage gets VEO_CLIP_X264, a slow encode: its grain loses detail
+    through two fast encodes, and there are at most VEO_MAX_PER_DAY such clips, so their speed
+    doesn't matter. Its own setting, so that a faster FILM_X264 doesn't also change it (D22)."""
+    preset, crf = config.VEO_CLIP_X264 if kind == "ai" else config.CLIP_X264
     return ["-c:v", "libx264", "-preset", preset, "-crf", str(crf)]
 
 

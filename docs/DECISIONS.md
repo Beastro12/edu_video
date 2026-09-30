@@ -321,3 +321,54 @@ The opt-in checks (this one and the one Veo clip) now live in their own module: 
 `test_live.py`, the module-wide `live` mark made `make smoke` run them too (P1-13 review; the
 Veo one had been exposed since P0-7). An offline test reads the Makefile and checks that `make
 smoke` selects neither.
+
+**D22 — The film encode stays x264 medium crf 18: no faster setting meets P1-9's bar; Veo
+clips get their own encoder setting.** P1-9 asked for a film encode ≥40% faster, with SSIM
+within 0.0005 of today's for stills, Manim and Veo clips and files at most 25% bigger. The gates
+were fixed before the data. Measured on 2026-09-30 with `scripts/bench_stills.py --film` on a
+20 s scene of each kind: pan and push-in stills, a real Manim render, and a Veo-like grainy clip.
+Each kind's clip is as the pipeline makes it; only the film encode varies. The runs:
+- the main grid, all kinds: the fastest of 3 runs, the default then; the header didn't print
+  it yet. The tool's 10-minute limit stopped it after 3 Veo rows.
+- the Veo rows, `--film ai --repeats 1`;
+- the tunes, `--film ai push-in --tunes --repeats 1`, with its own medium baseline (push-in
+  23.73 s);
+- crf 15.5, `--film pan push-in --repeats 2` and `--film manim ai --repeats 1`, with
+  `--encoders medium:18,veryfast:15.5`: its own baselines (pan 18.52 s, push-in 23.73 s).
+
+SSIM and sizes repeat exactly between runs; times are compared with the baseline of the same
+run. This machine ran ~24% slower than in D18. Changes against medium crf 18
+(pan / push-in / Manim / Veo):
+
+| film encoder | still encode time | SSIM Δ | size Δ |
+|---|---|---|---|
+| fast crf 17 | −11% / −11% | +0.0001 / +0.0000 / 0 / +0.0022 | +4% / +14% / 0 / +7% |
+| faster crf 17 | −20% / −27% | −0.0002 / −0.0002 / −0.0000 / **−0.0062** | −1% / +5% / 0 / −4% |
+| faster crf 15 | −21% / −20% | +0.0003 / +0.0005 / 0 / +0.0013 | +22% / **+42%** / +5% / +17% |
+| veryfast crf 16 | −49% / −46% | **−0.0007 / −0.0006** / −0.0001 / **−0.0101** | −6% / +5% / 0 / −10% |
+| veryfast crf 15.5 | −50% / −50% | −0.0004 / −0.0004 / −0.0001 / **−0.0071** | +1% / +16% / 0 / −3% |
+| veryfast crf 15 | −50% / −44% | −0.0002 / −0.0001 / −0.0001 / **−0.0052** | +7% / **+26%** / +5% / +3% |
+| veryfast crf 14 | −50% / −47% | +0.0000 / +0.0002 / −0.0000 / **−0.0027** | +18% / **+46%** / +5% / +14% |
+| veryfast crf 13 | −51% / −47% | +0.0002 / +0.0004 / −0.0000 / −0.0003 | **+32% / +68%** / +9% / **+26%** |
+| veryfast crf 15, tune grain | — / −41% | — / +0.0010 / — / +0.0003 | — / **+161%** / — / **+51%** |
+| veryfast crf 15, tune film | — / −51% | — / −0.0001 / — / **−0.0051** | — / +26% / — / +3% |
+
+(fast crf 16, faster crf 16, and veryfast crf 14 with tune grain or film do no better; every
+row is in the script's output.)
+
+- Only `veryfast` saves ≥40%.
+- At that speed, the Veo-like clip's grain keeps its quality only at crf 13, where still files
+  grow 32–68%. `tune grain` keeps quality but makes files 1.5–3× bigger.
+- crf 15.5 passes every gate for stills, and the quality and size gates for Manim (whose encode
+  gets only 12.5% faster); it fails only the Veo quality gate.
+- The textured test image is a hard case. Real, dark, low-contrast stills compress better, so
+  the size growth is likely smaller in films; not measured.
+
+Chosen: **no change** (`FILM_X264` stays medium crf 18). The trade-off is Pietro's (NEEDS_PIETRO):
+half the film encode for bigger uploads (crf 13), or for Veo scenes a little softer (crf 15.5).
+
+One change so that trade-off really is one line. The Veo clip encoder was `FILM_X264` itself
+(D18), so a faster film setting would also have put Veo footage through two fast encodes, the
+loss D18 measured. It is now its own setting, `VEO_CLIP_X264`, at the same medium crf 18, and
+a test checks that changing `FILM_X264` leaves it alone. Behaviour and cache keys are unchanged.
+The Veo numbers above all assume this: the clip stays at medium crf 18.

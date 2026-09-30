@@ -35,7 +35,7 @@ Not verified, and why it matters:
 
 In this order; each is a normal loop task (test, change, review, commit, PROGRESS):
 1. **P1-8**: fade only the music at the end, not the voice (fixes a defect in every film).
-2. **P1-9**: faster final film encode.
+2. **P1-9**: faster final film encode: blocked (D22), no setting meets the bar; your trade-off.
 3. **P1-11**: pin dependency versions in a lock file (new; foundation).
 4. **P2-3**: run report per film (costs, timings, QA, fallbacks). The first live run needs it.
 5. **P2-5**: prune unused clips.

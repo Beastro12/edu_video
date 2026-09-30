@@ -127,7 +127,8 @@ Work top to bottom within a priority.
   Accept: only the music bed fades out (the voice isn't touched); a test measures the last
   narration's level against an earlier one (within 1 dB) and the bed's level falling.
 
-- [ ] P1-9 — Faster final film encode
+- [~] P1-9 — Faster final film encode [blocked: no x264 setting meets all the criteria (D22);
+  the size-or-quality trade-off is Pietro's, see NEEDS_PIETRO]
   Found in P1-6 (D18): once scene clips are fast, the film's own encode (`FILM_X264`, x264
   medium crf 18 in `crossfade_concat`) is 61–65% of a still scene's render time, and every
   scene pays it.

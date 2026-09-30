@@ -494,3 +494,29 @@ two projects completely separate. The history was carried over with `git subtree
 DIVERGED — the P0-1 note on where commits go no longer applies. From now on, commit and push in
 this repository only. Nothing goes to `Beastro12/Mise` or its old branch.
 NEXT — unchanged: P1-9 (faster final film encode).
+
+## 2026-09-30 P1-9 Faster final film encode (blocked: Pietro's trade-off)
+CHANGED — No change to how films are encoded: `FILM_X264` stays medium crf 18 (D22). Veo clips
+now have their own encoder setting, `VEO_CLIP_X264` (medium crf 18, as before), so that a
+faster `FILM_X264` can't also push Veo footage through two fast encodes (`assembly.clip_encoder`;
+same arguments, so cache keys are unchanged). `scripts/bench_stills.py`: `--film [KIND ...]`,
+`--repeats N`, `--tunes`, `--encoders preset:crf[:tune],...`, x264 `tune`; clips for the grid are
+built once, without a film encode. Tests: the Veo clip's encoder, and a new test that changing
+`FILM_X264` leaves it alone. D22; BACKLOG P1-9 `[~]`; NEEDS_PIETRO: the trade-off; PLAN.
+CHECKED — measured on a 20 s scene of each kind (D22 lists the runs and baselines): 14 x264
+settings, with gates fixed before the data (≥40% faster film encode on stills; SSIM within 0.0005
+for pan, push-in, Manim and Veo; size ≤ +25%). None passes all three. veryfast crf 15.5 passes
+for stills and on Manim's quality and size, but Veo scenes lose 0.007 SSIM. veryfast crf 13 keeps
+quality everywhere, but still files grow 32–68%. The new test fails if Veo clips follow
+`FILM_X264` (mutant run). `make check`: 147 passed. Reviewer: first pass, 1 Critical. My
+NEEDS_PIETRO note said trying a faster film encode is "one line", but that line also changed
+the Veo clip encoder, so the Veo figures wouldn't have held. Fixed by the separate setting, and a
+re-review confirmed it. Also fixed: an overstated per-second encode cost and time saving;
+wording that says which runs and baselines each figure comes from; the benchmark's argument
+parsing. At the reviewer's suggestion I measured crf 15.5, now the best option for Pietro.
+Not verified: whether −0.007 SSIM on grainy footage is visible; how file sizes grow on real stills.
+ASSUMED — none.
+DIVERGED — the main grid run was stopped by the tool's 10-minute limit after 3 Veo rows; the
+rest were measured in separate runs (SSIM and size repeat exactly; times are compared within
+each run).
+NEXT — P1-11 (pin dependency versions).
