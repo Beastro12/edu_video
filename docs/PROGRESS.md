@@ -483,3 +483,14 @@ Veo up to 3.1). The default stays until Pietro has listened (taste, CLAUDE.md).
 DIVERGED — none from DECISIONS. My misreading of the earlier request (P1-12) is recorded in
 D20 and NEEDS_PIETRO rather than undone: that work stands as a check of the Veo options.
 NEXT — P1-9 (faster final film encode).
+
+## 2026-09-30 Repository moved to `Beastro12/edu_video` (Pietro's request)
+CHANGED — edu_video now lives in its own repository, `Beastro12/edu_video` (private), with `main`
+as the working branch. It was developed inside the meal-planner repo `Beastro12/Mise`, in
+`edu_video/`, on branch `claude/new-project-setup-b6eeid` (see the P0-1 entry). Pietro wants the
+two projects completely separate. The history was carried over with `git subtree split
+--prefix=edu_video`: all 19 commits, and the tree is identical to that folder at `e030798` (now
+`aae90aa`). The Mise PR (#3) was closed unmerged; nothing from edu_video was ever in Mise's `main`.
+DIVERGED — the P0-1 note on where commits go no longer applies. From now on, commit and push in
+this repository only. Nothing goes to `Beastro12/Mise` or its old branch.
+NEXT — unchanged: P1-9 (faster final film encode).
