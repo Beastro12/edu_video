@@ -26,8 +26,8 @@ Not verified, and why it matters:
 3. **Every film has a known defect:** the closing fade also dims the last narration (P1-8).
 4. **Not publishable yet:** `music/` is empty (a synthetic placeholder bed is used), and the
    YouTube description is a placeholder.
-5. **No CI runs the Python tests.** PR #3's CI runs only the Next.js jobs, so a regression
-   is caught only if the agent runs `make check`.
+5. **No CI runs the Python tests.** `Beastro12/edu_video` has no CI at all (since the move
+   on 2026-09-30), so a regression is caught only if the agent runs `make check`.
 6. **Dependencies are unpinned** (`>=` only). The installed versions are exactly the tested
    minimums, so a new SDK release could break the calls that the tests mock.
 
@@ -59,9 +59,9 @@ Most useful first:
 3. **Harden the ledger** (NEEDS_PIETRO): two deny rules and one CLAUDE.md line.
 4. **CI for the Python tests** (NEEDS_PIETRO): yes or no to an `edu_video` job in
    `.github/workflows/ci.yml`. Claude writes it if you say yes.
-5. **PR #3**: merge it when you're happy with it. Work then continues on the same branch
-   name, restarted from `main`, in smaller PRs. Also say whether Claude should watch PRs for
-   review comments and CI failures.
+5. **The repository** (NEEDS_PIETRO): it's public on GitHub, though the move note says
+   private. Say which you want. Claude pushes to `auto/dev`, never `main`: merge it when you're
+   happy, or say "push to main". PR #3 in Mise was closed unmerged.
 6. **Taste, whenever:**
    - music you have rights to (NEEDS_PIETRO);
    - the YouTube description text;
@@ -86,13 +86,13 @@ Most useful first:
 ## How we work
 
 - **Claude** runs the CLAUDE.md loop:
-  - one task per commit, pushed to `claude/new-project-setup-b6eeid` (PR #3);
+  - one task per commit, pushed to `auto/dev` in `Beastro12/edu_video` (not `main`);
   - a reviewer pass before each commit;
   - each PROGRESS entry labels what was verified vs assumed;
   - anything that needs you goes to NEEDS_PIETRO, and its task is marked `[~]`.
-- **Where this session departs from CLAUDE.md:** CLAUDE.md says to work on `auto/dev` with no
-  `git push`. This cloud session must use and push its assigned branch instead. Update
-  CLAUDE.md if you want the file to match.
+- **Where this departs from CLAUDE.md:** CLAUDE.md says "work on `auto/dev`. No `git push`".
+  The branch now matches. The push remains, because a cloud session's work is lost unless it's
+  pushed, so Claude pushes `auto/dev` only. Update CLAUDE.md if you want the file to match.
 - **Pietro** reads NEEDS_PIETRO (newest last) and the latest PROGRESS entries, and answers in
   chat or by editing an entry.
 - **Money:** Claude makes no live call without keys and budget. `make smoke` runs once;

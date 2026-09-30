@@ -124,6 +124,8 @@ the agent's own `make check`. A regression pushed by mistake would go unnoticed.
 **Tried:** nothing; the workflow is shared with the Next.js app, so I haven't touched it.
 **Recommend:** yes, and I'll write it if you say so (with the lock file from P1-11, so CI
 installs the tested versions).
+**Update 2026-09-30:** edu_video now has its own repository, which has no CI at all. The
+workflow would no longer be shared with the Next.js app, so adding it is low-risk.
 
 ## 2026-09-29 — Veo 3.1 or Veo 3.1 Lite? (taste + money)
 (I first read your "Veo 4" as Google's video model; you meant ElevenLabs' Eleven v4, see the
@@ -166,3 +168,16 @@ v4 sent `speed` too, which shows whether v4 really ignores or refuses it) and pr
 per minute. `make smoke` never runs it. If v4 sounds calmer or better and its pace is close to
 120 words/min, add `TTS_MODEL=eleven_v4` to `.env` and tell me, so I can set WORDS_PER_MIN to
 the measured pace. If only the `[slowly]` version works, I'll add the tag to every scene.
+
+## 2026-09-30 — The new repository: public or private, and `main` or `auto/dev`?
+**What:** two settings for `Beastro12/edu_video`.
+**Why:** the note that recorded the move (PROGRESS, 2026-09-30) calls the repository private,
+but GitHub lists it as public. The same note names `main` as the working branch, while CLAUDE.md
+says `auto/dev` and this environment's rule is to branch rather than commit to the default
+branch.
+**Tried:** nothing changed on GitHub. No key or `.env` has ever been committed (checked on
+2026-09-27), so being public exposes the code and docs, nothing secret. Work continues on
+`auto/dev`, pushed there; `main` has only what the move put there.
+**Recommend:** make it private if you didn't mean to publish the project (Settings → General →
+Danger Zone → Change visibility). Merge `auto/dev` into `main` when you like what's there, or
+tell me to push to `main` directly.
