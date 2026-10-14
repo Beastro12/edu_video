@@ -253,7 +253,7 @@ it); batch mode waits for one verified live film.
   (for example two-pass `loudnorm`: measure, then a linear gain), with every narration still at
   `VOICE_LUFS` ± 0.5 LU, sample-exact timing (D12) unchanged, and QA passing; test on the
   voice-only track.
-- [ ] P2-7 — The picture starts fading out before the last word
+- [x] P2-7 — The picture starts fading out before the last word
   Found in the P1-8 review: `FADE_OUT_S` (2.5 s) is longer than `TAIL_S` (1.4 s), so the film's
   closing fade to black starts ~1.1 s before the last narration ends. Nothing checks it; it
   predates P1-8.

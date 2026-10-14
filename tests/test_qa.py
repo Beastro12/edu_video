@@ -91,6 +91,17 @@ def test_film_turned_down_after_mixing_fails_loudness_only(healthy, tmp_path):
     assert report["checks"]["ducking"]["passed"], "a uniform level change doesn't change ducking"
 
 
+def test_the_duration_estimate_counts_the_last_scenes_longer_tail(healthy, monkeypatch):
+    """P2-7: the film is FINAL_TAIL_S - TAIL_S (2.1 s) longer than the sum of ordinary scenes. With a
+    3% tolerance (a tenth of the usual) the film is within 1%, and an estimate that left the extra
+    tail out would be 6% short."""
+    script = json.loads((healthy.parent / "script.json").read_text())
+    monkeypatch.setattr(config, "QA_DURATION_TOL", 0.03)
+    assert qa.check_duration(healthy, script)["passed"]
+    monkeypatch.setattr(config, "FINAL_TAIL_S", config.TAIL_S)  # an estimate that doesn't know about it
+    assert not qa.check_duration(healthy, script)["passed"]
+
+
 def test_film_far_shorter_than_its_script_is_caught(healthy, tmp_path):
     work = copy_film(healthy, tmp_path)
     script = json.loads((work / "script.json").read_text())

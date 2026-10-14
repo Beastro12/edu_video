@@ -236,3 +236,11 @@ pictures away from flat.
 before letting the rest run (Ctrl-C is safe; the run resumes). Tell me if the medium drifts:
 - the fix is a stronger flat suffix or a flat-only line for the still critic;
 - calm films are unaffected either way.
+
+## 2026-10-14 — FYI: a second of stillness at the end of every film (P2-7, pacing)
+**What:** the closing fade to black used to start about a second before the last word ended. Now
+the last scene holds about a second after the last word, then fades over the same 2.5 s.
+Films are 2.1 s longer.
+**Why:** a fade that dims the last words felt rushed for a sleep film. A shorter fade (1.4 s) was
+the other option, and is abrupt.
+**Recommend:** keep it. Otherwise change `FINAL_TAIL_S` in config.py (at least `FADE_OUT_S`).

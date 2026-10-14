@@ -222,6 +222,41 @@ def test_estimate_without_google_counts_visuals_as_manim_and_skips_cached_ones(m
     assert worst["claude"] == pytest.approx((config.MAX_MANIM_ATTEMPTS + 1) * one_manim)
 
 
+def test_estimate_looks_for_every_manim_render_at_the_ordinary_tail(monkeypatch, tmp_path):
+    """P2-7: the last scene's clip has a longer tail, but its Manim render is made for the same length as
+    any other scene's (a longer one would re-key it, D9, and buy it again). The estimate looks for it
+    there, whatever FINAL_TAIL_S is, and doesn't count one cached for the final tail's length."""
+    from conftest import ff
+    monkeypatch.setattr(config, "GOOGLE_API_KEY", None)
+    work = tmp_path / "w"
+    work.mkdir()
+    scenes = [{"id": i, "concept": "c", "narration": "n" * (100 + i), "visual_type": "manim",
+               "visual_description": "d"} for i in (1, 2)]
+    (work / "script.json").write_text(json.dumps({"title": "T", "scenes": scenes}))
+    (work / "audio").mkdir()
+
+    def render_at(scene, tail):
+        audio = voice.cache_path(scene["narration"], work / "audio")
+        return manim_agent.cache_path(scene, config.LEAD_IN_S + pipeline.duration(audio) + tail,
+                                      work / "visuals", atmospheric=False)
+
+    for scene in scenes:
+        ff("-f", "lavfi", "-i", "sine=d=1", str(voice.cache_path(scene["narration"], work / "audio")))
+        render_at(scene, config.TAIL_S).parent.mkdir(exist_ok=True)
+        render_at(scene, config.TAIL_S).write_bytes(b"mp4")
+    one_manim = ledger.claude_eur(config.CLAUDE_MODEL, *config.EST_MANIM_TOKENS)
+
+    est = pipeline.estimate_cost(15, work, allow_veo=False, skip_critic=False)
+    assert est["claude"] == pytest.approx(0), "both renders are where the pipeline will look"
+    monkeypatch.setattr(config, "FINAL_TAIL_S", config.FINAL_TAIL_S + 1.0)
+    assert pipeline.estimate_cost(15, work, allow_veo=False, skip_critic=False)["claude"] == pytest.approx(0)
+
+    render_at(scenes[1], config.TAIL_S).unlink()
+    render_at(scenes[1], config.FINAL_TAIL_S).write_bytes(b"mp4")  # a render for the longer scene is not it
+    est = pipeline.estimate_cost(15, work, allow_veo=False, skip_critic=False)
+    assert est["claude"] == pytest.approx(one_manim)
+
+
 def test_estimate_skip_critic_drops_the_review_calls(monkeypatch, tmp_path):
     with_critic = pipeline.estimate_cost(15, tmp_path / "a", allow_veo=False, skip_critic=False)
     without = pipeline.estimate_cost(15, tmp_path / "a", allow_veo=False, skip_critic=True)

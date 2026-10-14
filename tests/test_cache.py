@@ -16,6 +16,7 @@ from agents import manim_agent, music, voice
 from utils import duration, load_json
 
 PAD = config.LEAD_IN_S + config.TAIL_S
+FINAL_PAD = config.LEAD_IN_S + config.FINAL_TAIL_S  # the last scene's (P2-7)
 
 
 def speech_s(text: str) -> float:
@@ -92,8 +93,9 @@ def film(tmp_path, monkeypatch, stills_approved):
         manifest = load_json(work / "manifest.json")["scenes"]
         assert [m["id"] for m in manifest] == [s["id"] for s in script["scenes"]]
         for m, s in zip(manifest, script["scenes"], strict=True):
+            pad = FINAL_PAD if s is script["scenes"][-1] else PAD
             assert (work / m["audio"]).read_bytes() == spoken[s["narration"]]
-            assert duration(work / m["clip"]) == pytest.approx(speech_s(s["narration"]) + PAD, abs=0.08)
+            assert duration(work / m["clip"]) == pytest.approx(speech_s(s["narration"]) + pad, abs=0.08)
             prompt = [p for p in made if p.startswith(s["visual_description"])][0]
             assert (work / m["visual"]).read_bytes() == made[prompt]
 
@@ -125,7 +127,7 @@ def test_editing_one_narration_regenerates_only_that_scene_and_the_assembly(film
     assert film.rebuilt(lambda r: r.endswith(".mp4") and "test-film" in r), "final video must be rebuilt"
     film.check(script)
     audio = [film.work / m["audio"] for m in load_json(film.work / "manifest.json")["scenes"]]
-    expected = sum(duration(a) + PAD for a in audio) - 2 * config.XFADE_S
+    expected = sum(duration(a) + PAD for a in audio) + (FINAL_PAD - PAD) - 2 * config.XFADE_S
     assert duration(final) == pytest.approx(expected, abs=0.1)
 
 
@@ -169,3 +171,51 @@ def test_manim_cache_ignores_scene_id_but_not_inputs(tmp_path, monkeypatch, medi
     assert manim_agent.render_scene(scene, 7.0, tmp_path) != first
     assert manim_agent.render_scene({**scene, "narration": "Softly."}, 5.0, tmp_path) != first
     assert len(briefs) == 3
+
+
+def test_appending_a_scene_rebuilds_only_the_old_last_clip_and_dropping_it_brings_the_old_one_back(film):
+    """P2-7: the last scene's clip is made for the longer final tail. A scene added after it takes
+    over that tail, so the old last scene gets an ordinary clip (free: clips aren't paid); the
+    earlier scenes' clips are untouched, and going back finds the first render's clips."""
+    def clip_names():
+        return [m["clip"] for m in load_json(film.work / "manifest.json")["scenes"]]
+
+    film.render([A, B])
+    before = clip_names()
+    _, script = film.render([A, B, C])
+    after = clip_names()
+    assert after[0] == before[0], "the first scene's clip is untouched"
+    assert after[1] != before[1], "the old last scene gets an ordinary clip..."
+    assert len(film.rebuilt(lambda r: "/clips/" in r)) == 2, "...and the new one its final tail"
+    assert film.paid["tts"] == [C] and len(film.paid["image"]) == 1
+    film.check(script)
+
+    film.render([A, B])
+    assert clip_names() == before
+    assert film.rebuilt(lambda r: "/clips/" in r) == [], "the two-scene film's clips were all kept"
+
+
+def test_every_scenes_picture_is_made_for_an_ordinary_tail_the_last_one_included(film, monkeypatch):
+    """P2-7: only the clip has the final tail (it holds a Manim or Veo picture's last frame; a still
+    drifts over the whole clip). A Manim render is keyed by its length (D9), so a longer one for the last
+    scene would buy it again whenever a scene is appended or removed, and on the first run after P2-7."""
+    seen = {}
+    real = pipeline.make_visual
+    monkeypatch.setattr(pipeline, "make_visual",
+                        lambda scene, target_s, *a, **k: seen.update({scene["id"]: target_s})
+                        or real(scene, target_s, *a, **k))
+    film.render([A, B])
+    two_scenes = dict(seen)
+    monkeypatch.setattr(config, "FINAL_TAIL_S", config.FINAL_TAIL_S + 1.0)  # nor does a picture follow this
+    _, script = film.render([A, B, C])
+    want = {1: speech_s(A) + PAD, 2: speech_s(B) + PAD, 3: speech_s(C) + PAD}
+    assert seen == pytest.approx(want, abs=0.1)
+    assert seen[2] == two_scenes[2], "scene 2 was the last scene a moment ago: its target is the same"
+
+    def manim(target):
+        return manim_agent.cache_path(script["scenes"][1], target, film.work / "visuals", atmospheric=True)
+
+    assert manim(seen[2]) == manim(two_scenes[2]), "so its Manim render is found, not bought again"
+
+    last = load_json(film.work / "manifest.json")["scenes"][-1]["clip"]
+    assert duration(film.work / last) == pytest.approx(speech_s(C) + config.LEAD_IN_S + config.FINAL_TAIL_S, abs=0.08)

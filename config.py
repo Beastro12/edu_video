@@ -65,7 +65,9 @@ FILM_X264 = ("medium", 18)
 MAX_AI_SLOWDOWN = 1.6        # stretch Veo clips up to this before holding the last frame
 FADE_IN_S = 1.5              # the film fades in from black...
 FADE_OUT_S = 2.5             # ...and out to black
+FINAL_TAIL_S = FADE_OUT_S + 1.0  # the last scene's tail: a moment of stillness after the last word, then the fade (P2-7)
 assert XFADE_S < TAIL_S, "crossfade would overlap the end of a narration"
+assert FINAL_TAIL_S >= FADE_OUT_S, "the closing fade would start before the last narration ends"
 assert XFADE_S < LEAD_IN_S, "crossfade would overlap the start of the next narration"
 assert abs(XFADE_S * FPS - round(XFADE_S * FPS)) < 1e-9, "crossfade must be whole frames (D12)"
 

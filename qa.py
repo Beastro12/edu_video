@@ -62,8 +62,9 @@ def check(passed: bool, value, target: str, detail: str = "") -> dict:
 def check_duration(final: Path, script: dict) -> dict:
     words = sum(len(s["narration"].split()) for s in script["scenes"])
     n = len(script["scenes"])
+    # the last scene's tail is longer than the others' (P2-7)
     expected = (words / config.WORDS_PER_MIN * 60 + n * (config.LEAD_IN_S + config.TAIL_S)
-                - (n - 1) * config.XFADE_S)
+                + (config.FINAL_TAIL_S - config.TAIL_S) - (n - 1) * config.XFADE_S)
     actual = video_duration(final)
     ratio = actual / expected
     return check(abs(ratio - 1) <= config.QA_DURATION_TOL, round(actual, 2),

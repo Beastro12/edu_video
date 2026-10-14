@@ -17,7 +17,7 @@ import metadata
 import qa
 import run_report
 from agents import ai_video, critic, image_agent, manim_agent, music, script_agent, voice
-from assembly import add_music, build_scene_clip, crossfade_concat
+from assembly import add_music, build_scene_clip, crossfade_concat, scene_tail
 from failures import FailedEarlier, Failures
 from utils import (
     atomic_output,
@@ -453,6 +453,8 @@ def generate_assets(script: dict, work: Path, allow_veo: bool, retry_failed: boo
     run_report.stage("narration")
     print(f"• narration: {len(scenes)} scenes, {config.WORKERS} at a time")
     audio = in_parallel(lambda s: voice.narrate(s["narration"], work / "audio"), scenes)
+    # Every picture, the last scene's too, is made for an ordinary tail: a Manim render is keyed by its
+    # length (D9), and only the clip has the final tail (it holds the picture's last frame, P2-7).
     targets = [config.LEAD_IN_S + duration(a) + config.TAIL_S for a in audio]
     run_report.stage("visuals")
     print("• visuals")
@@ -468,10 +470,11 @@ def render_film(script: dict, work: Path, allow_veo: bool, seed: str, retry_fail
     clips, manifest = [], []
     assets = generate_assets(script, work, allow_veo, retry_failed)
     run_report.stage("scene clips")
-    for asset in assets:
+    for i, asset in enumerate(assets):
         scene, narration, visual, kind = asset["scene"], asset["audio"], asset["visual"], asset["kind"]
         print(f"• scene {scene['id']}/{len(script['scenes'])}: {scene['concept']} [{kind}]")
-        clip = build_scene_clip(visual, narration, work / "clips", kind, scene["id"])
+        clip = build_scene_clip(visual, narration, work / "clips", kind, scene["id"],
+                                scene_tail(i, len(script["scenes"])))
         clips.append(clip)
         review = image_agent.review_path(scene, work / "visuals")
         manifest.append({"id": scene["id"], "concept": scene["concept"], "kind": kind,

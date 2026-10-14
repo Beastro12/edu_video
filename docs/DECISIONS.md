@@ -476,3 +476,24 @@ so every run leaves one file saying what happened, what it cost and what to look
 - **Fallback reasons come only from what is recorded** (failures.json, the still review log).
   Transient errors and the Veo daily cap aren't recorded (D19), so the report says "no failure
   on file" rather than guessing.
+
+**D27 — The last scene's clip has a longer tail, so the closing fade starts after the last word
+(P2-7; 2026-10-14).**
+- **The defect.** `FADE_OUT_S` (2.5 s) was longer than `TAIL_S` (1.4 s), so the fade to black
+  began 1.08 s before the last narration ended. On a built film the picture was at luma 77.9 at
+  the last word, against 126.2 when that narration began.
+- **The fix.** The last scene's clip now has `FINAL_TAIL_S` = `FADE_OUT_S` + 1.0 = 3.5 s of tail
+  (`assembly.scene_tail`), asserted `>= FADE_OUT_S` in config. The film gets about a second of
+  stillness after the last word, then the same 2.5 s fade, which now starts 1.02 s after the
+  last word.
+- **No paid change.**
+  - Visuals are still made for `LEAD_IN_S + narration + TAIL_S`, the last scene included.
+  - The clip holds a Manim or Veo picture's last frame (`tpad`) for the extra 2.1 s, and a still
+    simply drifts over the longer clip.
+  - So no paid render's key depends on whether its scene is last. Appending a scene, or the first
+    run after this change, buys nothing. D9 holds.
+  - Only the last clip (free) changes; the other clips' keys are unchanged (18 names compared with
+    HEAD).
+- **QA.** The duration estimate adds the 2.1 s.
+- **Not chosen:** `FADE_OUT_S <= TAIL_S`, because a 1.4 s fade is abrupt for a sleep film. The
+  extra second of stillness is a pacing choice (D14); NEEDS_PIETRO has it.

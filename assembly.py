@@ -27,9 +27,16 @@ AUDIO_ENC = ["-c:a", "aac", "-b:a", "192k", "-ar", str(RATE)]
 RESTAMP = "asetpts=N/SR/TB"
 
 
-def scene_frames(narration_s: float) -> int:
-    """Lead-in + narration + tail, rounded up to whole video frames."""
-    return math.ceil(round((config.LEAD_IN_S + narration_s + config.TAIL_S) * FPS, 6))
+def scene_tail(index: int, count: int) -> float:
+    """Silence after scene `index`'s narration (0-based, of `count` scenes). The last scene's is
+    longer: the closing fade must not start before the voice ends (P2-7)."""
+    return config.FINAL_TAIL_S if index == count - 1 else config.TAIL_S
+
+
+def scene_frames(narration_s: float, tail_s: float | None = None) -> int:
+    """Lead-in + narration + tail (TAIL_S unless given), rounded up to whole video frames."""
+    tail = config.TAIL_S if tail_s is None else tail_s
+    return math.ceil(round((config.LEAD_IN_S + narration_s + tail) * FPS, 6))
 
 
 def _still_filter(target: float, scene_id: int) -> str:
@@ -76,11 +83,13 @@ def clip_encoder(kind: str) -> list[str]:
     return ["-c:v", "libx264", "-preset", preset, "-crf", str(crf)]
 
 
-def build_scene_clip(visual: Path, narration: Path, out_dir: Path, kind: str, scene_id: int) -> Path:
+def build_scene_clip(visual: Path, narration: Path, out_dir: Path, kind: str, scene_id: int,
+                     tail_s: float | None = None) -> Path:
     """Scene length is set by the voice: lead-in + narration + tail, in whole frames.
-    kind: 'still' | 'manim' | 'ai'. The clip is named by a hash of its input files and
-    the exact filters, so a changed narration or visual can never reuse an old clip."""
-    n = scene_frames(duration(narration))
+    kind: 'still' | 'manim' | 'ai'. `tail_s` is the silence after the narration (TAIL_S unless
+    given; the film's last scene gets FINAL_TAIL_S). The clip is named by a hash of its input
+    files and the exact filters, so a changed narration or visual can never reuse an old clip."""
+    n = scene_frames(duration(narration), tail_s)
     target, samples = n / FPS, n * RATE // FPS
     vf = (_still_filter(target, scene_id) if kind == "still"
           else _moving_filter(target, duration(visual), kind == "ai"))

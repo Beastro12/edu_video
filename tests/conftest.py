@@ -123,7 +123,8 @@ def build_film(work, media, visuals=None, narrations=None, chapters=None, **over
             narration = work / f"n{i}.mp3"
             ff("-f", "lavfi", "-i", f"sine=f={200 + 30 * i}:d={secs}:sample_rate=44100", str(narration))
             visual, kind = (visuals or {}).get(i, (media / "manim.mp4", "manim"))
-            clip = assembly.build_scene_clip(visual, narration, work / "clips", kind, i)
+            clip = assembly.build_scene_clip(visual, narration, work / "clips", kind, i,
+                                             assembly.scene_tail(i - 1, len(texts)))
             scenes.append({"id": i, "chapter": (chapters or [1] * len(texts))[i - 1], "concept": f"c{i}",
                            "narration": text, "visual_type": "manim", "visual_description": "d"})
             manifest.append({"id": i, "concept": f"c{i}", "kind": kind, "audio": narration.name,

@@ -768,3 +768,38 @@ exits 1.
 
 NEXT — P2-7 and P2-6 (built and in review), then P2-2. P1-14 (a pre-existing Ctrl-C window in
 `in_parallel`) is logged.
+
+## 2026-10-14 P2-7 The picture starts fading out before the last word
+CHANGED:
+- `config.FINAL_TAIL_S` = `FADE_OUT_S` + 1.0 (3.5 s), asserted `>= FADE_OUT_S`.
+- `assembly.scene_tail`. `scene_frames` and `build_scene_clip` take the tail; only the last
+  scene's clip gets the final one.
+- Every scene's picture is still made for the ordinary tail. The clip holds a Manim or Veo
+  picture's last frame, and a still drifts over the whole clip. So no paid render is keyed by
+  scene position.
+- `qa.py`: the duration estimate adds the extra 2.1 s.
+- Tests: `tests/test_final_tail.py` (new, 10); a luma-per-frame test on a built film in
+  `test_closing_fade.py`; `test_cache`, `test_budget`, `test_qa`.
+- D27; NEEDS_PIETRO (the extra second of stillness).
+
+CHECKED:
+- On a built 6-scene film, the first darker frame was 1.08 s before the last word ends; it is now
+  1.02 s after. The film is 2.1 s longer and ends in black. The reviewer measured this
+  independently.
+- 18 clip names of ordinary scenes are identical to HEAD.
+- Mutation checks:
+  - the old behaviour, the first scene given the final tail, no tail passed, and the fade moved or
+    removed: all killed;
+  - after the fix: the last picture given the final tail, and the estimate looking at the final
+    tail: both killed.
+- **Reviewer: no Critical.** Its warning: the last scene's Manim render was keyed by the longer
+  target, so appending a scene, or the first run after this change, would re-buy a Claude brief.
+  Fixed by keeping picture targets on the ordinary tail.
+- `make check` on this commit's tree state: see the commit.
+
+ASSUMED — a second of stillness after the last word suits the films (pacing, D14). Pietro can
+change `FINAL_TAIL_S`.
+
+DIVERGED — none (D27 is new).
+
+NEXT — P2-6.
