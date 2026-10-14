@@ -372,3 +372,26 @@ One change so that trade-off really is one line. The Veo clip encoder was `FILM_
 loss D18 measured. It is now its own setting, `VEO_CLIP_X264`, at the same medium crf 18, and
 a test checks that changing `FILM_X264` leaves it alone. Behaviour and cache keys are unchanged.
 The Veo numbers above all assume this: the clip stays at medium crf 18.
+
+**D23 — A research brief goes in the user prompt and is stamped with the script it shaped (P3-1;
+2026-10-14).** Films about recent research need facts the script model may not have:
+Pietro's first topic rests on a July 2026 paper. `--brief FILE` gives the outline agent, the writer
+and the critic the same markdown brief: verified facts with their sources, and hedging rules.
+
+- **Where it goes.** At the start of the *user* prompt, between `<<<BRIEF` and `BRIEF>>>`. The
+  system prompts stay fixed, so a film without a brief sends exactly what it sent before (a test
+  pins the old prompts byte for byte). The critic is also told to make any claim the brief
+  doesn't support more general, or remove it, as CLAUDE.md's content rule asks.
+- **Caching (D9).** The outline and chapters are reused whenever their files exist. A changed
+  brief would otherwise keep a script written without it, while the description cites the new
+  brief's sources. So the build is stamped (`brief.key`, the brief's content key or `none`)
+  before anything is written. A run with a different brief, or without one, then refuses and
+  names the files to delete. Builds from before briefs count as `none`.
+- **Sources.** The brief is kept as `build/<slug>/brief.md` once the script stage has run. Its
+  `## Sources` list goes into the YouTube description, but only when its stamp matches. A brief
+  left behind by an abandoned run never cites sources for a film written without it.
+- **Not chosen:**
+  - The brief in the system prompt: it would change the critic's and writer's fixed rules
+    per film.
+  - Rewriting the script automatically when the brief changes: it would throw away hand edits
+    to chapter files, which D9 keeps.

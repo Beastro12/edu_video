@@ -8,7 +8,7 @@ from pathlib import Path
 
 import config
 from assembly import xfade_offsets
-from utils import duration, load_json, save_json, video_duration
+from utils import brief_key, duration, load_json, save_json, video_duration
 
 MIN_CHAPTER_S = 10
 MIN_CHAPTERS = 3
@@ -88,6 +88,40 @@ def youtube_safe(text: str) -> str:
     return text.replace("<", "").replace(">", "")
 
 
+def brief_sources(work: Path) -> str:
+    """The `## Sources` section of the research brief kept in `work` (P3-1), one "- text" line
+    per entry. A description is plain text, so markdown links become "text: url" and list
+    markers go; the section ends at the next `#` or `##` heading; `###` headings and HTML
+    comments are skipped; an indented line that isn't a bullet continues the entry before it.
+    Only the brief the script was written with counts: brief.md must match the stamp
+    (brief.key) the script stage left, or a leftover from an abandoned run would put sources
+    in the description of a film that never used them. "" when there is no brief, no sources
+    or no match."""
+    path = work / config.BRIEF_FILE
+    if not path.exists():
+        return ""
+    raw = path.read_text(encoding="utf-8-sig")
+    stamp = work / config.BRIEF_KEY_FILE
+    if not stamp.exists() or stamp.read_text(encoding="utf-8").strip() != brief_key(raw):
+        print(f"    {config.BRIEF_FILE} isn't the brief this script was written with; "
+              "leaving Sources out of the description")
+        return ""
+    text = re.sub(r"<!--.*?-->", "", raw, flags=re.S)
+    entries, in_sources = [], False
+    for line in text.splitlines():
+        if not in_sources:
+            in_sources = line.rstrip() == "## Sources"
+        elif re.match(r"#{1,2}(\s|$)", line):
+            break
+        elif line.strip() and not re.match(r"#{3,}(\s|$)", line):
+            item = re.sub(r"^(?:[-*+]|\d{1,3}[.)])\s+", "", line.strip())
+            if line[0].isspace() and item == line.strip() and entries:
+                entries[-1] += " " + item
+            else:
+                entries.append(item)
+    return "\n".join("- " + re.sub(r"\[([^\]]+)\]\(([^)\s]+)\)", r"\1: \2", e) for e in entries)
+
+
 def srt_time(seconds: float) -> str:
     ms = round(seconds * 1000)
     return f"{ms // 3_600_000:02d}:{ms // 60_000 % 60:02d}:{ms // 1000 % 60:02d},{ms % 1000:03d}"
@@ -126,8 +160,12 @@ def write_metadata(work: Path) -> dict:
     description = youtube_safe(config.YOUTUBE_DESCRIPTION)
     if len(chapters) >= MIN_CHAPTERS:
         description += "\n\n" + "\n".join(f"{c['start']} {c['title']}" for c in chapters)
+    sources = brief_sources(work)
+    if sources:
+        description += "\n\nSources:\n" + youtube_safe(sources)
     if len(description.encode()) > DESCRIPTION_MAX_BYTES:
-        raise ValueError(f"description is over YouTube's {DESCRIPTION_MAX_BYTES} bytes; shorten YOUTUBE_DESCRIPTION")
+        raise ValueError(f"description is over YouTube's {DESCRIPTION_MAX_BYTES} bytes; "
+                         "shorten YOUTUBE_DESCRIPTION or the brief's Sources")
     meta = {"title": title, "description": description, "chapters": chapters, "duration_s": round(total, 3)}
     save_json(work / "metadata.json", meta)
     (work / "subtitles.srt").write_text(subtitles(work, script["scenes"], manifest, starts))

@@ -58,6 +58,10 @@ python pipeline.py "What happens inside a neutron star" --retry-failed
 
 # Skip the critic's review of each chapter (cheaper; not for films you publish)
 python pipeline.py "What happens inside a neutron star" --skip-critic
+
+# A film about recent research: a markdown file of verified facts with a "## Sources" heading (one
+# entry per line, shown in the YouTube description). A brief change after the script exists is refused
+python pipeline.py "A paper from last month" --brief brief.md
 ```
 
 A Veo clip or a still that fails for good (a safety filter, an invalid prompt, a Veo job

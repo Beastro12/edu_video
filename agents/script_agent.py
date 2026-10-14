@@ -71,15 +71,28 @@ Scenes carry roughly 40-70 words of narration each. Continue smoothly from the
 previous chapter's last lines; don't recap what was already explained."""
 
 
-def plan_outline(topic: str, minutes: float) -> dict:
-    return structured(OUTLINE_SYSTEM, f"Topic: {topic}\nTotal length: {minutes} minutes.",
+def brief_block(brief: str | None) -> str:
+    """The research brief as the opening of a user prompt. It goes in the user prompt so the
+    system prompts are the same with or without a brief; without one this is empty, so those
+    prompts stay byte-identical to what they were before briefs existed."""
+    if brief is None:
+        return ""
+    return ("Research brief (verified facts, hedging rules and sources for this film). Rely on it for\n"
+            "anything about recent research; don't add facts about that research beyond it.\n"
+            f"<<<BRIEF\n{brief}\nBRIEF>>>\n\n")
+
+
+def plan_outline(topic: str, minutes: float, brief: str | None = None) -> dict:
+    return structured(OUTLINE_SYSTEM,
+                      brief_block(brief) + f"Topic: {topic}\nTotal length: {minutes} minutes.",
                       "outline", OUTLINE_SCHEMA, max_tokens=4000)
 
 
-def write_chapter(outline: dict, chapter: dict, previous_tail: list[str]) -> list[dict]:
+def write_chapter(outline: dict, chapter: dict, previous_tail: list[str], brief: str | None = None) -> list[dict]:
     words = int(chapter["minutes"] * config.WORDS_PER_MIN)
     prompt = (
-        f"Full outline (for context):\n{json.dumps(outline, ensure_ascii=False)}\n\n"
+        brief_block(brief)
+        + f"Full outline (for context):\n{json.dumps(outline, ensure_ascii=False)}\n\n"
         f"Write chapter {chapter['number']}: {chapter['title']}\n"
         f"Target: about {words} words of narration.\n\n"
         + ("Previous chapter ended with:\n" + "\n".join(previous_tail) if previous_tail

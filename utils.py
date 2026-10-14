@@ -94,6 +94,13 @@ def content_key(*parts) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
+def brief_key(brief: str | None) -> str:
+    """Identity of a research brief (P3-1), as stamped in the build folder: "none" without one.
+    The pipeline stamps the script with it and metadata checks the kept brief against it, so
+    both must hash the same text."""
+    return "none" if brief is None else content_key("brief", brief)
+
+
 def file_hash(path: str | Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:

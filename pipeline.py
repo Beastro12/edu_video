@@ -2,6 +2,7 @@
 
     python pipeline.py "What happens inside a neutron star" --minutes 15
     python pipeline.py "What happens inside a neutron star" --script-only   # review before spending
+    python pipeline.py "A paper from last month" --brief brief.md           # verified facts for new research
 """
 import argparse
 import sys
@@ -16,7 +17,17 @@ import qa
 from agents import ai_video, critic, image_agent, manim_agent, music, script_agent, voice
 from assembly import add_music, build_scene_clip, crossfade_concat
 from failures import FailedEarlier, Failures
-from utils import content_key, duration, load_json, log, save_json, slugify, video_duration
+from utils import (
+    atomic_output,
+    brief_key,
+    content_key,
+    duration,
+    load_json,
+    log,
+    save_json,
+    slugify,
+    video_duration,
+)
 
 
 def _chapter_sources(work: Path) -> str | None:
@@ -34,10 +45,36 @@ def _chapter_sources(work: Path) -> str | None:
     return content_key("chapters", parts)
 
 
-def get_script(topic: str, minutes: float, work: Path, skip_critic: bool) -> dict:
+def _write_text(path: Path, text: str) -> None:
+    with atomic_output(path) as tmp:
+        tmp.write_text(text, encoding="utf-8")
+
+
+def _stamp_brief(work: Path, brief: str | None) -> None:
+    """Stamp the build with the brief (or none) its script is written from, and refuse to go on
+    with a script written from another: the narration would not match the brief whose Sources
+    go into the description. Builds from before briefs existed have no stamp and count as none."""
+    this = brief_key(brief)
+    stamp = work / config.BRIEF_KEY_FILE
+    recorded = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else "none"
+    started = (work / "outline.json").exists() or (work / "script.json").exists() or any(work.glob("chapter_*.json"))
+    if started and recorded != this:
+        raise RuntimeError(
+            f"The script in {work} was written with a different brief (or with a brief and this run "
+            "has none, or the reverse). Rerun with the brief it was written from, or delete "
+            "outline.json, chapter_*.json and script.json to write it again with this one.")
+    if not stamp.exists() or recorded != this:  # before any generation, so a crash leaves it matching the files
+        _write_text(stamp, this)
+
+
+def get_script(topic: str, minutes: float, work: Path, skip_critic: bool, brief: str | None = None) -> dict:
     """script.json is assembled from outline.json + chapter_XX.json. Both can be edited:
     hand edits to script.json are kept; edits to a chapter file rebuild script.json;
-    edits to both refuse to guess which one should win."""
+    edits to both refuse to guess which one should win. `brief` (P3-1) is the research brief for
+    the outline, writer and critic; None means none, even if `work` holds one from an earlier run.
+    Once outline.json, a chapter or script.json exists, a different brief (or one where there was
+    none, or none where there was one) is refused instead of mixing it into the script."""
+    _stamp_brief(work, brief)
     final, meta_path = work / "script.json", work / "script.meta.json"
     if final.exists():
         script = load_json(final)
@@ -60,7 +97,7 @@ def get_script(topic: str, minutes: float, work: Path, skip_critic: bool) -> dic
         outline = load_json(outline_path)
     else:
         print("• outline agent: planning chapters")
-        outline = script_agent.plan_outline(topic, minutes)
+        outline = script_agent.plan_outline(topic, minutes, brief=brief)
         save_json(outline_path, outline)
     for ch in outline["chapters"]:
         print(f"    {ch['number']}. {ch['title']} ({ch['minutes']} min)")
@@ -72,10 +109,10 @@ def get_script(topic: str, minutes: float, work: Path, skip_critic: bool) -> dic
             ch_scenes = load_json(ch_path)
         else:
             print(f"• writer: chapter {ch['number']}")
-            ch_scenes = script_agent.write_chapter(outline, ch, tail)
+            ch_scenes = script_agent.write_chapter(outline, ch, tail, brief=brief)
             if not skip_critic:
                 for _ in range(config.MAX_CRITIC_ROUNDS):
-                    result = critic.review_chapter(outline, ch, ch_scenes)
+                    result = critic.review_chapter(outline, ch, ch_scenes, brief=brief)
                     for issue in result["issues"]:
                         print(f"    critic: {issue}")
                     ch_scenes = result["revised_scenes"]
@@ -129,20 +166,26 @@ def make_visual(scene: dict, target_s: float, out_dir: Path, allow_veo: bool,
     return manim_agent.render_scene(scene, target_s, out_dir, atmospheric), "manim"
 
 
-def _planned_scenes(minutes: float, work: Path) -> tuple[list[dict], list[tuple[str, int, int]]]:
+def _planned_scenes(minutes: float, work: Path,
+                    brief: str | None = None) -> tuple[list[dict], list[tuple[str, int, int]]]:
     """Scenes this run will voice and illustrate, and the script-stage Claude calls still to
     make as (label, input_tokens, output_tokens). Real text where it exists; a synthetic
-    scene mix following D3 where it doesn't."""
+    scene mix following D3 where it doesn't. Every script-stage call carries the brief."""
     if (work / "script.json").exists():
         return load_json(work / "script.json")["scenes"], []
     calls = []
+    prompt_tokens = review_tokens = config.EST_PROMPT_TOKENS
+    if brief is not None:
+        block = script_agent.brief_block(brief)
+        prompt_tokens += ledger.claude_input_estimate(block)
+        review_tokens += ledger.claude_input_estimate(block, critic.BRIEF_CHECK)
     outline_path = work / "outline.json"
     if outline_path.exists():
         chapters = load_json(outline_path)["chapters"]
     else:
         chapters = [{"number": i + 1, "minutes": minutes / config.EST_CHAPTERS}
                     for i in range(config.EST_CHAPTERS)]
-        calls.append(("outline", config.EST_PROMPT_TOKENS, config.EST_OUTLINE_TOKENS_PER_CHAPTER * config.EST_CHAPTERS))
+        calls.append(("outline", prompt_tokens, config.EST_OUTLINE_TOKENS_PER_CHAPTER * config.EST_CHAPTERS))
     scenes = []
     for ch in chapters:
         ch_path = work / f"chapter_{ch['number']:02d}.json"
@@ -151,8 +194,8 @@ def _planned_scenes(minutes: float, work: Path) -> tuple[list[dict], list[tuple[
             continue
         words = ch["minutes"] * config.WORDS_PER_MIN
         out_tokens = int(words * config.EST_SCRIPT_TOKENS_PER_WORD)
-        calls.append(("chapter", config.EST_PROMPT_TOKENS, out_tokens))
-        calls.append(("review", config.EST_PROMPT_TOKENS + out_tokens, out_tokens))
+        calls.append(("chapter", prompt_tokens, out_tokens))
+        calls.append(("review", review_tokens + out_tokens, out_tokens))
         n = max(1, round(words / config.EST_WORDS_PER_SCENE))
         n_manim = round(config.EST_MANIM_SHARE * (n - 1))
         types = ["ai_video"] + ["manim"] * n_manim + ["still"] * (n - 1 - n_manim)
@@ -167,12 +210,13 @@ def _still_rejected_for_good(scene: dict, visuals: Path) -> bool:
 
 
 def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool,
-                  worst_case: bool = False, retry_failed: bool = False) -> dict[str, float]:
+                  worst_case: bool = False, retry_failed: bool = False,
+                  brief: str | None = None) -> dict[str, float]:
     """Projected spend in EUR for what this run would still have to buy. Cached work costs
     nothing, and a generation that failed before costs its fallback (P1-7). Calls no paid API.
     Typical: one critic round, one Manim attempt; worst case: every critic round and every
     Manim retry."""
-    scenes, calls = _planned_scenes(minutes, work)
+    scenes, calls = _planned_scenes(minutes, work, brief)
     failed = Failures(failure_log.path(work), retry=retry_failed).earlier
     model = config.CLAUDE_MODEL
     reviews = 0 if skip_critic else (config.MAX_CRITIC_ROUNDS if worst_case else 1)
@@ -299,6 +343,15 @@ def render_film(script: dict, work: Path, allow_veo: bool, seed: str, retry_fail
     return final
 
 
+def keep_brief(brief: str, work: Path) -> None:
+    """Copy the brief into the build folder, so metadata (and a later run report) find it from
+    `work` alone. Called once get_script has accepted it: the copy is the brief the script was
+    written from."""
+    dest = work / config.BRIEF_FILE
+    if not dest.exists() or dest.read_text(encoding="utf-8") != brief:
+        _write_text(dest, brief)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("topic")
@@ -309,19 +362,35 @@ def main():
     ap.add_argument("--estimate", action="store_true", help="print the projected cost and exit; calls nothing")
     ap.add_argument("--retry-failed", action="store_true",
                     help="ask Veo / the image model again for scenes whose generation failed on an earlier run")
+    ap.add_argument("--brief", type=Path, metavar="FILE",
+                    help="markdown research brief (verified facts, hedging rules, ## Sources) for films "
+                         "about recent research; the script agents rely on it and its Sources go "
+                         "into the YouTube description. Once the script exists, a different brief "
+                         "(or none) is refused")
     args = ap.parse_args()
+
+    brief = None
+    if args.brief is not None:
+        try:
+            brief = args.brief.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError) as e:
+            ap.error(f"--brief: cannot read {args.brief} ({type(e).__name__})")
+        if not brief.strip():
+            ap.error(f"--brief: {args.brief} is empty")
 
     work = Path(config.BUILD_DIR) / slugify(args.topic)
     allow_veo = ai_video.available() and not args.no_ai_video
     if args.estimate:
         print_estimate(args.topic, estimate_cost(args.minutes, work, allow_veo, args.skip_critic,
-                                                 retry_failed=args.retry_failed),
+                                                 retry_failed=args.retry_failed, brief=brief),
                        estimate_cost(args.minutes, work, allow_veo, args.skip_critic, worst_case=True,
-                                     retry_failed=args.retry_failed))
+                                     retry_failed=args.retry_failed, brief=brief))
         return
     work.mkdir(parents=True, exist_ok=True)
 
-    script = get_script(args.topic, args.minutes, work, args.skip_critic)
+    script = get_script(args.topic, args.minutes, work, args.skip_critic, brief)
+    if brief is not None:
+        keep_brief(brief, work)
     if args.script_only:
         print(f"Script saved to {work / 'script.json'}. Edit it, then rerun without --script-only.")
         return

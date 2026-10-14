@@ -171,6 +171,33 @@ Work top to bottom within a priority.
   reportedly has no speed control (unverified); the choice and a €0.12 listening check are in
   NEEDS_PIETRO.
 
+## P3 — the first film (MVP; Pietro, 2026-10-14)
+
+Pietro: "finish this project to MVP", with a research film on a New Scientist headline (12 Oct
+2026): "Do AIs already process information in a way that gives rise to consciousness?", "in
+kurzgesagt style + others I said I like". Plan approved 2026-10-14 (PLAN.md). These come before
+the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that order.
+
+- [x] P3-1 — Research brief for a film (`--brief FILE`)
+  A film about recent research needs facts the script model may not know.
+  Accept: `--brief` passes the file's text to the outline agent, the writer and the critic (in
+  the user prompt; system prompts unchanged; with no brief every prompt is byte-identical to
+  before); the critic is told to generalise or drop claims the brief doesn't support;
+  `--estimate` counts the brief's tokens; the brief is copied to `build/<slug>/brief.md` and
+  its `## Sources` list goes into the YouTube description.
+- [ ] P3-2 — Visual style presets (`--style calm|flat`)
+  Kurzgesagt-inspired pictures (flat vector shapes, rich colour on deep navy) with the calm
+  SleepOnPhysics voice and pacing. The studio's name never goes into a prompt.
+  Accept: `config.STYLES` holds each preset's still-prompt suffix and Manim palette; `calm`
+  (the default) leaves every prompt and cache key byte-identical; `flat` changes the still
+  prompt and the Manim palette; the flat background stays above the QA black threshold.
+- [ ] P3-3 — The film's brief and script (`topics/ai-global-workspace/`)
+  Accept: `brief.md` labels every fact by source (primary verified vs secondary) with binding
+  hedging rules; the outline and chapters are written with the pipeline's own prompts and
+  reviewed with the critic's; every factual sentence maps to a brief line (table in
+  `script.md`); `get_script` seeds missing outline/chapter files from the brief's folder;
+  `--script-only` builds `script.json` with no keys, and `--estimate` runs.
+
 ## P2 — scale and polish
 
 Order set by docs/PLAN.md (2026-09-27): the run report first (the first live run needs

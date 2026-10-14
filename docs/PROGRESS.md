@@ -520,3 +520,52 @@ DIVERGED — the main grid run was stopped by the tool's 10-minute limit after 3
 rest were measured in separate runs (SSIM and size repeat exactly; times are compared within
 each run).
 NEXT — P1-11 (pin dependency versions).
+
+## 2026-10-14 P3-1 Research brief for a film (`--brief FILE`)
+CHANGED — Pietro's first film topic rests on a July 2026 paper, so the script agents need a brief
+of verified facts (D23):
+- `pipeline.py`:
+  - `--brief FILE` (read as utf-8-sig; a missing or empty file is a usage error).
+  - `get_script` passes the brief to the outline agent, the writer and the critic.
+  - `_stamp_brief` writes `build/<slug>/brief.key` (the brief's content key, or `none`) before
+    any generation. It refuses a different brief, or a missing one, once a script file exists.
+  - `keep_brief` copies the brief to `build/<slug>/brief.md` after the script stage.
+  - The estimate counts the brief wrapper on every script call, plus `critic.BRIEF_CHECK` on
+    reviews.
+- `agents/script_agent.py`: `brief_block` opens the user prompt. The system prompts are
+  unchanged.
+- `agents/critic.py`: `BRIEF_CHECK`.
+- `metadata.py`: `brief_sources` adds the brief's `## Sources` to the YouTube description, only
+  when its stamp matches. It handles wrapped entries, `#`/`##` ends, `###` headings, comments
+  and list markers.
+- `utils.brief_key`; `config.BRIEF_FILE` and `BRIEF_KEY_FILE`.
+- README run line; BACKLOG: new P3 section; D23.
+- Tests: `tests/test_brief.py` (59 tests, 0.4 s).
+
+CHECKED:
+- `make check`: 206 passed, ruff clean.
+- Without a brief, every prompt is byte-identical to HEAD. The reviewer compared system prompt,
+  user prompt, schema and max_tokens in 11 cases, and a test pins the old prompt strings.
+- The implementer confirmed by mutation that the tests catch: a removed refusal, a removed
+  stamp write, a critic check moved after the scenes, a brief dropped from the estimate, and a
+  disabled stamp check in metadata.
+- Reviewer, first pass: 1 Critical. A changed brief silently reused a script written from
+  another brief, or none, while the description cited the new brief's Sources. Fixed with the
+  stamp and refusal.
+- Also fixed from the first pass: the Sources parser on wrapped and nested markdown; an 18 s
+  film fixture replaced by stubs; exact-equality prompt asserts; a byte-order mark; names in
+  config.
+- A stale `brief.md` from an abandoned run no longer reaches the description.
+- Second pass: no Critical.
+
+ASSUMED — Pietro writes the brief, or Claude Code does, from sources he can check. The pipeline
+doesn't verify facts itself.
+
+DIVERGED — none from DECISIONS (D23 is new). The work was implemented by a Sonnet subagent and
+reviewed by me plus an independent reviewer subagent (the operating model Pietro asked for).
+
+NEXT:
+- P3-3 (this film's brief and script), which also takes the second review's two warnings:
+  - Reruns must repeat the exact `--brief`. Use the kept copy when the stamp matches.
+  - `--estimate` doesn't say a run would be refused.
+- Then P3-2 (style presets).

@@ -2,7 +2,7 @@
 import json
 
 from agents.llm import structured
-from agents.script_agent import CHAPTER_SCHEMA
+from agents.script_agent import CHAPTER_SCHEMA, brief_block
 
 REVIEW_SCHEMA = {
     "type": "object",
@@ -27,8 +27,13 @@ Otherwise list each issue plainly and return corrected revised_scenes.
 Do not lengthen the chapter unless a gap requires it."""
 
 
-def review_chapter(outline: dict, chapter: dict, scenes: list[dict]) -> dict:
-    prompt = (f"Outline: {json.dumps(outline, ensure_ascii=False)}\n\n"
+BRIEF_CHECK = ("Check every claim about recent research against the brief. A claim the brief doesn't "
+               "support: make it more general or remove it, and list it as an issue.\n\n")
+
+
+def review_chapter(outline: dict, chapter: dict, scenes: list[dict], brief: str | None = None) -> dict:
+    prompt = (brief_block(brief) + (BRIEF_CHECK if brief is not None else "")
+              + f"Outline: {json.dumps(outline, ensure_ascii=False)}\n\n"
               f"Chapter {chapter['number']} ({chapter['title']}) scenes:\n"
               f"{json.dumps(scenes, ensure_ascii=False)}")
     return structured(SYSTEM, prompt, "review", REVIEW_SCHEMA)
