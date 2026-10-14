@@ -15,6 +15,7 @@ import failures as failure_log
 import ledger
 import metadata
 import qa
+import run_report
 from agents import ai_video, critic, image_agent, manim_agent, music, script_agent, voice
 from assembly import add_music, build_scene_clip, crossfade_concat
 from failures import FailedEarlier, Failures
@@ -449,9 +450,11 @@ def generate_assets(script: dict, work: Path, allow_veo: bool, retry_failed: boo
     go straight to their fallback unless `retry_failed` (P1-7)."""
     scenes = script["scenes"]
     failures = Failures(failure_log.path(work), retry=retry_failed)
+    run_report.stage("narration")
     print(f"• narration: {len(scenes)} scenes, {config.WORKERS} at a time")
     audio = in_parallel(lambda s: voice.narrate(s["narration"], work / "audio"), scenes)
     targets = [config.LEAD_IN_S + duration(a) + config.TAIL_S for a in audio]
+    run_report.stage("visuals")
     print("• visuals")
     visuals = in_parallel(lambda i: make_visual(scenes[i], targets[i], work / "visuals", allow_veo, failures),
                           list(range(len(scenes))))
@@ -463,7 +466,9 @@ def render_film(script: dict, work: Path, allow_veo: bool, seed: str, retry_fail
     """Per-scene files live in audio/, visuals/ and clips/, named by a hash of their inputs.
     manifest.json maps each scene id to the files it used."""
     clips, manifest = [], []
-    for asset in generate_assets(script, work, allow_veo, retry_failed):
+    assets = generate_assets(script, work, allow_veo, retry_failed)
+    run_report.stage("scene clips")
+    for asset in assets:
         scene, narration, visual, kind = asset["scene"], asset["audio"], asset["visual"], asset["kind"]
         print(f"• scene {scene['id']}/{len(script['scenes'])}: {scene['concept']} [{kind}]")
         clip = build_scene_clip(visual, narration, work / "clips", kind, scene["id"])
@@ -476,6 +481,7 @@ def render_film(script: dict, work: Path, allow_veo: bool, seed: str, retry_fail
                          "still_review": str(review.relative_to(work)) if kind != "ai" and review.exists() else None})
     save_json(work / "manifest.json", {"title": script["title"], "style": config.STYLE, "scenes": manifest})
 
+    run_report.stage("assembly")
     print("• assembling (crossfades)")
     narrated = crossfade_concat(clips, work / "narrated.mp4")
     total = video_duration(narrated)  # the container also counts AAC's end padding
@@ -572,24 +578,30 @@ def main():
                                      retry_failed=args.retry_failed, brief=brief, seed=seed), config.STYLE)
         return
     work.mkdir(parents=True, exist_ok=True)
-    if _brief_conflict(work, brief) is None:  # a refused run changes nothing; get_script says why
-        _record_style(work)  # first, like brief.key: a run that stops in the script stage keeps it
-    if seed is not None:
-        seed_script(seed, seed_chapters, work, brief)
+    # P2-3: build/<slug>/run_report.md is written however this block ends
+    with run_report.recording(work, args.topic, args.brief, brief, allow_veo) as run:
+        run_report.stage("script")
+        if _brief_conflict(work, brief) is None:  # a refused run changes nothing; get_script says why
+            _record_style(work)  # first, like brief.key: a run that stops in the script stage keeps it
+        if seed is not None:
+            seed_script(seed, seed_chapters, work, brief)
 
-    script = get_script(args.topic, args.minutes, work, args.skip_critic, brief)
-    if brief is not None:
-        keep_brief(brief, work)
-    if args.script_only:
-        print(f"Script saved to {work / 'script.json'}. Edit it, then rerun without --script-only.")
-        return
+        script = run.script = get_script(args.topic, args.minutes, work, args.skip_critic, brief)
+        if brief is not None:
+            keep_brief(brief, work)
+        if args.script_only:
+            run.outcome = "script only"
+            print(f"Script saved to {work / 'script.json'}. Edit it, then rerun without --script-only.")
+            return
 
-    final = render_film(script, work, allow_veo, args.topic, args.retry_failed)
-    metadata.write_metadata(work)  # metadata.json + subtitles.srt for YouTube
-    print(f"• YouTube metadata: {work / 'metadata.json'}, {work / 'subtitles.srt'}")
-    report = qa.run_qa(final)  # writes qa.json next to the film
-    qa.print_report(report)
-    if not report["passed"]:
+        final = render_film(script, work, allow_veo, args.topic, args.retry_failed)
+        run_report.stage("metadata")
+        metadata.write_metadata(work)  # metadata.json + subtitles.srt for YouTube
+        print(f"• YouTube metadata: {work / 'metadata.json'}, {work / 'subtitles.srt'}")
+        run_report.stage("QA")
+        run.qa = qa.run_qa(final)  # writes qa.json next to the film
+        qa.print_report(run.qa)
+    if not run.qa["passed"]:  # outside the block: SystemExit would be written up as a stop
         sys.exit(1)
 
 

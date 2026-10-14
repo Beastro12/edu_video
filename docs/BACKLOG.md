@@ -206,13 +206,28 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   `--brief` seeds from it while that folder's `brief.key` equals the build's stamp; test: a
   chapter deleted from a seeded build comes back on a rerun without `--brief`, zero calls.
 
+- [ ] P1-14 — Ctrl-C during the submission of parallel work doesn't stop the workers
+  Found in P2-3's review (pre-existing, P1-5): `pipeline.in_parallel` creates the pool and
+  submits futures before its `try`, so a Ctrl-C landing during submission skips the handler:
+  `ledger.interrupted`/`stopping` are never set and the scenes already submitted keep making
+  paid calls until the interpreter joins the threads (their ledger entries then lack the
+  run's attribution). The window is milliseconds.
+  Accept: pool creation and submission inside the `try`; a test that interrupts during
+  submission sees `ledger.interrupted` set and no further paid call started.
+
 ## P2 — scale and polish
 
 Order set by docs/PLAN.md (2026-09-27): the run report first (the first live run needs
 it); batch mode waits for one verified live film.
 
-- [ ] P2-3 — Structured run log and a `run_report.md` per video (costs, timings, QA,
+- [x] P2-3 — Structured run log and a `run_report.md` per video (costs, timings, QA,
   fallbacks used).
+  Accept (2026-10-14): every run past argument parsing writes `build/<slug>/run_report.md`,
+  also a stopped run (in a `finally`) and `--script-only`, never `--estimate`. It holds: header
+  (outcome `finished` / `finished, QA failed` / `script only` / `stopped at <stage>: …`, flags,
+  style, brief, models); this run's and this film's costs from the ledger (entries carry `film`
+  and `run`); stage timings; scenes with fallbacks and their recorded reasons; QA check by
+  check; next steps. Keys are redacted; the previous report is kept as `run_report.prev.md`.
 - [ ] P2-5 — Prune per-scene files no film uses any more
   Found in the P1-6 review: files are named by a hash of their inputs, so any change of
   settings (e.g. D18's clip encoder) leaves the old clips behind; `clips/` roughly doubles.

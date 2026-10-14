@@ -2,9 +2,13 @@
 
 Every paid call is checked against BUDGET_EUR before it is made and appended to
 build/ledger.jsonl after it succeeds. The ledger is shared by all videos, so the cap is a
-total across runs: raise BUDGET_EUR (or archive the ledger) to allow more spend."""
+total across runs: raise BUDGET_EUR (or archive the ledger) to allow more spend.
+
+Entries made during a pipeline run also say which film and which run made them (P2-3), so a
+run report can tell this run's spend from the film's and from everyone else's."""
 import json
 import threading
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -32,6 +36,12 @@ def _entries() -> list[dict]:
         return [json.loads(line) for line in path.read_text().splitlines() if line.strip()] if path.exists() else []
 
 
+def entries(**match) -> list[dict]:
+    """Ledger entries whose fields equal `match` (film="x", run="y"); all of them without any.
+    An entry from before P2-3 has neither field and matches no film or run."""
+    return [e for e in _entries() if all(k in e and e[k] == v for k, v in match.items())]
+
+
 def spent_eur() -> float:
     return sum(e["est_cost_eur"] for e in _entries())
 
@@ -45,6 +55,23 @@ def veo_clips_today() -> int:
 
 
 _held = 0.0  # cost reserved by calls in flight (P1-5: several can run at once)
+_film: str | None = None  # whose run is in progress (P2-3); set once before any worker thread starts
+_run: str | None = None
+
+
+@contextmanager
+def attribute_to(film: str) -> Iterator[str]:
+    """Entries recorded inside the block carry this film and a fresh run id, which is yielded.
+    A run id rather than the start time: entries are stamped to the second, so a run that began
+    in the second the last one ended would claim its entries; an id also keeps two processes
+    on one film apart."""
+    global _film, _run
+    saved = _film, _run
+    _film, _run = film, uuid.uuid4().hex[:12]
+    try:
+        yield _run
+    finally:
+        _film, _run = saved
 
 
 def check(provider: str, est_cost_eur: float, held: float = 0.0) -> None:
@@ -76,6 +103,8 @@ def reserve(provider: str, est_cost_eur: float) -> Iterator[None]:
 def record(provider: str, model: str, units: dict, est_cost_eur: float) -> None:
     entry = {"time": datetime.now(timezone.utc).isoformat(timespec="seconds"), "provider": provider,
              "model": model, "units": units, "est_cost_eur": round(est_cost_eur, 6)}
+    if _film is not None:  # outside a pipeline run an entry is what it always was
+        entry |= {"film": _film, "run": _run}
     with _lock:
         ledger_path().parent.mkdir(parents=True, exist_ok=True)
         with ledger_path().open("a") as f:

@@ -729,3 +729,42 @@ has happened.
 DIVERGED — none (D25 is new; calm is unchanged).
 
 NEXT — P2-3 (run report), then P2-7 and P2-6 (two defects in every film), then P2-2 (thumbnail).
+
+## 2026-10-14 P2-3 A `run_report.md` per film
+CHANGED:
+- `run_report.py` (new): every run past argument parsing writes `build/<slug>/run_report.md` in
+  a `finally`, including a stopped run and `--script-only`; never `--estimate`. It covers the
+  outcome, flags, style, brief, models, costs, stage timings, scenes with fallbacks and their
+  recorded reasons, QA check by check, and next steps. The previous report is kept as
+  `run_report.prev.md`.
+- `ledger.py`: `attribute_to(film)` adds `film` and `run` to entries made during a run;
+  `entries(**match)`.
+- `pipeline.py`: seven stage marks and the `recording` block in `main`. `sys.exit(1)` on a QA
+  failure moved outside the block.
+- Tests: `tests/test_run_report.py` (46); two exact-output expectations in `test_brief.py` (the
+  new console line, and the report in a crashed build's listing).
+- D26; BACKLOG P2-3 acceptance written down, plus P1-14 (new).
+
+CHECKED:
+- Implementer mutation checks: 21 mutants, all killed. These cover attribution, run-vs-film
+  costs, stale manifests, three redaction layers, stage marks, writing on failure, `sys.exit`
+  placement, write failures masking errors, the previous-report move, Ctrl-C advice, a gone
+  console, and QA shape via the real `qa.check`.
+- One test runs the real `qa.run_qa` on a real built film.
+- **Reviewer, no Critical and no Warning.** It confirmed:
+  - old ledgers and every reader are unaffected;
+  - attribution is safe with the worker threads;
+  - a real SIGINT still stops the run as before and the report says so;
+  - no key reaches the report;
+  - exit codes are unchanged.
+- The reviewer's suggestions S1–S4 are applied: keep the previous report; advice per kind of
+  stop; protected console lines; the real QA shape.
+- `make check` on the tree state of this commit (P2-3 alone): see the commit.
+
+ASSUMED — none.
+
+DIVERGED — an extra outcome, "finished, QA failed", beyond the spec's three; the process still
+exits 1.
+
+NEXT — P2-7 and P2-6 (built and in review), then P2-2. P1-14 (a pre-existing Ctrl-C window in
+`in_parallel`) is logged.

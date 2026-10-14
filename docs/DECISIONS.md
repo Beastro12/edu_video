@@ -453,3 +453,26 @@ scripts calm. So only the look changes.
     purpose.
   - A style-dependent writer: it would make the script differ per style and break the reviewed
     seed.
+
+**D26 — Ledger entries name their film and run; each run writes `run_report.md` (P2-3;
+2026-10-14).** The first live run is where model names, response shapes and prices meet reality,
+so every run leaves one file saying what happened, what it cost and what to look at next.
+
+- **Attribution.** Inside `pipeline.main`, `ledger.attribute_to(slug)` adds `film` (the build
+  folder name) and `run` (a random 12-hex id) to every entry. Worker threads only read these
+  fields.
+  - "This run" means the same `run`; "this film" means the same `film`.
+  - Entries from before P2-3, and entries made outside a pipeline run (`make smoke`), count only
+    in the ledger total. Every existing reader (`spent_eur`, the Veo cap, the budget check, the
+    estimate) is unchanged.
+  - A run id rather than a start time: entries are stamped to the second, so a time filter would
+    claim a previous run's last entries. Two processes on one film also stay apart.
+- **The report.** It is written in a `finally`, so a stopped run reports where and why.
+  - It re-raises the original exception, and a failed report or a gone console never hides it.
+  - It doesn't change exit codes: QA failure is still 1, usage errors 2.
+  - It is built only from files already on disk plus in-memory timings: no paid call. Every field
+    passes `utils.redact`.
+  - The previous report is kept as `run_report.prev.md`.
+- **Fallback reasons come only from what is recorded** (failures.json, the still review log).
+  Transient errors and the Veo daily cap aren't recorded (D19), so the report says "no failure
+  on file" rather than guessing.
