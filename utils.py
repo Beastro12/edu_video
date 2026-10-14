@@ -101,6 +101,16 @@ def brief_key(brief: str | None) -> str:
     return "none" if brief is None else content_key("brief", brief)
 
 
+def kept_brief(work: Path) -> str | None:
+    """The brief kept in a build folder, if it is the one its script was stamped with (P3-1);
+    None when there is none, no stamp, or a stamp for another brief."""
+    path, stamp = work / config.BRIEF_FILE, work / config.BRIEF_KEY_FILE
+    if not path.exists() or not stamp.exists():
+        return None
+    text = path.read_text(encoding="utf-8-sig")
+    return text if stamp.read_text(encoding="utf-8").strip() == brief_key(text) else None
+
+
 def file_hash(path: str | Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:

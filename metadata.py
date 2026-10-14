@@ -8,7 +8,7 @@ from pathlib import Path
 
 import config
 from assembly import xfade_offsets
-from utils import brief_key, duration, load_json, save_json, video_duration
+from utils import duration, kept_brief, load_json, save_json, video_duration
 
 MIN_CHAPTER_S = 10
 MIN_CHAPTERS = 3
@@ -89,31 +89,41 @@ def youtube_safe(text: str) -> str:
 
 
 def brief_sources(work: Path) -> str:
-    """The `## Sources` section of the research brief kept in `work` (P3-1), one "- text" line
-    per entry. A description is plain text, so markdown links become "text: url" and list
-    markers go; the section ends at the next `#` or `##` heading; `###` headings and HTML
-    comments are skipped; an indented line that isn't a bullet continues the entry before it.
+    """The Sources of the research brief kept in `work` (P3-1), as parse_sources gives them.
     Only the brief the script was written with counts: brief.md must match the stamp
     (brief.key) the script stage left, or a leftover from an abandoned run would put sources
     in the description of a film that never used them. "" when there is no brief, no sources
     or no match."""
-    path = work / config.BRIEF_FILE
-    if not path.exists():
+    if not (work / config.BRIEF_FILE).exists():
         return ""
-    raw = path.read_text(encoding="utf-8-sig")
-    stamp = work / config.BRIEF_KEY_FILE
-    if not stamp.exists() or stamp.read_text(encoding="utf-8").strip() != brief_key(raw):
+    brief = kept_brief(work)
+    if brief is None:
         print(f"    {config.BRIEF_FILE} isn't the brief this script was written with; "
               "leaving Sources out of the description")
         return ""
-    text = re.sub(r"<!--.*?-->", "", raw, flags=re.S)
+    return parse_sources(brief)
+
+
+NOT_AN_ENTRY = re.compile(r"#{3,}(\s|$)"            # a deeper heading
+                          r"|(-\s*){3,}$|(\*\s*){3,}$|(_\s*){3,}$"   # a horizontal rule
+                          r"|```|~~~"                # a code fence
+                          r"|\|")                    # a table row
+
+
+def parse_sources(text: str) -> str:
+    """The `## Sources` section of a brief, one "- text" line per entry. A description is plain
+    text, so markdown links become "text: url" and list markers go; the section ends at the next
+    `#` or `##` heading; deeper headings, horizontal rules, code fences, table rows and HTML
+    comments are skipped; an indented line that isn't a bullet continues the entry before it.
+    "" without a Sources section."""
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
     entries, in_sources = [], False
     for line in text.splitlines():
         if not in_sources:
             in_sources = line.rstrip() == "## Sources"
         elif re.match(r"#{1,2}(\s|$)", line):
             break
-        elif line.strip() and not re.match(r"#{3,}(\s|$)", line):
+        elif line.strip() and not NOT_AN_ENTRY.match(line.strip()):
             item = re.sub(r"^(?:[-*+]|\d{1,3}[.)])\s+", "", line.strip())
             if line[0].isspace() and item == line.strip() and entries:
                 entries[-1] += " " + item

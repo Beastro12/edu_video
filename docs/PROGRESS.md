@@ -569,3 +569,84 @@ NEXT:
   - Reruns must repeat the exact `--brief`. Use the kept copy when the stamp matches.
   - `--estimate` doesn't say a run would be refused.
 - Then P3-2 (style presets).
+
+## 2026-10-14 P3-3 The film's brief and script (`topics/ai-global-workspace/`)
+CHANGED:
+- `topics/ai-global-workspace/`:
+  - `brief.md`: the research brief. Every fact is labelled [A] (verified in Anthropic's own
+    post) or [B] (established science, general terms only). It has binding hedging rules and
+    Sources limited to the works the film draws on.
+  - `outline.json` and `chapter_01–05.json`: 39 scenes, 1,929 words. That is about 16 min of
+    narration, or 16 to 18 min with pauses.
+  - `script.md`: reading form, a provenance header, and a fact table mapping each scene to its
+    brief lines.
+  - `brief.key`: the brief version the chapters were reviewed with.
+  - Title: "A Small Lit Stage: Global Workspace Theory and Language Models".
+- `pipeline.py` (seeding):
+  - A run with `--brief` copies in, file by file, the brief folder's outline and chapters that
+    the build lacks.
+  - It does so only when the build's outline is the folder's, and it stamps first.
+  - It refuses when the folder's `brief.key` doesn't match its brief.
+  - It names build files that differ from the folder's.
+  - `--estimate` prices a seeded script without writing anything.
+- Rerun fixes from P3-1's review:
+  - A rerun without `--brief` uses the kept brief when its stamp matches.
+  - The refusal message names its case and suggests the kept copy.
+  - `--estimate` says when a run would be refused.
+- `metadata.parse_sources` skips rules, fences and tables. `utils.kept_brief`.
+- Tests:
+  - `tests/test_brief.py`: seeding, interrupted seeds, deleted chapters, a stale topic stamp,
+    estimates.
+  - `tests/test_topics.py`: every topic folder's outline and scene rules, `brief.key`, and
+    `script.md` equal to its JSON, chapter by chapter.
+- README run notes; BACKLOG P3-4 (new).
+
+CHECKED:
+- **How the script was made:**
+  - A Sonnet subagent wrote the outline and chapters with the pipeline's own prompts
+    (`OUTLINE_SYSTEM`, `CHAPTER_SYSTEM`) and the brief.
+  - A second subagent reviewed it following the critic's `SYSTEM` prompt and the brief.
+  - **Critic's verdict:** no chapter approved on the first round; 21 issues, all applied. They
+    included unattributed findings, no access/experience line for six minutes in chapter 3, a
+    visual teaching a false separation, glosses, and a meta-reference.
+- **My fact-check against the post** changed:
+  - "holding" to the post's "on its mind";
+  - "think about" to "concentrate on";
+  - the blog title wrongly given as the paper's title;
+  - "rival theories agreed" to their supporters;
+  - a spider and ant still the still critic would reject;
+  - the closing stage simile.
+- **Reviewer, first pass: 1 Critical.** Seeding was all-or-nothing, so an interrupted seed or a
+  deleted chapter made the writer replace reviewed scenes, as paid calls. Fixed by per-file
+  seeding, with tests for both cases.
+- **Reviewer content warnings, fixed:**
+  - three [A] lines the saved post didn't support (relabelled or fixed);
+  - Sources citing works the film doesn't use, and an unchecked paper title (removed);
+  - an unlabelled provenance claim (now stated exactly).
+- **Second pass: no Critical.** The reviewer compared `script.md` with the JSON in code (0
+  mismatches) and checked every [A] line against the saved post.
+- **CLI with no keys, in a temp copy:**
+  - `--estimate` printed "would seed outline.json, chapter_01–05", €2.05 typical and €5.06
+    worst case. Stills are counted as Manim without a Google key, so with one the figure
+    differs. Nothing was written.
+  - `--script-only` seeded 6 files and built 39 scenes, 1,929 words, with 0 Claude calls.
+- `make check`: 265 passed before the final small fixes. After them, ruff is clean and
+  test_topics, test_brief and test_script_flow pass (106). The full run happens before the
+  commit.
+
+ASSUMED:
+- "Kurzgesagt style + others I said I like" means a Kurzgesagt-inspired look with
+  SleepOnPhysics' calm voice and pacing (plan approved 2026-10-14).
+- The film gets its own title, not the magazine's headline.
+- The New Scientist article itself (paywalled, and blocked here) is not used. Only its question
+  is.
+
+DIVERGED:
+- The script was written in-session by subagents following the pipeline's prompts, not by a
+  pipeline run (no keys here). `script.md` says so.
+- It runs 1.1 min of narration over the planned 15 min; still within 10–20 min.
+
+NEXT:
+- P3-2 (style presets).
+- Not verified: the paper's own title and address (blocked here); what the outside
+  commentaries say (not used).

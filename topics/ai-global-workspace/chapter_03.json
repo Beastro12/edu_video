@@ -1,0 +1,98 @@
+[
+  {
+    "concept": "Layers of activity",
+    "narration": "Now to language models. A language model is trained on a great deal of text, and learns to predict the next small piece of text, often a word or part of one. When it reads, it passes the text through a series of layers. At each layer, its internal activity is a long list of numbers.",
+    "visual_type": "manim",
+    "visual_description": "Several thin pale horizontal bands stacked like strata on a dark background. Three short word-pieces ('the', 'moon', 'rose') enter at the bottom one after another and rise slowly; each lights a short column of small dots in every layer it passes through. Slow, even motion. At most three words on screen."
+  },
+  {
+    "concept": "The study",
+    "narration": "On 6 July 2026, researchers at Anthropic, the company that makes Claude, published a study of what they describe as a global workspace in language models. They report finding such a structure inside Claude. What follows is what they report: how information is used inside the model, not whether it has experiences. Where the film uses their shorthand, it will say so.",
+    "visual_type": "still",
+    "visual_description": "A quiet desk by a window in the early morning: a closed notebook and a single unlit lamp, pale blue dawn light on the wall behind. No people. Soft blue-grey with one faint warm highlight on the notebook, plenty of empty space. No text."
+  },
+  {
+    "concept": "The Jacobian lens",
+    "narration": "To look inside, the researchers built a tool they call the Jacobian lens, or J-lens, after a mathematical object called the Jacobian. For each word in the model's vocabulary, it finds the internal pattern that makes the model more likely to say that word later.",
+    "visual_type": "manim",
+    "visual_description": "The same stack of layers. A small clear lens shape slides slowly to a middle layer. Beside the stack a short list of three words fades in one by one, while the line of output at the top of the stack stays empty. Words on screen: 'J-lens' and the three listed words, five at most."
+  },
+  {
+    "concept": "The J-space",
+    "narration": "Reading these patterns gives a list of words that are, in the researchers' phrase, on the model's mind, without being said. They call the collection of these patterns the J-space. The researchers report that it holds only a few dozen concepts at a time, and accounts for less than a tenth of the model's internal activity.",
+    "visual_type": "manim",
+    "visual_description": "A wide field of many small, faint dots filling the frame. A small cluster of dots near the centre, less than a tenth of the field, brightens and is gently ringed. The label 'J-space' fades in beside the ring. One word on screen."
+  },
+  {
+    "concept": "Nobody designed it",
+    "narration": "The researchers report that nobody designed the J-space. Like a stream finding its own channel through sand, it emerged during training. They also report that it is already present before the model is trained to be an assistant, and that afterwards it begins to hold what they call the assistant's own reactions.",
+    "visual_type": "still",
+    "visual_description": "A shallow stream finding its own thin, winding channel through pale sand under a dim moon, seen from above. The channel branches once. Deep blue-black ground, silver moonlight on the water, pale sand, wide empty margins. No text."
+  },
+  {
+    "concept": "Content beyond the text",
+    "narration": "The J-space goes beyond the words on the page, the researchers report. When the model reads code with a bug that nobody mentions, the J-space holds the word error. When it reads the letters of a protein, it holds the protein's function. On a multi-step maths problem, the in-between steps appear in order.",
+    "visual_type": "still",
+    "visual_description": "A long pale ribbon of abstract strokes (not letters) unrolling across the lower third of a dark frame. Above it hover three soft glowing shapes, not attached to the ribbon, like faint lanterns above a road: one teal, one gold, one pale rose. Deep charcoal ground, large empty sky. No text."
+  },
+  {
+    "concept": "Reading the answer from the J-space",
+    "narration": "In one test, the model was asked to silently pick a sport. Before it answered, the J-space showed soccer. Then the researchers swapped that pattern for rugby, and Claude said it had picked rugby. From this the researchers conclude that the answer is read from the J-space, and not merely mirrored there.",
+    "visual_type": "manim",
+    "visual_description": "On the left, a small glowing circle labelled 'soccer' inside a faint ring. A thin arrow carries it to a plain rounded box on the right, the answer. The circle on the left slowly dissolves and a new circle labelled 'rugby' takes its place; the arrow lights again and the answer box changes to match. Two words on screen at a time at most."
+  },
+  {
+    "concept": "Control",
+    "narration": "The researchers also tested control. They asked the model to concentrate on citrus fruit while it copied an unrelated sentence about a painting. Orange appeared in the J-space, and nothing about fruit appeared in the output. Asked to work out three squared minus two silently, the J-space showed nine, and then seven at later layers.",
+    "visual_type": "still",
+    "visual_description": "A single orange resting on a plain wooden table beside an empty picture frame leaning on the wall; the frame holds only soft shadow. One low window gives dim side light. Muted orange against warm grey and dark brown, large quiet shadows. No text."
+  },
+  {
+    "concept": "A white bear",
+    "narration": "In another test, the model was told not to think about a concept. The concept then appeared in the J-space less than when it was told to think of it, but much more than when it was never mentioned. The researchers compare this to people who are told not to think of a white bear.",
+    "visual_type": "still",
+    "visual_description": "A wide snowfield at twilight, empty except for one small pale shape far in the distance, almost lost in the snow, with no detail and no face. Pale blue-grey and soft white, a huge area of open negative space. No text."
+  },
+  {
+    "concept": "Spider, ant, and the number of legs",
+    "narration": "The researchers also followed multi-step reasoning. For the number of legs on the animal that spins webs, spider appeared in the J-space partway through, and the answer was eight. With spider swapped for ant, the answer became six. When the model wrote a rhyming couplet, the planned rhyme word sat in the J-space at the start of the line.",
+    "visual_type": "still",
+    "visual_description": "A single dew-beaded web strung between two dry grass stems at dusk, empty and still, catching a little silver light. Below it, a small pale stone on dark ground. Silver-blue and charcoal, cool soft light, wide dark negative space. No creatures, no text."
+  },
+  {
+    "concept": "France becomes China",
+    "narration": "The researchers asked four questions about France: its capital, its language, its continent and its currency. With France swapped for China in the J-space, all four answers changed together: Beijing, Chinese, Asia and yuan. The researchers read this as one shared representation feeding many tasks, which is what a workspace is for.",
+    "visual_type": "manim",
+    "visual_description": "A single glowing node in the centre labelled 'France', with four thin lines running out to four small boxes that carry simple icons only, no words: a dot, a speech curve, a rough landmass, a coin. The central node changes to 'China'; all four boxes change at once and show 'Beijing', 'Chinese', 'Asia', 'yuan'. Never more than five words on screen."
+  },
+  {
+    "concept": "Heard widely",
+    "narration": "A workspace is not only a place where things are held. It also has to be heard widely. The researchers report that far more parts of the network read from and write to J-space patterns than do so with ordinary patterns.",
+    "visual_type": "still",
+    "visual_description": "A river basin seen from high above at night in moonlight: many thin streams gather from all sides into one broad river, which then fans out again into a wide branching delta. Deep navy land, silver water, no lights or buildings, wide margins. No text."
+  },
+  {
+    "concept": "A broadcasting hub",
+    "narration": "In some parts of the network, they report, it is about a hundred times more: wiring like a broadcasting hub.",
+    "visual_type": "ai_video",
+    "visual_description": "One continuous slow camera move along the face of layered stone-coloured strata, gliding toward a single small bright point set in the middle layer. As the camera drifts, fine threads of warm gold light spread outward from the point and reach gently into each layer above and below, then settle. Dark slate, warm gold, soft haze. No people, no machinery, no text."
+  },
+  {
+    "concept": "With the J-space removed",
+    "narration": "The researchers also tried removing the J-space. They report that a great deal carries on as before. The model still speaks fluently, judges whether a sentence is positive or negative, answers multiple-choice questions and pulls facts from passages, roughly as well as it did. Multi-step reasoning, though, drops to near zero.",
+    "visual_type": "manim",
+    "visual_description": "A row of five upright bars on a dark ground, four in a calm blue-grey and one in gold. A small bright ring above the row, the J-space, slowly fades away. The four blue-grey bars stay almost level; the gold bar slowly sinks to near the baseline. Two labels at most: 'reasoning' on the gold bar and 'the rest' under the others."
+  },
+  {
+    "concept": "Practised skills",
+    "narration": "In another test, the model was shown a Spanish passage, and the researchers swapped Spanish for French in its J-space. Asked to name the language, it said French. Asked for a famous author, it said Victor Hugo, instead of García Márquez. Asked simply to continue the passage, it still wrote fluent Spanish. The researchers describe practised skills as running automatically, like grammar for a fluent speaker.",
+    "visual_type": "still",
+    "visual_description": "Two paths crossing a dark plain side by side. One path is lit by a single small lantern and bends toward a distant hill; the other runs straight on beside it, unlit but continuous and sure. Navy and charcoal ground, one warm amber lantern, wide empty sky. No text."
+  },
+  {
+    "concept": "What the lens is used for",
+    "narration": "The researchers also describe a practical use. The lens shows some things the model holds but does not say, such as what they describe as the model privately noticing that a test is staged. With the findings laid out, the careful question is what they do, and do not, show.",
+    "visual_type": "still",
+    "visual_description": "A small lantern set on a stone ledge, lighting a short stretch of a dark wall; beyond the reach of its light the wall simply continues, unseen. Calm, still, symmetrical composition. Deep slate, soft amber, very low contrast, wide empty margins. No text."
+  }
+]

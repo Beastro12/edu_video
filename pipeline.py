@@ -5,6 +5,7 @@
     python pipeline.py "A paper from last month" --brief brief.md           # verified facts for new research
 """
 import argparse
+import shutil
 import sys
 from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from pathlib import Path
@@ -22,6 +23,7 @@ from utils import (
     brief_key,
     content_key,
     duration,
+    kept_brief,
     load_json,
     log,
     save_json,
@@ -50,21 +52,128 @@ def _write_text(path: Path, text: str) -> None:
         tmp.write_text(text, encoding="utf-8")
 
 
-def _stamp_brief(work: Path, brief: str | None) -> None:
-    """Stamp the build with the brief (or none) its script is written from, and refuse to go on
-    with a script written from another: the narration would not match the brief whose Sources
-    go into the description. Builds from before briefs existed have no stamp and count as none."""
-    this = brief_key(brief)
+def _script_started(work: Path) -> bool:
+    return (work / "outline.json").exists() or (work / "script.json").exists() or any(work.glob("chapter_*.json"))
+
+
+def _recorded_brief(work: Path) -> str:
+    """The brief the build's script is stamped with. Builds from before briefs existed have no
+    stamp and count as written without one."""
     stamp = work / config.BRIEF_KEY_FILE
-    recorded = stamp.read_text(encoding="utf-8").strip() if stamp.exists() else "none"
-    started = (work / "outline.json").exists() or (work / "script.json").exists() or any(work.glob("chapter_*.json"))
-    if started and recorded != this:
-        raise RuntimeError(
-            f"The script in {work} was written with a different brief (or with a brief and this run "
-            "has none, or the reverse). Rerun with the brief it was written from, or delete "
-            "outline.json, chapter_*.json and script.json to write it again with this one.")
-    if not stamp.exists() or recorded != this:  # before any generation, so a crash leaves it matching the files
-        _write_text(stamp, this)
+    return stamp.read_text(encoding="utf-8").strip() if stamp.exists() else "none"
+
+
+def _brief_conflict(work: Path, brief: str | None) -> str | None:
+    """Why `brief` (None: no brief) can't go on with the script already in `work`, or None. A
+    script written from another brief would not match the one whose Sources go into the
+    description. Reads only."""
+    if _recorded_brief(work) == brief_key(brief) or not _script_started(work):
+        return None
+    delete = "delete outline.json, chapter_*.json and script.json to write it again with this one"
+    if _recorded_brief(work) == "none":
+        return (f"The script in {work} was written without a brief; this run has one. "
+                f"Rerun without --brief, or {delete}.")
+    what = "written with a brief; this run has none" if brief is None else "written with a different brief"
+    kept = f" (--brief {work / config.BRIEF_FILE})" if kept_brief(work) is not None else ""
+    return f"The script in {work} was {what}. Rerun with the brief it was written from{kept}, or {delete}."
+
+
+def _stamp_brief(work: Path, brief: str | None) -> None:
+    """Stamp the build with the brief (or none) its script is written from, or refuse to go on
+    with a script written from another."""
+    conflict = _brief_conflict(work, brief)
+    if conflict:
+        raise RuntimeError(conflict)
+    if not (work / config.BRIEF_KEY_FILE).exists() or _recorded_brief(work) != brief_key(brief):
+        # before any generation, so a crash leaves a stamp that matches the files
+        _write_text(work / config.BRIEF_KEY_FILE, brief_key(brief))
+
+
+def _seed_folder(brief_path: Path, work: Path) -> Path | None:
+    """The folder of a brief that carries its reviewed script (P3-3): the outline.json next to
+    it. Not the build folder itself, which `--brief <work>/brief.md` points at."""
+    folder = brief_path.parent
+    if not (folder / "outline.json").exists() or folder.resolve() == work.resolve():
+        return None
+    return folder
+
+
+def _load_seed(seed: Path, brief: str) -> list[Path]:
+    """The chapter files, of those the seed's outline lists, that exist in the seed. Raises
+    ValueError saying what is wrong: the folder's script was reviewed with another version of its
+    brief (its brief.key), or the outline or a chapter file isn't what get_script reads."""
+    key_path = seed / config.BRIEF_KEY_FILE
+    recorded = key_path.read_text(encoding="utf-8").strip() if key_path.exists() else None
+    if recorded != brief_key(brief):
+        raise ValueError(f"the script in {seed} was reviewed with a different version of its brief "
+                         f"({key_path.name} {'is missing' if recorded is None else 'does not match'}): "
+                         f"re-review the chapters, then update {key_path} (python -c \"from utils import "
+                         f"brief_key; print(brief_key(open('{seed / config.BRIEF_FILE}', encoding='utf-8-sig')"
+                         f".read()), end='')\" > {key_path})")
+    outline_path = seed / "outline.json"
+    try:
+        chapters = load_json(outline_path)["chapters"]
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise ValueError(f"{outline_path} must be a JSON object with a 'chapters' list ({type(e).__name__})") from e
+    if not (isinstance(chapters, list) and chapters and all(
+            isinstance(c, dict) and isinstance(c.get("number"), int) and "title" in c and "minutes" in c
+            for c in chapters)):
+        raise ValueError(f"{outline_path}: 'chapters' must be a list of chapters with number, title and minutes")
+    scene_keys = set(script_agent.SCENE["properties"])
+    visual_types = script_agent.SCENE["properties"]["visual_type"]["enum"]
+    files = []
+    for ch in chapters:
+        path = seed / f"chapter_{ch['number']:02d}.json"
+        if path.exists():
+            try:
+                scenes = load_json(path)
+            except (OSError, ValueError) as e:
+                raise ValueError(f"{path} is not readable JSON ({type(e).__name__})") from e
+            if not isinstance(scenes, list):
+                raise ValueError(f"{path} must be a JSON list of scenes")
+            for i, scene in enumerate(scenes, 1):
+                if not (isinstance(scene, dict) and set(scene) == scene_keys and scene["visual_type"] in visual_types):
+                    raise ValueError(f"{path}, scene {i}: needs exactly the keys {sorted(scene_keys)} "
+                                     f"and a visual_type of {visual_types}")
+            files.append(path)
+    return files
+
+
+def _plan_seed(seed: Path, chapter_files: list[Path], work: Path) -> tuple[list[Path], str | None]:
+    """What seeding would do to `work`, file by file (P3-3): the seed files it would copy (the
+    outline first, then the chapters the build lacks), and a note when it leaves something because
+    the build's copy differs. The build's outline must be the seed's, or none is: its chapters
+    belong to it. Reads only."""
+    outline = seed / "outline.json"
+    if (work / outline.name).exists() and load_json(work / outline.name) != load_json(outline):
+        return [], (f"{outline.name} in {work} isn't the one in {seed}; not seeding (to start from the "
+                    "seed's, delete the build's outline.json, chapter_*.json and script.json)")
+    copy = [] if (work / outline.name).exists() else [outline]
+    differ = []
+    for path in chapter_files:
+        if not (work / path.name).exists():
+            copy.append(path)
+        elif load_json(work / path.name) != load_json(path):
+            differ.append(path.name)
+    note = (f"{', '.join(differ)}: not the same in {work} as in {seed}; keeping the build's (to take "
+            "the seed's, delete the build's copy and script.json)") if differ else None
+    return copy, note
+
+
+def seed_script(seed: Path, chapter_files: list[Path], work: Path, brief: str) -> None:
+    """Start or complete the build's script from the reviewed one in the brief's folder (P3-3):
+    its outline and chapters, each copied only where the build has no file of that name. The
+    writer does the rest, with the brief. Stamps first, after the brief check, so a crash
+    mid-copy leaves a stamp that matches the files; a rerun finishes the job."""
+    _stamp_brief(work, brief)
+    copy, note = _plan_seed(seed, chapter_files, work)
+    for path in copy:
+        with atomic_output(work / path.name) as tmp:
+            shutil.copyfile(path, tmp)
+    if copy:
+        print(f"• script: seeded {', '.join(p.name for p in copy)} from {seed}")
+    if note:
+        print(f"• script: {note}")
 
 
 def get_script(topic: str, minutes: float, work: Path, skip_critic: bool, brief: str | None = None) -> dict:
@@ -166,21 +275,30 @@ def make_visual(scene: dict, target_s: float, out_dir: Path, allow_veo: bool,
     return manim_agent.render_scene(scene, target_s, out_dir, atmospheric), "manim"
 
 
-def _planned_scenes(minutes: float, work: Path,
-                    brief: str | None = None) -> tuple[list[dict], list[tuple[str, int, int]]]:
+def _planned_scenes(minutes: float, work: Path, brief: str | None = None,
+                    seed: Path | None = None) -> tuple[list[dict], list[tuple[str, int, int]]]:
     """Scenes this run will voice and illustrate, and the script-stage Claude calls still to
     make as (label, input_tokens, output_tokens). Real text where it exists; a synthetic
-    scene mix following D3 where it doesn't. Every script-stage call carries the brief."""
+    scene mix following D3 where it doesn't. Every script-stage call carries the brief. Files the
+    build lacks are planned from `seed` where seeding would copy them in (P3-3), without copying."""
     if (work / "script.json").exists():
         return load_json(work / "script.json")["scenes"], []
+    own_outline = work / "outline.json"
+    seeded = (seed is not None and (seed / "outline.json").exists()
+              and (not own_outline.exists() or load_json(own_outline) == load_json(seed / "outline.json")))
+    sources = [work, seed] if seeded else [work]  # per file: the build's own, else the one seeding would copy in
+
+    def find(name: str) -> Path | None:
+        return next((d / name for d in sources if (d / name).exists()), None)
+
     calls = []
     prompt_tokens = review_tokens = config.EST_PROMPT_TOKENS
     if brief is not None:
         block = script_agent.brief_block(brief)
         prompt_tokens += ledger.claude_input_estimate(block)
         review_tokens += ledger.claude_input_estimate(block, critic.BRIEF_CHECK)
-    outline_path = work / "outline.json"
-    if outline_path.exists():
+    outline_path = find("outline.json")
+    if outline_path:
         chapters = load_json(outline_path)["chapters"]
     else:
         chapters = [{"number": i + 1, "minutes": minutes / config.EST_CHAPTERS}
@@ -188,8 +306,8 @@ def _planned_scenes(minutes: float, work: Path,
         calls.append(("outline", prompt_tokens, config.EST_OUTLINE_TOKENS_PER_CHAPTER * config.EST_CHAPTERS))
     scenes = []
     for ch in chapters:
-        ch_path = work / f"chapter_{ch['number']:02d}.json"
-        if ch_path.exists():
+        ch_path = find(f"chapter_{ch['number']:02d}.json")
+        if ch_path:
             scenes += load_json(ch_path)
             continue
         words = ch["minutes"] * config.WORDS_PER_MIN
@@ -211,12 +329,12 @@ def _still_rejected_for_good(scene: dict, visuals: Path) -> bool:
 
 def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool,
                   worst_case: bool = False, retry_failed: bool = False,
-                  brief: str | None = None) -> dict[str, float]:
+                  brief: str | None = None, seed: Path | None = None) -> dict[str, float]:
     """Projected spend in EUR for what this run would still have to buy. Cached work costs
     nothing, and a generation that failed before costs its fallback (P1-7). Calls no paid API.
     Typical: one critic round, one Manim attempt; worst case: every critic round and every
     Manim retry."""
-    scenes, calls = _planned_scenes(minutes, work, brief)
+    scenes, calls = _planned_scenes(minutes, work, brief, seed)
     failed = Failures(failure_log.path(work), retry=retry_failed).earlier
     model = config.CLAUDE_MODEL
     reviews = 0 if skip_critic else (config.MAX_CRITIC_ROUNDS if worst_case else 1)
@@ -366,10 +484,14 @@ def main():
                     help="markdown research brief (verified facts, hedging rules, ## Sources) for films "
                          "about recent research; the script agents rely on it and its Sources go "
                          "into the YouTube description. Once the script exists, a different brief "
-                         "(or none) is refused")
+                         "(or none) is refused; a rerun may leave it out and uses the kept one. "
+                         "An outline.json (and chapter_NN.json files) next to the brief is a "
+                         "reviewed script: a run with --brief copies in whichever of its files "
+                         "the build lacks (a rerun without --brief doesn't)")
     args = ap.parse_args()
 
-    brief = None
+    work = Path(config.BUILD_DIR) / slugify(args.topic)
+    brief, seed, seed_chapters = None, None, []
     if args.brief is not None:
         try:
             brief = args.brief.read_text(encoding="utf-8-sig")
@@ -377,16 +499,36 @@ def main():
             ap.error(f"--brief: cannot read {args.brief} ({type(e).__name__})")
         if not brief.strip():
             ap.error(f"--brief: {args.brief} is empty")
+        seed = _seed_folder(args.brief, work)
+        if seed is not None:
+            try:
+                seed_chapters = _load_seed(seed, brief)
+            except ValueError as e:
+                ap.error(f"--brief: {e}")
+    elif _script_started(work):
+        brief = kept_brief(work)  # a rerun: the script goes on with the brief it was written with
+        if brief is not None:
+            print(f"• brief: using the one this script was written with ({work / config.BRIEF_FILE})")
 
-    work = Path(config.BUILD_DIR) / slugify(args.topic)
     allow_veo = ai_video.available() and not args.no_ai_video
     if args.estimate:
+        conflict = _brief_conflict(work, brief)
+        if conflict:
+            print(f"this run would be refused: {conflict}")
+        if seed is not None:
+            copy, note = _plan_seed(seed, seed_chapters, work)
+            if copy:
+                print(f"• script: would seed {', '.join(p.name for p in copy)} from {seed}")
+            if note:
+                print(f"• script: {note}")
         print_estimate(args.topic, estimate_cost(args.minutes, work, allow_veo, args.skip_critic,
-                                                 retry_failed=args.retry_failed, brief=brief),
+                                                 retry_failed=args.retry_failed, brief=brief, seed=seed),
                        estimate_cost(args.minutes, work, allow_veo, args.skip_critic, worst_case=True,
-                                     retry_failed=args.retry_failed, brief=brief))
+                                     retry_failed=args.retry_failed, brief=brief, seed=seed))
         return
     work.mkdir(parents=True, exist_ok=True)
+    if seed is not None:
+        seed_script(seed, seed_chapters, work, brief)
 
     script = get_script(args.topic, args.minutes, work, args.skip_critic, brief)
     if brief is not None:

@@ -191,12 +191,20 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   Accept: `config.STYLES` holds each preset's still-prompt suffix and Manim palette; `calm`
   (the default) leaves every prompt and cache key byte-identical; `flat` changes the still
   prompt and the Manim palette; the flat background stays above the QA black threshold.
-- [ ] P3-3 — The film's brief and script (`topics/ai-global-workspace/`)
+- [x] P3-3 — The film's brief and script (`topics/ai-global-workspace/`)
   Accept: `brief.md` labels every fact by source (primary verified vs secondary) with binding
   hedging rules; the outline and chapters are written with the pipeline's own prompts and
   reviewed with the critic's; every factual sentence maps to a brief line (table in
   `script.md`); `get_script` seeds missing outline/chapter files from the brief's folder;
   `--script-only` builds `script.json` with no keys, and `--estimate` runs.
+
+- [ ] P3-4 — A rerun without `--brief` restores a deleted chapter from the topic folder
+  Found in P3-3's review: seeding happens only on a run with `--brief`. On a rerun that leaves
+  it out (allowed, since the kept brief is used), a deleted chapter goes to the writer and
+  replaces reviewed scenes (a paid call). README and `--help` now say so.
+  Accept: seeding records its folder in the build (e.g. `seed`, its path); a rerun without
+  `--brief` seeds from it while that folder's `brief.key` equals the build's stamp; test: a
+  chapter deleted from a seeded build comes back on a rerun without `--brief`, zero calls.
 
 ## P2 — scale and polish
 

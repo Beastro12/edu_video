@@ -1,0 +1,67 @@
+{
+  "title": "A Small Lit Stage: Global Workspace Theory and Language Models",
+  "chapters": [
+    {
+      "number": 1,
+      "title": "The Quiet Majority",
+      "summary": "Most of what a brain does runs outside awareness. Masking and blindsight show that information can influence behaviour without being consciously seen, and only part of the brain's activity is consciously accessible. This raises an older question: how are a few things brought forward out of so many?",
+      "key_ideas": [
+        "Breathing, balance, posture and reading run without our awareness",
+        "Masking: a word that is flashed and covered can still influence what a person does next",
+        "Blindsight: people who say they see nothing on one side still guess better than chance",
+        "'Consciously accessible' means we can describe it, hold it in mind and use it deliberately"
+      ],
+      "minutes": 2.0
+    },
+    {
+      "number": 2,
+      "title": "The Global Workspace Idea",
+      "summary": "Bernard Baars pictured the mind as many quiet specialists plus a small, lit shared stage that broadcasts to all of them. Dehaene, Changeux and Naccache developed a brain version, with ignition as its signature, and a large 2025 adversarial test gave mixed results for it and its rival.",
+      "key_ideas": [
+        "Many specialist processes work in parallel, unconsciously and largely apart",
+        "A small workspace holds a little at a time and broadcasts it to all specialists",
+        "The global neuronal workspace and ignition",
+        "The 2025 adversarial test: matched some predictions, challenged key parts, nothing settled"
+      ],
+      "minutes": 2.5
+    },
+    {
+      "number": 3,
+      "title": "Inside a Language Model",
+      "summary": "A plain account of how a language model processes text in layers, then what Anthropic's July 2026 study reports: a small set of patterns, read with the J-lens, that behaves like a workspace. The chapter follows the experiments in order, and ends with what happens when the J-space is removed.",
+      "key_ideas": [
+        "Layers of numbers; the J-lens and the J-space",
+        "A few dozen concepts, under a tenth of the activity, emerged in training",
+        "Unspoken content, report, control and reasoning, shown by swapping patterns (soccer to rugby, spider to ant)",
+        "One shared representation feeds many tasks (France to China); a broadcasting-hub pattern of wiring",
+        "With the J-space removed, reasoning drops while practised skills carry on"
+      ],
+      "minutes": 6.25
+    },
+    {
+      "number": 4,
+      "title": "Access Is Not Experience",
+      "summary": "Ned Block's distinction between access and experience frames what the study can and cannot show. The researchers say their experiments speak to access, not experience, that their tool is imperfect, and that the model's workspace differs from the brain's in several ways. Researchers also disagree about what consciousness depends on, and outside experts were invited to comment.",
+      "key_ideas": [
+        "Access (available to report, reason and act) versus phenomenal experience (what it is like)",
+        "What the researchers say the study does not show",
+        "Limits of the J-lens",
+        "Differences from the brain: loops versus one pass, fading versus looking back, images and sounds versus words",
+        "Functional theories versus views that depend on biology or physical structure",
+        "Outside commentary, not characterised"
+      ],
+      "minutes": 2.75
+    },
+    {
+      "number": 5,
+      "title": "Where the Question Rests",
+      "summary": "A gentle close. The researchers note the ethical weight of building systems with experiences and who would need to decide. The film restates what was measured (access), what was not (experience), and ends without a verdict.",
+      "key_ideas": [
+        "Ethical questions belong to many people",
+        "What was measured, and what was not",
+        "The question stays open"
+      ],
+      "minutes": 1.5
+    }
+  ]
+}

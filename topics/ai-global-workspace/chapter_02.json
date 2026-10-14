@@ -1,0 +1,44 @@
+[
+  {
+    "concept": "Many quiet specialists",
+    "narration": "That older idea is called global workspace theory. It was proposed in the 1980s by the psychologist Bernard Baars. He pictured the mind as a great many specialist processes, all working at once. They work unconsciously, and largely apart from one another, each at its own small task.",
+    "visual_type": "still",
+    "visual_description": "A dark valley seen from above at night, filled with many small, separate workshops, each lit by a single dim warm window and each standing a little apart from the others. No paths between them, no figures. Deep navy ground, faint amber windows, low contrast, wide dark margins. No text."
+  },
+  {
+    "concept": "A lit stage in a dark theatre",
+    "narration": "Alongside them, in this picture, there is a small shared workspace. Baars used the image of a lit stage in a dark theatre. Only a little can stand on the stage at a time, while the rest of the theatre stays in shadow.",
+    "visual_type": "still",
+    "visual_description": "The inside of a vast dark theatre seen from the back of the hall: rows of empty seats fading into shadow, and far ahead one small stage holding a single soft pool of warm light. Symmetrical, still composition. Deep brown-black, warm amber on the stage, a great deal of darkness. No people, no text."
+  },
+  {
+    "concept": "Broadcast from the workspace",
+    "narration": "What stands on the stage is broadcast to all of the specialists at once, however many there are and however far apart they work. In this theory, information becomes conscious when it enters the workspace. Everything else goes on, unseen, in the dark.",
+    "visual_type": "manim",
+    "visual_description": "A small bright circle at the centre of the frame, ringed by many small dim circles (the quiet specialists). A short bar of light appears inside the central circle; then a slow pulse travels outward along thin lines and every surrounding circle glows briefly in turn, then fades back. Only one word on screen: 'workspace'."
+  },
+  {
+    "concept": "The brain's version",
+    "narration": "Stanislas Dehaene, Jean-Pierre Changeux and Lionel Naccache developed a version for the brain, which they call the global neuronal workspace. In it, long-range connections, especially in the front and top of the brain, link regions that lie far apart. It is Baars's picture, given a place in the wiring of the brain.",
+    "visual_type": "still",
+    "visual_description": "A schematic map of a dark landscape with several separate patches of faint light. Long, thin arcs of pale gold light join distant patches across the whole frame, gathering most densely toward the upper part of the frame. No outlines of heads or bodies. Deep navy ground, fine gold threads, lots of empty space. No text."
+  },
+  {
+    "concept": "Ignition",
+    "narration": "When something becomes consciously seen, they propose, activity can swiftly strengthen and spread across that wide network, a fraction of a second later. Picture the lights of a town coming on, street after street. They call this ignition. It is a change of scale, from a small flicker to a wide, shared glow.",
+    "visual_type": "manim",
+    "visual_description": "A web of small dim nodes joined by faint lines. One node on the left glows faintly. After a brief pause it brightens and a wave of light sweeps slowly outward, lighting node after node until the whole web glows evenly, then gently settles. One word on screen: 'ignition'."
+  },
+  {
+    "concept": "A test between rival theories",
+    "narration": "Ideas like these can be tested. A study published in Nature in 2025 was an adversarial test, in which supporters of rival theories agreed their predictions in advance. That means the predictions were fixed before any data came in. Then over 250 people were measured, using several different brain imaging methods.",
+    "visual_type": "still",
+    "visual_description": "A quiet table under a single lamp in a dim room. Two sealed plain envelopes lie side by side on the wood, untouched, with a closed notebook between them. Soft warm light on the table, the room beyond in shadow. Muted green, cream and brown. No people, no text."
+  },
+  {
+    "concept": "Influential, not settled",
+    "narration": "The results matched some predictions of global workspace theory, and some predictions of a rival, integrated information theory. They also challenged key parts of each. Global workspace theory is influential, but not settled. Several other theories exist, and there is no consensus. That is the ground on which the next part of the story stands.",
+    "visual_type": "still",
+    "visual_description": "A dark hillside at dusk with several small lanterns of different colours and shapes set apart on the grass, none brighter than the others, each casting its own soft circle of light. Muted teal, amber, rose and pale green against deep blue-grey, with a wide empty sky. No text."
+  }
+]

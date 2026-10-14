@@ -60,7 +60,13 @@ python pipeline.py "What happens inside a neutron star" --retry-failed
 python pipeline.py "What happens inside a neutron star" --skip-critic
 
 # A film about recent research: a markdown file of verified facts with a "## Sources" heading (one
-# entry per line, shown in the YouTube description). A brief change after the script exists is refused
+# entry per line, shown in the YouTube description). A brief change after the script exists is refused;
+# a rerun may leave --brief out. An outline.json (+ chapter_NN.json) beside the brief is a reviewed
+# script (see topics/): a run with --brief copies in any of its files the build lacks, so a deleted
+# chapter comes back from there; only chapters the folder doesn't have go to the writer. Its
+# brief.key records the brief version the chapters were reviewed with: after editing the brief,
+# re-review the chapters and update brief.key (the error says how); until then seeding is refused.
+# A rerun without --brief doesn't seed: a deleted chapter would be written afresh.
 python pipeline.py "A paper from last month" --brief brief.md
 ```
 

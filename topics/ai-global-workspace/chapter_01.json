@@ -1,0 +1,32 @@
+[
+  {
+    "concept": "A body working quietly",
+    "narration": "Right now, a body is breathing, holding its balance, and keeping its posture, mostly without being asked.",
+    "visual_type": "ai_video",
+    "visual_description": "One continuous, slow camera move gliding low and forward over a calm dark sea at dusk. The swell lifts and settles in a slow, even rhythm, like breathing. Far ahead, a few small warm points of light on a distant shore. Deep blue-grey water, soft amber lights, thin mist, a wide empty sky. Nothing else in frame."
+  },
+  {
+    "concept": "Most of the work is hidden",
+    "narration": "Most of what a brain does goes on without our awareness. Even reading depends on hidden work. The eyes meet shapes on a page, and somewhere out of sight those shapes are turned into words. We meet only the result, finished and quiet, as if it had arrived by itself.",
+    "visual_type": "still",
+    "visual_description": "A close, dim view of a page of small abstract strokes (not letters) set in even lines, softly blurred at the edges. A few of the strokes glow faintly from behind, as if a lamp were beneath the paper. Charcoal and deep brown ground, pale cream strokes, one soft amber glow, large areas of empty dark. No text."
+  },
+  {
+    "concept": "Masking: seen without being seen",
+    "narration": "Researchers can show this in the laboratory. In an experiment called masking, a word is flashed for a few hundredths of a second, and then covered by a pattern. Often the person does not consciously see the word. And yet it can still influence what they do next.",
+    "visual_type": "manim",
+    "visual_description": "A slow horizontal timeline on a dark background. A short pale bar slides in and fades, labelled 'flash'. Immediately a longer hatched bar covers the same spot, labelled 'mask'. After the hatched bar ends, a small dot travelling along a straight path takes a gentle, smooth bend, showing that the unseen word still shaped what came next. Only two words on screen, no numbers."
+  },
+  {
+    "concept": "Blindsight",
+    "narration": "Blindsight shows the same thing in another way. Some people have damage to the brain's main visual area, the primary visual cortex, and say that they see nothing on one side. Yet when they are asked to guess, they still point to objects on that side better than chance. Their guesses carry information that their own words do not.",
+    "visual_type": "still",
+    "visual_description": "A dark horizontal landscape divided down the middle: the right half dimly lit, the left half almost black, with a small pale object resting on the ground in the dark half. A single thin thread of light runs from that object, across the boundary, and ends in a small pale point in the lit half. No figures. Navy, charcoal and muted pale gold, a great deal of negative space. No text."
+  },
+  {
+    "concept": "What is consciously accessible",
+    "narration": "Only some of what the brain does is consciously accessible. We can describe it, hold it in mind, and use it deliberately. A research post from Anthropic, published in 2026, opens with this very distinction. We will come to it. First, an older idea, about how a few things are brought forward out of so many.",
+    "visual_type": "still",
+    "visual_description": "One small circle of warm light on a large dark field, with a few faint dim shapes scattered at a distance, outside the light. Overhead view, calm and symmetrical. Deep indigo ground, soft amber glow, wide empty margins. No text."
+  }
+]

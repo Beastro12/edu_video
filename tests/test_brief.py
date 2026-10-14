@@ -4,6 +4,7 @@ different brief being mixed into a script already written, and its Sources reach
 description. Without a brief every prompt is exactly what it was before."""
 import copy
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -212,16 +213,92 @@ def test_a_different_brief_is_refused_once_any_script_file_exists(tmp_path, monk
     assert (build / "brief.key").read_text() == content_key("brief", BRIEF)
 
 
-def test_a_run_without_a_brief_is_refused_on_a_script_written_with_one(tmp_path, monkeypatch, calls, build):
+def test_a_run_without_a_brief_is_refused_when_the_kept_copy_is_not_the_one_the_script_was_written_with(
+        tmp_path, monkeypatch, calls, build):
     run_cli(monkeypatch, "topic", "--brief", brief_file(tmp_path, BRIEF), "--script-only")
+    (build / "brief.md").write_text(OTHER_BRIEF)  # edited since: no longer what the stamp names
     n = len(calls)
 
-    with pytest.raises(RuntimeError, match="different brief"):
+    with pytest.raises(RuntimeError, match="written with a brief; this run has none") as refused:
         run_cli(monkeypatch, "topic", "--script-only")
 
+    assert "(--brief" not in str(refused.value), "no matching copy to suggest"
     assert len(calls) == n
+    assert (build / "brief.md").read_text() == OTHER_BRIEF
+    assert (build / "brief.key").read_text() == content_key("brief", BRIEF)
+
+
+def test_a_run_without_a_brief_is_refused_by_get_script_but_names_the_kept_copy(tmp_path, calls):
+    pipeline.get_script("topic", 4, tmp_path, skip_critic=False, brief=BRIEF)
+    (tmp_path / "brief.md").write_text(BRIEF)  # keep_brief's doing, in `main`
+
+    with pytest.raises(RuntimeError, match="written with a brief; this run has none") as refused:
+        pipeline.get_script("topic", 4, tmp_path, skip_critic=False)
+
+    assert f"(--brief {tmp_path / 'brief.md'})" in str(refused.value)
+
+
+def test_a_rerun_without_a_brief_goes_on_with_the_kept_one(tmp_path, monkeypatch, calls, build, capsys):
+    run_cli(monkeypatch, "topic", "--brief", brief_file(tmp_path, BRIEF), "--script-only")
+    for name in ("chapter_02.json", "script.json", "script.meta.json"):
+        (build / name).unlink()  # chapter 2 is still to be written
+    n = len(calls)
+    capsys.readouterr()
+
+    run_cli(monkeypatch, "topic", "--script-only")
+
+    assert f"• brief: using the one this script was written with ({build / 'brief.md'})" in capsys.readouterr().out
+    assert [c[0] for c in calls[n:]] == ["chapter", "review"]
+    assert all(c[2].startswith(BRIEF_BLOCK) for c in calls[n:]), "the writer and critic still have the brief"
     assert (build / "brief.md").read_text() == BRIEF
     assert (build / "brief.key").read_text() == content_key("brief", BRIEF)
+
+
+def test_the_estimate_of_a_rerun_uses_the_kept_brief(tmp_path, monkeypatch, calls, build):
+    run_cli(monkeypatch, "topic", "--brief", brief_file(tmp_path, BRIEF), "--script-only")
+    seen = []
+
+    def estimate(*a, **k):
+        seen.append((k.get("brief"), k.get("worst_case", False)))
+        return {"claude": 0.0, "elevenlabs": 0.0, "images": 0.0, "veo": 0.0}
+
+    monkeypatch.setattr(pipeline, "estimate_cost", estimate)
+    run_cli(monkeypatch, "topic", "--estimate")
+
+    assert seen == [(BRIEF, False), (BRIEF, True)]
+
+
+def test_a_different_brief_is_refused_and_the_kept_copy_is_suggested(tmp_path, monkeypatch, calls, build):
+    run_cli(monkeypatch, "topic", "--brief", brief_file(tmp_path, BRIEF), "--script-only")
+
+    with pytest.raises(RuntimeError, match="written with a different brief") as refused:
+        run_cli(monkeypatch, "topic", "--brief", brief_file(tmp_path, OTHER_BRIEF, "other.md"), "--script-only")
+
+    assert f"Rerun with the brief it was written from (--brief {build / 'brief.md'})" in str(refused.value)
+
+
+def test_the_estimate_says_when_the_run_would_be_refused_and_still_prints_it(tmp_path, monkeypatch, calls, build,
+                                                                             capsys):
+    monkeypatch.setattr(config, "GOOGLE_API_KEY", None)
+    run_cli(monkeypatch, "topic", "--brief", brief_file(tmp_path, BRIEF), "--script-only")
+    n = len(calls)
+    capsys.readouterr()
+
+    run_cli(monkeypatch, "topic", "--brief", brief_file(tmp_path, OTHER_BRIEF, "other.md"), "--estimate")
+
+    out = capsys.readouterr().out
+    assert "this run would be refused: The script in " in out and "written with a different brief" in out
+    assert out.index("would be refused") < out.index("Projected cost"), "before the estimate, which is still there"
+    assert len(calls) == n
+
+
+def test_the_conflict_check_only_reads(tmp_path):
+    assert pipeline._brief_conflict(tmp_path, BRIEF) is None
+    save_json(tmp_path / "outline.json", OUTLINE)  # a build from before briefs existed
+
+    assert "written without a brief; this run has one" in pipeline._brief_conflict(tmp_path, BRIEF)
+    assert pipeline._brief_conflict(tmp_path, None) is None
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["outline.json"], "no stamp written"
 
 
 def test_a_brief_is_refused_on_a_script_written_without_one(tmp_path, monkeypatch, calls, build):
@@ -229,7 +306,7 @@ def test_a_brief_is_refused_on_a_script_written_without_one(tmp_path, monkeypatc
     assert (build / "brief.key").read_text() == "none"
     n = len(calls)
 
-    with pytest.raises(RuntimeError, match="different brief"):
+    with pytest.raises(RuntimeError, match="written without a brief; this run has one"):
         run_cli(monkeypatch, "topic", "--brief", brief_file(tmp_path, BRIEF), "--script-only")
 
     assert len(calls) == n
@@ -242,7 +319,7 @@ def test_a_build_from_before_briefs_existed_counts_as_written_without_one(tmp_pa
     (build / "brief.key").unlink()  # such builds have no stamp
     n = len(calls)
 
-    with pytest.raises(RuntimeError, match="different brief"):
+    with pytest.raises(RuntimeError, match="written without a brief; this run has one"):
         run_cli(monkeypatch, "topic", "--brief", brief_file(tmp_path, BRIEF), "--script-only")
     assert not (build / "brief.key").exists()
 
@@ -317,6 +394,300 @@ def test_an_unreadable_or_empty_brief_is_a_usage_error(tmp_path, monkeypatch, ca
     assert stop.value.code == 2
     assert message in capsys.readouterr().err
     assert not build.exists(), "nothing was started"
+
+
+# --- a brief's folder with its reviewed script (P3-3) ------------------------
+
+SEEDED = {1: ["The first seeded line, spoken slowly. " * 3, "A second seeded line."],
+          2: ["The second chapter opens with a seeded line. " * 4]}
+
+
+def seeded_chapter(n):
+    return [{"concept": f"seed {n}.{i}", "narration": text, "visual_type": "still", "visual_description": "d"}
+            for i, text in enumerate(SEEDED[n], 1)]
+
+
+@pytest.fixture
+def folder(tmp_path):
+    """A brief's folder carrying its reviewed script: the outline and both chapters, and the key
+    of the brief they were reviewed with."""
+    folder = tmp_path / "topics" / "demo"
+    folder.mkdir(parents=True)
+    (folder / "brief.md").write_text(BRIEF, encoding="utf-8")
+    (folder / "brief.key").write_text(content_key("brief", BRIEF))
+    save_json(folder / "outline.json", OUTLINE)
+    for n in SEEDED:
+        save_json(folder / f"chapter_{n:02d}.json", seeded_chapter(n))
+    return folder
+
+
+def seed_run(monkeypatch, folder, *flags):
+    run_cli(monkeypatch, "topic", "--brief", str(folder / "brief.md"), *(flags or ("--script-only",)))
+
+
+def script_narrations(build):
+    return [s["narration"] for s in json.loads((build / "script.json").read_text())["scenes"]]
+
+
+def test_a_seeded_script_only_builds_the_script_without_calling_claude(folder, monkeypatch, calls, build, capsys):
+    seed_run(monkeypatch, folder)
+
+    assert calls == []
+    assert script_narrations(build) == SEEDED[1] + SEEDED[2]
+    assert (build / "brief.key").read_text() == content_key("brief", BRIEF), "the folder's script goes with its brief"
+    assert (build / "brief.md").read_text() == BRIEF
+    assert f"• script: seeded outline.json, chapter_01.json, chapter_02.json from {folder}" in capsys.readouterr().out
+    assert json.loads((build / "outline.json").read_text()) == OUTLINE
+    assert not list(build.glob("*.partial-*"))
+
+
+def test_a_rerun_of_a_seeded_build_goes_on_quietly_and_calls_nothing(folder, monkeypatch, calls, build, capsys):
+    seed_run(monkeypatch, folder)
+    capsys.readouterr()
+
+    seed_run(monkeypatch, folder)
+
+    assert calls == []
+    out = capsys.readouterr().out
+    assert out == "• script: using cached script.json (edit it freely)\nScript saved to " + str(
+        build / "script.json") + ". Edit it, then rerun without --script-only.\n", "nothing to say about the seed"
+
+
+def test_a_partial_seed_leaves_the_missing_chapter_to_the_writer_with_the_brief(folder, monkeypatch, calls, build,
+                                                                                capsys):
+    (folder / "chapter_02.json").unlink()
+
+    seed_run(monkeypatch, folder)
+
+    assert [c[0] for c in calls] == ["chapter", "review"]
+    chapter, review = calls[0][2], calls[1][2]
+    assert chapter.startswith(BRIEF_BLOCK) and "Write chapter 2: Ch2" in chapter
+    assert SEEDED[1][-1] in chapter, "chapter 2 continues from the seeded chapter 1"
+    assert review.startswith(BRIEF_BLOCK + CRITIC_CHECK)
+    assert f"seeded outline.json, chapter_01.json from {folder}" in capsys.readouterr().out
+    assert (build / "chapter_01.json").exists() and (build / "chapter_02.json").exists()
+
+
+def test_an_interrupted_seed_is_completed_on_the_rerun_without_calling_claude(folder, monkeypatch, calls, build,
+                                                                             capsys):
+    real, copies = shutil.copyfile, []
+
+    def dies_on_the_third_copy(src, dst, *args, **kwargs):
+        if len(copies) == 2:
+            raise OSError("disk full")
+        copies.append(src)
+        return real(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "copyfile", dies_on_the_third_copy)
+    with pytest.raises(OSError, match="disk full"):
+        seed_run(monkeypatch, folder)
+    assert sorted(p.name for p in build.iterdir()) == ["brief.key", "chapter_01.json", "outline.json"]
+    assert (build / "brief.key").read_text() == content_key("brief", BRIEF), "the stamp went in first"
+    monkeypatch.setattr(shutil, "copyfile", real)
+    capsys.readouterr()
+
+    seed_run(monkeypatch, folder)
+
+    assert calls == [], "the reviewed chapter is copied, not rewritten"
+    assert script_narrations(build) == SEEDED[1] + SEEDED[2]
+    assert f"• script: seeded chapter_02.json from {folder}" in capsys.readouterr().out
+
+
+def test_a_chapter_deleted_from_a_seeded_build_is_seeded_again_not_rewritten(folder, monkeypatch, calls, build,
+                                                                            capsys):
+    seed_run(monkeypatch, folder)
+    for name in ("chapter_02.json", "script.json", "script.meta.json"):
+        (build / name).unlink()
+    capsys.readouterr()
+
+    seed_run(monkeypatch, folder)
+
+    assert calls == []
+    assert script_narrations(build) == SEEDED[1] + SEEDED[2]
+    assert f"• script: seeded chapter_02.json from {folder}" in capsys.readouterr().out
+
+
+def test_a_build_chapter_that_differs_from_the_seed_is_kept_and_named(folder, monkeypatch, calls, build, capsys):
+    seed_run(monkeypatch, folder)
+    edited = seeded_chapter(1)
+    edited[0]["narration"] = "A line edited in the build."
+    save_json(build / "chapter_01.json", edited)
+    capsys.readouterr()
+
+    seed_run(monkeypatch, folder)
+
+    out = capsys.readouterr().out
+    assert (f"• script: chapter_01.json: not the same in {build} as in {folder}; keeping the build's "
+            "(to take the seed's, delete the build's copy and script.json)") in out
+    assert "chapter_02.json" not in out.split("keeping")[0], "only the one that differs is named"
+    assert calls == [] and json.loads((build / "chapter_01.json").read_text()) == edited
+
+
+def test_a_build_whose_outline_is_not_the_seeds_is_not_seeded(folder, monkeypatch, calls, build, capsys):
+    build.mkdir(parents=True)
+    own = {"title": "Mine", "chapters": [OUTLINE["chapters"][0]]}
+    save_json(build / "outline.json", own)
+    (build / "brief.key").write_text(content_key("brief", BRIEF))
+
+    seed_run(monkeypatch, folder)
+
+    assert (f"• script: outline.json in {build} isn't the one in {folder}; not seeding (to start from the "
+            "seed's, delete the build's outline.json, chapter_*.json and script.json)") in capsys.readouterr().out
+    assert json.loads((build / "outline.json").read_text()) == own
+    assert [c[0] for c in calls] == ["chapter", "review"], "the build's own outline is written out as usual"
+    assert script_narrations(build) == [SCENES[0]["narration"]], "nothing of the folder's chapters"
+
+
+def test_the_brief_kept_in_the_build_folder_is_not_a_seed_folder(tmp_path, monkeypatch, calls, build):
+    run_cli(monkeypatch, "topic", "--brief", brief_file(tmp_path, BRIEF), "--script-only")
+    n = len(calls)
+
+    run_cli(monkeypatch, "topic", "--brief", str(build / "brief.md"), "--script-only")  # what a refusal suggests
+
+    assert len(calls) == n
+
+
+def damage_scene(folder, **changes):
+    chapter = seeded_chapter(2)
+    chapter[0].update(changes)
+    save_json(folder / "chapter_02.json", chapter)
+
+
+@pytest.mark.parametrize("damage", ["outline not json", "no chapters", "chapter without number",
+                                    "chapter file not a list", "chapter file not json", "scene without a key",
+                                    "scene with another key", "scene with an unknown visual type"])
+def test_an_invalid_seed_copies_nothing(folder, monkeypatch, calls, build, capsys, damage):
+    if damage == "outline not json":
+        (folder / "outline.json").write_text("{not json")
+    elif damage == "no chapters":
+        save_json(folder / "outline.json", {"title": "T"})
+    elif damage == "chapter without number":
+        save_json(folder / "outline.json", {"title": "T", "chapters": [{"title": "a", "minutes": 1}]})
+    elif damage == "chapter file not a list":
+        save_json(folder / "chapter_02.json", {"scenes": []})
+    elif damage == "chapter file not json":
+        (folder / "chapter_01.json").write_text("[oops")
+    elif damage == "scene without a key":
+        chapter = seeded_chapter(2)
+        del chapter[0]["visual_description"]
+        save_json(folder / "chapter_02.json", chapter)
+    elif damage == "scene with another key":
+        damage_scene(folder, notes="x")
+    else:
+        damage_scene(folder, visual_type="gif")
+
+    for flag in ("--script-only", "--estimate"):
+        with pytest.raises(SystemExit) as stop:
+            seed_run(monkeypatch, folder, flag)
+        assert stop.value.code == 2
+
+    err = capsys.readouterr().err
+    assert err.count("--brief:") == 2 and str(folder) in err
+    assert calls == [] and not build.exists(), "nothing copied, nothing stamped"
+
+
+@pytest.mark.parametrize("key, problem", [(None, "brief.key is missing"), ("0123456789abcdef", "brief.key does not match")])
+def test_a_seed_reviewed_with_another_version_of_its_brief_is_refused(folder, monkeypatch, calls, build, capsys,
+                                                                    key, problem):
+    if key is None:
+        (folder / "brief.key").unlink()
+    else:
+        (folder / "brief.key").write_text(key)
+
+    for flag in ("--script-only", "--estimate"):
+        with pytest.raises(SystemExit) as stop:
+            seed_run(monkeypatch, folder, flag)
+        assert stop.value.code == 2
+
+    err = capsys.readouterr().err
+    assert err.count("was reviewed with a different version of its brief") == 2 and problem in err
+    assert f"re-review the chapters, then update {folder / 'brief.key'}" in err
+    assert calls == [] and not build.exists()
+
+
+def test_editing_the_brief_in_a_seed_folder_refuses_the_seed_until_it_is_restamped(folder, monkeypatch, calls, build):
+    (folder / "brief.md").write_text(OTHER_BRIEF)
+
+    with pytest.raises(SystemExit):
+        seed_run(monkeypatch, folder)
+
+    (folder / "brief.key").write_text(content_key("brief", OTHER_BRIEF))
+    seed_run(monkeypatch, folder)
+    assert calls == [] and (build / "brief.key").read_text() == content_key("brief", OTHER_BRIEF)
+
+
+@pytest.mark.parametrize("missing", [None, 2], ids=["whole seed", "chapter 2 missing"])
+def test_the_estimate_prices_a_seed_as_if_it_were_already_in_the_build(folder, tmp_path, monkeypatch, missing):
+    monkeypatch.setattr(config, "GOOGLE_API_KEY", None)
+    if missing:
+        (folder / f"chapter_{missing:02d}.json").unlink()
+    copied = tmp_path / "copied"  # what seeding would leave behind
+    copied.mkdir()
+    for path in folder.glob("*.json"):
+        (copied / path.name).write_text(path.read_text())
+    fresh = tmp_path / "fresh"
+
+    seeded = pipeline.estimate_cost(15, fresh, False, False, brief=BRIEF, seed=folder)
+    worst = pipeline.estimate_cost(15, fresh, False, False, worst_case=True, brief=BRIEF, seed=folder)
+
+    assert seeded == pipeline.estimate_cost(15, copied, False, False, brief=BRIEF)
+    assert worst == pipeline.estimate_cost(15, copied, False, False, worst_case=True, brief=BRIEF)
+    assert seeded["claude"] < pipeline.estimate_cost(15, fresh, False, False, brief=BRIEF)["claude"]
+    assert not fresh.exists(), "nothing written"
+    if not missing:
+        narration = SEEDED[1] + SEEDED[2]
+        assert seeded["elevenlabs"] == pytest.approx(sum(ledger.tts_eur(len(t)) for t in narration)), \
+            "narration priced from the seeded text"
+        no_script_calls = pipeline.estimate_cost(15, fresh, False, True, brief=BRIEF, seed=folder)
+        assert no_script_calls["claude"] == seeded["claude"], "no outline, writer or critic call left"
+
+
+def test_the_estimate_of_a_partly_seeded_build_prices_what_seeding_would_add(folder, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "GOOGLE_API_KEY", None)
+    build = tmp_path / "build"
+    build.mkdir()
+    for name in ("outline.json", "chapter_01.json"):  # an interrupted seed
+        (build / name).write_text((folder / name).read_text())
+    complete = tmp_path / "complete"
+    complete.mkdir()
+    for path in folder.glob("*.json"):
+        (complete / path.name).write_text(path.read_text())
+
+    assert (pipeline.estimate_cost(15, build, False, False, brief=BRIEF, seed=folder)
+            == pipeline.estimate_cost(15, complete, False, False, brief=BRIEF))
+
+
+def test_the_estimate_ignores_a_seed_whose_outline_the_build_does_not_share(folder, tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "GOOGLE_API_KEY", None)
+    save_json(tmp_path / "outline.json", {"title": "Mine", "chapters": [OUTLINE["chapters"][0]]})
+
+    with_seed = pipeline.estimate_cost(15, tmp_path, False, False, brief=BRIEF, seed=folder)
+
+    assert with_seed == pipeline.estimate_cost(15, tmp_path, False, False, brief=BRIEF)
+
+
+def test_estimate_of_a_seeded_brief_says_so_and_writes_nothing(folder, monkeypatch, calls, build, capsys):
+    monkeypatch.setattr(config, "GOOGLE_API_KEY", None)
+
+    seed_run(monkeypatch, folder, "--estimate")
+
+    out = capsys.readouterr().out
+    est = pipeline.estimate_cost(config.DEFAULT_MINUTES, build, False, False, brief=BRIEF, seed=folder)
+    assert f"• script: would seed outline.json, chapter_01.json, chapter_02.json from {folder}" in out
+    assert f"€{sum(est.values()):.2f}" in out
+    assert calls == [] and not build.exists()
+
+
+def test_estimate_says_why_a_seed_would_not_be_used(folder, monkeypatch, calls, build, capsys):
+    build.mkdir(parents=True)
+    save_json(build / "outline.json", {"title": "Mine", "chapters": [OUTLINE["chapters"][0]]})
+    (build / "brief.key").write_text(content_key("brief", BRIEF))
+
+    seed_run(monkeypatch, folder, "--estimate")
+
+    out = capsys.readouterr().out
+    assert f"outline.json in {build} isn't the one in {folder}; not seeding" in out and "would seed" not in out
+    assert "Projected cost" in out
 
 
 # --- the estimate ------------------------------------------------------------
@@ -475,6 +846,12 @@ def test_sources_turn_links_into_plain_text_and_stop_at_the_next_section(tmp_pat
      "- Paper: https://a.org, Nature, vol. 5, p. 1\n- b"),
     ("## Sources\n- a\n    continued here\n    and here\n", "- a continued here and here"),
     ("## Sources\n- a\n  - nested\n", "- a\n- nested"),
+    ("## Sources\n- a\ncontinued\n", "- a\n- continued"),            # not indented: its own entry
+    # horizontal rules, code fences and table rows are not entries
+    ("## Sources\n- a\n---\n- b\n***\n___\n- c\n- - -\n* * *\n", "- a\n- b\n- c"),
+    ("## Sources\n```text\n- a\n```\n~~~\n- b\n", "- a\n- b"),
+    ("## Sources\n| Title | URL |\n|---|---|\n| x | y |\n  | indented |\n- a\n", "- a"),
+    ("## Sources\n- ---not a rule\n- **bold** entry\n", "- ---not a rule\n- **bold** entry"),
     # every list marker; a number or a year that is not one stays
     ("## Sources\n+ a\n1. b\n2) c\n10. d\n", "- a\n- b\n- c\n- d"),
     ("## Sources\n- 1.5 sigma result\n2026 survey\n", "- 1.5 sigma result\n- 2026 survey"),
