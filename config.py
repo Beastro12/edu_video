@@ -79,6 +79,46 @@ VOICE_LUFS = -18             # every scene's narration is levelled to this befor
 TARGET_LUFS = -16            # final master
 MASTER_TP_DBTP = -2.0        # true-peak ceiling for loudnorm; AAC adds a little, QA allows -1 (was -1.5)
 
+# --- Visual style (P3-2) ---------------------------------------------------------
+# Only the pictures change between presets; voice, pacing and music stay. Each prompt suffix
+# is part of its picture's cache key (D9), so `calm` must stay byte-identical or every paid
+# still, clip and Manim render is bought again. Only the look's traits go in a prompt, never
+# the name of a studio or its characters. VISUAL_STYLE in .env sets STYLE, the default for a build
+# that has no recorded style (STYLE_FILE); `--style` overrides both for a run.
+STYLES = {
+    "calm": {
+        "still": (" Calm, dark, low-contrast, cinematic, deep blues and soft warm highlights, "
+                  "lots of negative space, soft focus edges. No text, no letters, no watermark, "
+                  "no people's faces."),
+        "ai_video": (" Calm documentary footage, one continuous slow camera move, soft natural "
+                     "light, muted colours, shallow depth of field. No text, no captions, no logos, "
+                     "no people's faces."),
+        "manim": ('- Style: background "#0f1419". Soft palette: "#7fb3d5", "#a9dfbf", "#f5cba7",\n'
+                  '  "#d7bde2", "#fdfefe". No flashing, no bright full-screen colour.'),
+        "manim_background": "#0f1419",
+    },
+    "flat": {
+        "still": (" Flat vector illustration: clean geometric shapes with rounded corners, smooth flat "
+                  "colour fields with soft gradients and a gentle rim light, a few small soft stars or "
+                  "specks of light. Deep navy and indigo background with warm amber, coral and teal "
+                  "accents. Calm and uncluttered, generous negative space, low contrast, no harsh "
+                  "edges. No text, no letters, no watermark, no faces, no characters."),
+        "ai_video": (" Smooth 2D flat vector animation: clean geometric shapes with soft gradients, one "
+                     "continuous slow camera move, deep navy and indigo with warm amber, coral and teal "
+                     "accents, calm and uncluttered. No text, no captions, no logos, no faces, "
+                     "no characters."),
+        "manim": ('- Style: background "#162044" (deep navy). Flat vector look: filled shapes (fill_opacity 1,\n'
+                  '  thin or no stroke), rounded forms (Circle, RoundedRectangle), soft glows made by stacking 3-4\n'
+                  '  concentric circles of falling opacity, a few small dim dots as distant stars.\n'
+                  '  Palette: "#f4a261" amber, "#e76f51" coral, "#2a9d8f" teal, "#8ecae6" sky, "#e9c46a" gold,\n'
+                  '  "#f1faee" off-white for text. No flashing, no bright full-screen colour.'),
+        "manim_background": "#162044",  # luma 32.5/255 against calm's 19.3: above QA_BLACK_PIX_TH too
+    },
+}
+# Not named STYLE in the environment: a stray one in a shell would stop every import.
+STYLE = os.getenv("VISUAL_STYLE", "calm")
+assert STYLE in STYLES, f"VISUAL_STYLE must be one of {sorted(STYLES)}, got {STYLE!r}"
+
 # --- QA (qa.py) ---------------------------------------------------------------
 QA_DURATION_TOL = 0.30        # film length vs the script's estimate (words at WORDS_PER_MIN)
 QA_LOUDNESS_TOL_LU = 1.0      # integrated loudness within this of TARGET_LUFS
@@ -100,6 +140,7 @@ YOUTUBE_DESCRIPTION = "A calm, slow science documentary to relax or fall asleep 
 # --- Pipeline ---------------------------------------------------------------
 BRIEF_FILE = "brief.md"         # the research brief (--brief), kept in the build folder; metadata reads its Sources
 BRIEF_KEY_FILE = "brief.key"    # which brief the script stage was written with, so a change can't go unnoticed
+STYLE_FILE = "style"            # which style the build's pictures are made in, so a rerun can't quietly switch
 MAX_CRITIC_ROUNDS = 2
 MAX_MANIM_ATTEMPTS = 3
 WORKERS = 4                   # scenes whose narration / visual are generated at the same time

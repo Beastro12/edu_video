@@ -219,3 +219,20 @@ tried on macOS. From PyPI listings: on Apple silicon with Python 3.11, everythin
 except pycairo (built with the brew cairo you already have) and srt (pure Python). On an Intel
 Mac, cryptography 50.0.1 would build from source.
 **Recommend:** `python3.11 -m venv .venv` if your `python` is newer.
+
+## 2026-10-14 — The first film's look: is this what you meant? (taste)
+**What:** you asked for "kurzgesagt style + others I said I like". I read that as:
+- Kurzgesagt-inspired pictures: flat vector shapes, rich colour on deep navy, soft stars (`--style
+  flat`);
+- with SleepOnPhysics' calm voice, pacing and music, the only other style on record (CLAUDE.md).
+The narration stays calm because CLAUDE.md's hard rule says so (D25).
+**Why:** if you also want Kurzgesagt's lively, joke-dense narration, that changes a hard rule in
+CLAUDE.md and the script prompts, so it's your call. If "others I said I like" means channels I
+don't know about, name them.
+**Tried:** the flat look has not been seen yet: no Google key here. 12 of the 29 still and Veo
+descriptions in the script use photographic words (mist, depth of field), which may pull some
+pictures away from flat.
+**Recommend:** on the first live run, look at the first few stills in `build/<slug>/visuals/`
+before letting the rest run (Ctrl-C is safe; the run resumes). Tell me if the medium drifts:
+- the fix is a stronger flat suffix or a flat-only line for the still critic;
+- calm films are unaffected either way.

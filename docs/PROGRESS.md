@@ -684,3 +684,48 @@ listings, not an install.
 DIVERGED — none (D24 is new).
 
 NEXT — P3-2 (style presets).
+
+## 2026-10-14 P3-2 Visual style presets (`--style calm|flat`)
+CHANGED:
+- `config.STYLES` (`calm` and `flat`): still and Veo prompt suffixes, Manim style lines and
+  background. `config.STYLE` comes from `VISUAL_STYLE` (default `calm`).
+- `image_agent.style()`, `ai_video.style()` and `manim_agent.system()` read the active preset at
+  call time. `assembly.pad_colour()` likewise.
+- `pipeline.py`:
+  - `--style`, resolved as flag > the build's record (`build/<slug>/style`) > default, and
+    printed on every run and estimate.
+  - The record is written before the script stage (not on a refused run).
+  - An explicit switch is announced.
+  - `manifest.json` has `style`.
+- `tests/conftest.py` pins `calm` for offline tests.
+- `tests/test_style.py` (52 cases); the exact rerun output in `test_brief.py` gained the style
+  line.
+- README run line; `.env.example`; D25; NEEDS_PIETRO (the look); BACKLOG note on P2-5.
+
+CHECKED:
+- `calm` is byte-identical to HEAD. The reviewer ran HEAD's modules against the new ones:
+  - on all 39 scenes of the first film plus 3 synthetic ones: every still, review and Veo cache
+    path, retry prompt and prompt actually sent;
+  - Manim system prompt and paths, for both LaTeX settings: 0 of 640 differ;
+  - scene clips: 20 of 20 names equal.
+  Under `flat`, all of them differ, so there is no cross-style reuse. Review and failure keys are
+  style-keyed too.
+- The flat background `#162044` (luma 32.5 vs 19.3) passes the real `qa.black_segments`.
+- The full suite passes with `VISUAL_STYLE=flat` in the environment.
+- Implementer mutation checks: 20 breaks caught in total.
+- My two fixes after the second review, each confirmed by mutation:
+  - the record is now written before the script stage;
+  - a refused run records nothing.
+- Reviewer:
+  - first pass, no Critical. W1: a rerun without `--style` quietly reverted to calm and bought
+    every picture again. Fixed by the build's record.
+  - second pass, no Critical. Two warnings: `make check` depended on `.env`; a run stopped in
+    the script stage forgot its style. Both fixed.
+
+ASSUMED — the reading of "kurzgesagt style + others I said I like" (D25, NEEDS_PIETRO). A
+pre-P3-2 build with pictures but no record counts as unrecorded; none exists, since no live run
+has happened.
+
+DIVERGED — none (D25 is new; calm is unchanged).
+
+NEXT — P2-3 (run report), then P2-7 and P2-6 (two defects in every film), then P2-2 (thumbnail).

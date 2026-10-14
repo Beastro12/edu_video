@@ -71,6 +71,9 @@ python pipeline.py "What happens inside a neutron star" --skip-critic
 # re-review the chapters and update brief.key (the error says how); until then seeding is refused.
 # A rerun without --brief doesn't seed: a deleted chapter would be written afresh.
 python pipeline.py "A paper from last month" --brief brief.md
+
+# Kurzgesagt-inspired flat vector pictures, same calm voice. The build remembers the style; VISUAL_STYLE in .env sets the default.
+python pipeline.py "What happens inside a neutron star" --style flat
 ```
 
 A Veo clip or a still that fails for good (a safety filter, an invalid prompt, a Veo job

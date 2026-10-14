@@ -12,15 +12,18 @@ HAS_LATEX = shutil.which("latex") is not None
 CLASS_NAME = "DocScene"  # fixed, so the scene's position never leaks into the cache key
 QUALITY = "-qh"
 
-SYSTEM = f"""You write Manim Community Edition (v0.18+) code for calm science explainer videos.
+
+def system() -> str:
+    """Built per call: main sets config.STYLE after this module loads, and the style lines are
+    part of every render's cache key."""
+    return f"""You write Manim Community Edition (v0.18+) code for calm science explainer videos.
 
 Rules:
 - Output ONE python code block. `from manim import *` then exactly one class named
   as instructed, subclassing Scene (or MovingCameraScene if you need camera moves).
 - No external files, images, sounds, or network. Built-in shapes and Text only.
 - {"MathTex/Tex are allowed." if HAS_LATEX else "LaTeX is NOT installed: never use MathTex, Tex, or Integer/DecimalNumber with LaTeX. Use Text for all labels and formulas."}
-- Style: background "#0f1419". Soft palette: "#7fb3d5", "#a9dfbf", "#f5cba7",
-  "#d7bde2", "#fdfefe". No flashing, no bright full-screen colour.
+{config.STYLES[config.STYLE]["manim"]}
 - This is a calm, sleep-friendly documentary: slow, gentle motion (run_time >= 2),
   at most 5 words of text on screen at once, font_size >= 32, nothing sudden.
 - Timing: the sum of all run_time and wait() calls must be close to the target
@@ -57,7 +60,7 @@ def _brief(scene: dict, target_s: float, atmospheric: bool) -> str:
 
 def cache_path(scene: dict, target_s: float, out_dir: Path, atmospheric: bool = False) -> Path:
     brief = _brief(scene, target_s, atmospheric)
-    return out_dir / f"manim_{content_key('manim', SYSTEM, brief, config.CLAUDE_MODEL, QUALITY, config.FPS)}.mp4"
+    return out_dir / f"manim_{content_key('manim', system(), brief, config.CLAUDE_MODEL, QUALITY, config.FPS)}.mp4"
 
 
 def _timing_error(got: float, target_s: float) -> float:
@@ -80,7 +83,7 @@ def _fit_timing(rendered: Path, target_s: float, messages: list[dict], py_file: 
                "it: scale run_time and wait() so the total is close to the target and not longer, keeping "
                "every motion slow and calm. Change nothing else. Return the full code.")
         retimed_py = py_file.with_name(py_file.stem + "_retimed.py")
-        retimed_py.write_text(_extract_code(text(SYSTEM, messages + [{"role": "user", "content": ask}])))
+        retimed_py.write_text(_extract_code(text(system(), messages + [{"role": "user", "content": ask}])))
         retimed = _render(retimed_py, CLASS_NAME, out_dir / "manim_media")
         new = duration(retimed)
     except ledger.BudgetExceeded:
@@ -109,7 +112,7 @@ def _make(scene: dict, target_s: float, out_dir: Path, atmospheric: bool, out: P
     messages = [{"role": "user", "content": brief}]
     last_error = ""
     for attempt in range(1, config.MAX_MANIM_ATTEMPTS + 1):
-        reply = text(SYSTEM, messages)
+        reply = text(system(), messages)
         py_file.write_text(_extract_code(reply))
         try:
             rendered = _render(py_file, CLASS_NAME, out_dir / "manim_media")

@@ -89,6 +89,36 @@ def _stamp_brief(work: Path, brief: str | None) -> None:
         _write_text(work / config.BRIEF_KEY_FILE, brief_key(brief))
 
 
+def _recorded_style(work: Path) -> str | None:
+    """The style the build's pictures are made in (P3-2), or None for a build with no record
+    (made before styles, or not yet past its script), which counts as no choice made."""
+    path = work / config.STYLE_FILE
+    if not path.exists():
+        return None
+    name = path.read_text(encoding="utf-8").strip()
+    if name not in config.STYLES:
+        raise ValueError(f"{path} says {name!r}, which is not a style ({', '.join(sorted(config.STYLES))}); "
+                         "fix or delete the file")
+    return name
+
+
+def pick_style(flag: str | None, recorded: str | None, default: str) -> tuple[str, str]:
+    """(style, where it came from): --style, else the build's record, else the default. The record
+    outranks the default so that a rerun without the flag can't quietly switch a build and buy
+    every picture again."""
+    if flag is not None:
+        return flag, "--style"
+    if recorded is not None:
+        return recorded, "recorded in the build"
+    return default, "default"
+
+
+def _record_style(work: Path) -> None:
+    """Before any picture is made, so a run that stops partway leaves the style it was making."""
+    if _recorded_style(work) != config.STYLE:
+        _write_text(work / config.STYLE_FILE, config.STYLE)
+
+
 def _seed_folder(brief_path: Path, work: Path) -> Path | None:
     """The folder of a brief that carries its reviewed script (P3-3): the outline.json next to
     it. Not the build folder itself, which `--brief <work>/brief.md` points at."""
@@ -372,10 +402,10 @@ def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool
     return est
 
 
-def print_estimate(topic: str, est: dict[str, float], worst: dict[str, float]) -> None:
+def print_estimate(topic: str, est: dict[str, float], worst: dict[str, float], style: str) -> None:
     total, worst_total, spent = sum(est.values()), sum(worst.values()), ledger.spent_eur()
-    print(f'Projected cost for "{topic}" (estimate; prices marked "verify" in config.py; '
-          "cached work excluded):")
+    print(f'Projected cost for "{topic}" in the {style} style (estimate; prices marked "verify" in '
+          "config.py; cached work excluded):")
     for name, eur in est.items():
         print(f"  {name:<11} €{eur:.2f}")
     print(f"  {'total':<11} €{total:.2f}   (worst case, every critic round and Manim retry: €{worst_total:.2f})")
@@ -444,7 +474,7 @@ def render_film(script: dict, work: Path, allow_veo: bool, seed: str, retry_fail
                          "visual": str(visual.relative_to(work)),
                          "clip": str(clip.relative_to(work)),
                          "still_review": str(review.relative_to(work)) if kind != "ai" and review.exists() else None})
-    save_json(work / "manifest.json", {"title": script["title"], "scenes": manifest})
+    save_json(work / "manifest.json", {"title": script["title"], "style": config.STYLE, "scenes": manifest})
 
     print("• assembling (crossfades)")
     narrated = crossfade_concat(clips, work / "narrated.mp4")
@@ -488,9 +518,24 @@ def main():
                          "An outline.json (and chapter_NN.json files) next to the brief is a "
                          "reviewed script: a run with --brief copies in whichever of its files "
                          "the build lacks (a rerun without --brief doesn't)")
+    ap.add_argument("--style", choices=sorted(config.STYLES),
+                    help="how the pictures look: calm = dark, soft, cinematic; flat = flat vector shapes in "
+                         "rich colour on deep navy. Voice, pacing and music stay calm. Default: the style "
+                         "the build was started in, else VISUAL_STYLE from .env, else calm. Each style makes "
+                         "its own pictures, so switching a build's style reuses none")
     args = ap.parse_args()
 
     work = Path(config.BUILD_DIR) / slugify(args.topic)
+    try:
+        recorded = _recorded_style(work)
+    except ValueError as e:
+        ap.error(str(e))
+    # Before anything makes a prompt or a cache path (the estimate included).
+    config.STYLE, source = pick_style(args.style, recorded, config.STYLE)
+    print(f"• style: {config.STYLE} ({source})")
+    if recorded not in (None, config.STYLE):
+        print(f"• style: this build is recorded as {recorded}; this run makes its pictures in {config.STYLE} "
+              f"instead (any already made in {recorded} are kept)")
     brief, seed, seed_chapters = None, None, []
     if args.brief is not None:
         try:
@@ -524,9 +569,11 @@ def main():
         print_estimate(args.topic, estimate_cost(args.minutes, work, allow_veo, args.skip_critic,
                                                  retry_failed=args.retry_failed, brief=brief, seed=seed),
                        estimate_cost(args.minutes, work, allow_veo, args.skip_critic, worst_case=True,
-                                     retry_failed=args.retry_failed, brief=brief, seed=seed))
+                                     retry_failed=args.retry_failed, brief=brief, seed=seed), config.STYLE)
         return
     work.mkdir(parents=True, exist_ok=True)
+    if _brief_conflict(work, brief) is None:  # a refused run changes nothing; get_script says why
+        _record_style(work)  # first, like brief.key: a run that stops in the script stage keeps it
     if seed is not None:
         seed_script(seed, seed_chapters, work, brief)
 

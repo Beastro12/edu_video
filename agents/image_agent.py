@@ -8,9 +8,10 @@ from agents import google_client, still_critic
 from failures import Failures
 from utils import atomic_output, content_key, load_json, output_lock, run, save_json
 
-STYLE = (" Calm, dark, low-contrast, cinematic, deep blues and soft warm highlights, "
-         "lots of negative space, soft focus edges. No text, no letters, no watermark, "
-         "no people's faces.")
+
+def style() -> str:
+    """The active preset's suffix, read per call: main sets config.STYLE after this module loads."""
+    return config.STYLES[config.STYLE]["still"]
 
 
 def available() -> bool:
@@ -18,7 +19,7 @@ def available() -> bool:
 
 
 def cache_path(scene: dict, out_dir: Path) -> Path:
-    prompt = scene["visual_description"] + STYLE
+    prompt = scene["visual_description"] + style()
     key = content_key("still", prompt, config.IMAGE_MODEL, config.ASPECT_RATIO, config.IMAGE_SIZE)
     return out_dir / f"still_{key}.png"
 
@@ -51,7 +52,7 @@ def _buy(scene: dict, out: Path) -> Path:
 
     resp = google_client.make().models.generate_content(
         model=config.IMAGE_MODEL,
-        contents=scene["visual_description"] + STYLE,
+        contents=scene["visual_description"] + style(),
         config=types.GenerateContentConfig(
             response_modalities=["IMAGE"],
             image_config=types.ImageConfig(aspect_ratio=config.ASPECT_RATIO, image_size=config.IMAGE_SIZE),
@@ -84,7 +85,7 @@ class StillRejected(RuntimeError):
 
 def review_path(scene: dict, out_dir: Path) -> Path:
     """The per-scene decision: keyed by everything the image model and the reviewer are given."""
-    key = content_key("review", scene["visual_description"] + STYLE, scene["concept"], config.IMAGE_MODEL,
+    key = content_key("review", scene["visual_description"] + style(), scene["concept"], config.IMAGE_MODEL,
                       config.ASPECT_RATIO, config.IMAGE_SIZE, config.CLAUDE_MODEL, still_critic.SYSTEM,
                       still_critic.PROMPT, still_critic.SCHEMA, config.STILL_REVIEW_RETRIES, config.PREVIEW_PX)
     return out_dir / f"review_{key}.json"

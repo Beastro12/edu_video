@@ -413,3 +413,43 @@ check` also checks the installed versions (P1-11; 2026-10-14).**
 - **Not chosen:**
   - pip-tools or uv lock files with markers: a new tool for one file. Revisit if CI or a
     second platform needs them.
+
+**D25 — Visual style presets: Kurzgesagt-inspired pictures, SleepOnPhysics voice (P3-2;
+2026-10-14).** Pietro asked for his first film "in kurzgesagt style + others I said I like".
+The only other style on record is SleepOnPhysics (CLAUDE.md), and CLAUDE.md's hard rule keeps
+scripts calm. So only the look changes.
+
+- **What `flat` is.** `--style flat` (or `VISUAL_STYLE=flat` in `.env`) gives flat vector
+  pictures: rounded geometric shapes, soft gradients, deep navy with warm amber, coral and teal
+  accents, a few soft stars.
+  - It applies to the still and Veo prompt suffixes, the Manim palette and background, and the
+    letterbox pad.
+  - The Manim background `#162044` has BT.709 luma 32.5/255, against calm's 19.3, so QA's black
+    detection is unaffected.
+- **What every style shares.** Narration, pacing, music and the script prompts, so a reviewed
+  script serves any style.
+- **No studio name in prompts.** A test checks that no preset names a studio; only the traits
+  are described.
+- **Calm is unchanged.** `calm` stays the default. Under it every prompt, clip argument and cache
+  key is byte-identical to before (pinned by tests), so nothing paid is bought again.
+- **Caching.** The suffix is part of every picture's cache key, review key and failures key. A
+  flat run never reuses a calm still, clip or Manim render, or the reverse.
+- **The build remembers its style** (`build/<slug>/style`, plus a `style` field in
+  manifest.json).
+  - A rerun without `--style` keeps it.
+  - An explicit switch is allowed, but it is announced, because every picture is then bought
+    again.
+  - Every run and estimate prints the style.
+  - This is the same per-run-flag versus per-topic-build problem D23 solved for briefs.
+- **Not verified live:**
+  - How the image model renders the suffix.
+  - Twelve of the first film's 29 still and Veo descriptions carry photographic cues (blur,
+    mist, depth of field), which may pull some pictures away from flat.
+  - Check the first few flat stills before buying the rest (NEEDS_PIETRO). If the medium drifts,
+    strengthen the flat suffix or give the still critic a flat-only line; calm's keys stay
+    unchanged either way.
+- **Not chosen:**
+  - Kurzgesagt's lively, joke-dense narration: it conflicts with the calm rule and the channel's
+    purpose.
+  - A style-dependent writer: it would make the script differ per style and break the reviewed
+    seed.

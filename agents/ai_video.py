@@ -10,9 +10,10 @@ from agents import google_client
 from failures import Failures
 from utils import atomic_output, content_key, output_lock
 
-STYLE = (" Calm documentary footage, one continuous slow camera move, soft natural "
-         "light, muted colours, shallow depth of field. No text, no captions, no logos, "
-         "no people's faces.")
+
+def style() -> str:
+    """The active preset's suffix, read per call: main sets config.STYLE after this module loads."""
+    return config.STYLES[config.STYLE]["ai_video"]
 
 
 def available() -> bool:
@@ -20,7 +21,7 @@ def available() -> bool:
 
 
 def cache_path(scene: dict, out_dir: Path) -> Path:
-    prompt = scene["visual_description"] + STYLE
+    prompt = scene["visual_description"] + style()
     return out_dir / f"ai_{content_key('ai', prompt, config.VEO_MODEL, config.ASPECT_RATIO, config.VEO_RESOLUTION)}.mp4"
 
 
@@ -73,7 +74,7 @@ def _buy(scene: dict, out: Path, cost: float, timeout_s: int) -> Path:
     try:
         op = client.models.generate_videos(
             model=config.VEO_MODEL,
-            source=types.GenerateVideosSource(prompt=scene["visual_description"] + STYLE),
+            source=types.GenerateVideosSource(prompt=scene["visual_description"] + style()),
             # No generate_audio: the Gemini API refuses it (the SDK raises); the audio is discarded.
             config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO, resolution=config.VEO_RESOLUTION,
                                               http_options=google_client.start_job_options()),

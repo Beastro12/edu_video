@@ -72,6 +72,7 @@ def offline(request, monkeypatch, tmp_path):
         raise PaidCallInOfflineTest("offline test reached a paid API without mocking it")
 
     monkeypatch.setattr(config, "BUILD_DIR", str(tmp_path / "build"))
+    monkeypatch.setattr(config, "STYLE", "calm")  # VISUAL_STYLE in .env must not change what a test sees
     monkeypatch.setattr(requests.Session, "request", blocked)  # requests.post and friends
     monkeypatch.setattr(requests, "post", blocked)
     monkeypatch.setattr(anthropic.resources.messages.Messages, "create", blocked)  # any client

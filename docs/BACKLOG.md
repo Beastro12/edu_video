@@ -185,7 +185,7 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   before); the critic is told to generalise or drop claims the brief doesn't support;
   `--estimate` counts the brief's tokens; the brief is copied to `build/<slug>/brief.md` and
   its `## Sources` list goes into the YouTube description.
-- [ ] P3-2 — Visual style presets (`--style calm|flat`)
+- [x] P3-2 — Visual style presets (`--style calm|flat`)
   Kurzgesagt-inspired pictures (flat vector shapes, rich colour on deep navy) with the calm
   SleepOnPhysics voice and pacing. The studio's name never goes into a prompt.
   Accept: `config.STYLES` holds each preset's still-prompt suffix and Manim palette; `calm`
@@ -220,6 +220,8 @@ it); batch mode waits for one verified live film.
   that the current `manifest.json` doesn't reference and prints the space freed. Paid files
   (`audio/`, `visuals/`) no manifest references are only listed, with what they cost; they
   are deleted only with `--prune-paid` (a reverted script edit would otherwise pay again).
+  Since P3-2 a build can hold pictures of two styles (D25); `--prune-paid` keeps those the
+  last manifest of each style used, or a switch back would buy them all again.
   Nothing in `music/` is touched. Test: after a settings change and rebuild, `--prune` leaves
   exactly the referenced clips and every paid file.
 - [ ] P2-2 — Thumbnail generation (1280×720, no text baked in by the image model; title

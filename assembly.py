@@ -20,7 +20,6 @@ from utils import (
 
 W, H, FPS = config.WIDTH, config.HEIGHT, config.FPS
 RATE = config.AUDIO_RATE
-BG = "0x0f1419"
 VIDEO_ENC = ["-c:v", "libx264", "-preset", config.FILM_X264[0], "-crf", str(config.FILM_X264[1])]
 AUDIO_ENC = ["-c:a", "aac", "-b:a", "192k", "-ar", str(RATE)]
 # loudnorm's output timestamps skip at the end of its input; FFmpeg then drops samples
@@ -54,11 +53,17 @@ def _still_filter(target: float, scene_id: int) -> str:
             f"setsar=1,format=yuv420p")
 
 
+def pad_colour() -> str:
+    """The letterbox bars match the active style's background, in FFmpeg's 0x form. Under calm
+    this is the 0x0f1419 it always was, so no scene clip's cache key changes (D9)."""
+    return "0x" + config.STYLES[config.STYLE]["manim_background"].lstrip("#")
+
+
 def _moving_filter(target: float, v_len: float, is_ai: bool) -> str:
     slow = min(target / v_len, config.MAX_AI_SLOWDOWN) if (is_ai and v_len < target) else 1.0
     return (f"setpts={slow:.4f}*PTS,"
             f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
-            f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color={BG},setsar=1,fps={FPS},"
+            f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color={pad_colour()},setsar=1,fps={FPS},"
             f"tpad=stop_mode=clone:stop_duration={target:.2f},format=yuv420p")
 
 

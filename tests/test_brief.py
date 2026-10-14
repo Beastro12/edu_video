@@ -449,8 +449,10 @@ def test_a_rerun_of_a_seeded_build_goes_on_quietly_and_calls_nothing(folder, mon
 
     assert calls == []
     out = capsys.readouterr().out
-    assert out == "• script: using cached script.json (edit it freely)\nScript saved to " + str(
-        build / "script.json") + ". Edit it, then rerun without --script-only.\n", "nothing to say about the seed"
+    assert out == ("• style: calm (recorded in the build)\n"  # P3-2: every run says its style
+                   "• script: using cached script.json (edit it freely)\nScript saved to " + str(
+                       build / "script.json") + ". Edit it, then rerun without --script-only.\n"), \
+        "nothing to say about the seed"
 
 
 def test_a_partial_seed_leaves_the_missing_chapter_to_the_writer_with_the_brief(folder, monkeypatch, calls, build,
@@ -481,7 +483,7 @@ def test_an_interrupted_seed_is_completed_on_the_rerun_without_calling_claude(fo
     monkeypatch.setattr(shutil, "copyfile", dies_on_the_third_copy)
     with pytest.raises(OSError, match="disk full"):
         seed_run(monkeypatch, folder)
-    assert sorted(p.name for p in build.iterdir()) == ["brief.key", "chapter_01.json", "outline.json"]
+    assert sorted(p.name for p in build.iterdir()) == ["brief.key", "chapter_01.json", "outline.json", "style"]
     assert (build / "brief.key").read_text() == content_key("brief", BRIEF), "the stamp went in first"
     monkeypatch.setattr(shutil, "copyfile", real)
     capsys.readouterr()
