@@ -1,0 +1,78 @@
+# requirements.lock: exact versions of the environment `make check` passes in (P1-11).
+# Made on Linux, Python 3.11.15, from the working venv (pip install -r requirements.txt
+# -r requirements-dev.txt), then:  pip freeze --exclude-editable   (the pins below).
+# Install:  pip install -r requirements.lock      (one lock: runtime and dev tools)
+# Upgrade on purpose: install the new versions, run `make check`, then regenerate (keeps this header):
+#   { grep '^#' requirements.lock; pip freeze --exclude-editable; } > requirements.lock.new && mv requirements.lock.new requirements.lock
+# Regenerate only on Linux with Python 3.11, in a venv installed from the ranges and nothing else:
+# frozen on macOS, it would pin macOS-only packages (pyobjc, via screeninfo) and break Linux installs.
+# requirements.txt and requirements-dev.txt keep the ranges. tests/test_lock.py checks that this
+# lock satisfies them and that the installed versions equal these pins.
+annotated-types==0.8.0
+anthropic==1.8.0
+anyio==4.15.1
+av==18.1.0
+beautifulsoup4==4.15.0
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.1
+click==8.5.0
+cloup==4.0.0
+cryptography==50.0.1
+decorator==5.3.1
+distro==1.9.0
+docstring_parser==0.18.0
+glcontext==3.0.0
+google-auth==2.58.1
+google-genai==2.25.0
+h11==0.16.0
+httpcore==1.0.9
+httpcore2==2.13.1
+httpx==0.28.1
+httpx2==2.13.1
+idna==3.20
+iniconfig==2.3.0
+isosurfaces==0.1.2
+jiter==0.17.0
+manim==0.21.0
+ManimPango==0.6.1
+mapbox_earcut==2.1.0
+markdown-it-py==4.2.0
+mdurl==0.1.2
+moderngl==5.12.0
+moderngl-window==3.1.1
+networkx==3.6.1
+numpy==2.4.6
+packaging==26.3
+pillow==12.3.0
+pluggy==1.6.0
+pyasn1==0.6.4
+pyasn1_modules==0.4.2
+pycairo==1.29.1
+pycparser==3.0
+pydantic==2.13.5
+pydantic_core==2.46.5
+pydub==0.25.1
+pyglet==2.1.16
+pyglm==2.8.3
+Pygments==2.21.0
+pytest==9.1.1
+python-dotenv==1.2.3
+requests==2.34.2
+rich==15.0.0
+ruff==0.16.9
+scipy==1.17.1
+screeninfo==0.8.1
+skia-pathops==0.9.2
+sniffio==1.3.1
+soupsieve==2.10
+srt==3.5.3
+svgelements==1.9.6
+tenacity==9.1.4
+tqdm==4.70.1
+truststore==0.10.4
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+urllib3==2.8.0
+watchdog==6.0.0
+websockets==16.1.1

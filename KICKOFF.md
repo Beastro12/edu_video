@@ -9,9 +9,9 @@ git init && git add -A && git commit -m "baseline from chat"
 # system deps (macOS shown; Ubuntu: sudo apt install ffmpeg libcairo2-dev libpango1.0-dev pkg-config)
 brew install ffmpeg cairo pango pkg-config
 
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt -r requirements-dev.txt
-make check          # expect: ruff clean, 6 passed
+python3.11 -m venv .venv && source .venv/bin/activate   # the lock is made for Python 3.11
+pip install -r requirements.lock    # exact tested versions, dev tools included
+make check          # expect: ruff clean, every test passes
 ```
 
 Then `cp .env.example .env` and fill in your keys and a calm ElevenLabs voice ID.

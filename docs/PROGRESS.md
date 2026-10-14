@@ -650,3 +650,37 @@ NEXT:
 - P3-2 (style presets).
 - Not verified: the paper's own title and address (blocked here); what the outside
   commentaries say (not used).
+
+## 2026-10-14 P1-11 Pin dependency versions
+CHANGED:
+- `requirements.lock` (new): 68 exact pins from `pip freeze --exclude-editable` of the tested
+  venv. Its header gives how it was made, how to install and how to regenerate (only on Linux /
+  Python 3.11).
+- `tests/test_lock.py` (new, 16 tests): the lock is exact `name==version` lines; it satisfies
+  the ranges in both requirements files; installed versions equal the pins. Failures name the
+  packages and the fix.
+- README and KICKOFF install from the lock with `python3.11 -m venv`.
+- `requirements-dev.txt` declares `packaging` (the test imports it).
+- NEEDS_PIETRO: the CI entry now installs the lock, plus an FYI to reinstall once.
+- D24.
+
+CHECKED:
+- A fresh venv from the lock installed with no extra packages (its freeze equals the lock) and
+  passed `make check` (265 passed), as verified by both the implementer and the reviewer.
+- The lock is byte-identical to the working venv's freeze.
+- Mutation checks: a changed pin, a raised range, a missing package and a `-e` line each fail
+  the tests.
+- Reviewer, first pass: 1 Critical. KICKOFF.md still installed from the ranges, and those
+  resolve 19 newer versions today, so following it would fail the new test. Fixed.
+- Also fixed:
+  - the lock is for Python 3.11 (said in README and KICKOFF);
+  - a regeneration trap on macOS (the lock header now says Linux only);
+  - the CI note in NEEDS_PIETRO;
+  - `packaging` declared.
+
+ASSUMED — Pietro's Mac runs Python 3.11 or can install it. The macOS wheel facts come from PyPI
+listings, not an install.
+
+DIVERGED — none (D24 is new).
+
+NEXT — P3-2 (style presets).

@@ -118,7 +118,7 @@ with their credits added to the YouTube description text if the licence asks for
 
 ## 2026-09-27 — Run the Python tests in CI? (repo settings: yours to change)
 **What:** add an `edu_video` job to `.github/workflows/ci.yml`: install ffmpeg and
-`requirements-dev.txt`, then run `make check` (about 4 minutes).
+`requirements.lock` (P1-11; it replaces `requirements-dev.txt` here), then run `make check` (about 4 minutes).
 **Why:** PR #3's CI runs only the Next.js jobs, so none of edu_video's 134 tests run outside
 the agent's own `make check`. A regression pushed by mistake would go unnoticed.
 **Tried:** nothing; the workflow is shared with the Next.js app, so I haven't touched it.
@@ -207,3 +207,15 @@ changing `FILM_X264` doesn't also degrade them. Nothing else changed.
 **Recommend:** keep today's setting until the first real film exists. Then, if render time
 matters, set `FILM_X264 = ("veryfast", 15.5)` in `config.py` for that film, watch a Veo scene,
 and compare file sizes. That one line is the whole change.
+
+## 2026-10-14 — FYI: after pulling, reinstall from the lock once (P1-11)
+**What:** run `pip install -r requirements.lock` in your venv (Python 3.11) once.
+**Why:** `make check` now also checks that installed versions equal the lock. A venv installed
+from `requirements.txt` today resolves 19 packages to newer versions (anthropic 1.13.0, manim
+0.22.0, …), so its `make check` fails until it is reinstalled. The failure message says the
+same. `scripts/run_autonomous.sh` uses the same venv.
+**Tried:** a fresh venv from the lock passes `make check` here (Linux, Python 3.11.15). Not
+tried on macOS. From PyPI listings: on Apple silicon with Python 3.11, everything has a wheel
+except pycairo (built with the brew cairo you already have) and srt (pure Python). On an Intel
+Mac, cryptography 50.0.1 would build from source.
+**Recommend:** `python3.11 -m venv .venv` if your `python` is newer.

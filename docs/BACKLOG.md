@@ -147,7 +147,7 @@ Work top to bottom within a priority.
   Accept (once Pietro says the difference is visible): stills drift with jitter ≤ 0.1 px in
   the benchmark, same framing and motion as today; D18 updated with the new render time.
 
-- [ ] P1-11 — Pin dependency versions
+- [x] P1-11 — Pin dependency versions
   Found in the foundation check (PLAN.md): requirements use `>=` only, and the installed
   versions are exactly the tested minimums (anthropic 1.8.0, google-genai 2.25.0), so a new
   SDK release could silently break calls the tests mock.

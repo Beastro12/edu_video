@@ -32,10 +32,13 @@ else is.
 #   Ubuntu: sudo apt install ffmpeg libcairo2-dev libpango1.0-dev pkg-config
 # Optional: LaTeX lets Manim render proper equations (auto-detected)
 
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+python3.11 -m venv .venv && source .venv/bin/activate   # the lock is made for Python 3.11
+pip install -r requirements.lock    # the exact versions the tests ran with (dev tools included)
 cp .env.example .env    # add keys and a calm ElevenLabs voice ID
 ```
+
+`requirements.txt` and `requirements-dev.txt` keep the version ranges, for upgrading on purpose; after an upgrade, run
+`make check` and regenerate the lock (the command is in the header of `requirements.lock`).
 
 Put soft instrumental tracks you have the rights to in `music/`. Several tracks are
 shuffled and crossfaded; a single track is repeated with crossfades so there's no loop

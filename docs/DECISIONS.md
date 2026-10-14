@@ -395,3 +395,21 @@ and the critic the same markdown brief: verified facts with their sources, and h
     per film.
   - Rewriting the script automatically when the brief changes: it would throw away hand edits
     to chapter files, which D9 keeps.
+
+**D24 — One lock file of exact versions, made with `pip freeze` on Linux / Python 3.11; `make
+check` also checks the installed versions (P1-11; 2026-10-14).**
+- `requirements.lock` pins all 68 packages of the environment the tests pass in, dev tools
+  included. Installs use it. `requirements.txt` and `requirements-dev.txt` keep their ranges,
+  for upgrading on purpose: install, run `make check`, regenerate.
+- `tests/test_lock.py` fails when an installed version differs from its pin. A venv installed
+  from the ranges, which today resolve 19 packages newer, goes red until it's reinstalled from
+  the lock. That is the point: the SDK calls the tests mock are only known to work at the
+  pinned versions.
+- Platform-only extras outside the lock aren't checked: on macOS, Cython and pyobjc via
+  screeninfo, and audioop-lts on Python 3.13+. So a Mac install doesn't fail for that reason;
+  those extras simply float.
+- Regenerate only on Linux / Python 3.11 from a clean venv. A lock frozen on macOS would pin
+  macOS-only packages with no marker and break Linux installs. The lock header says so.
+- **Not chosen:**
+  - pip-tools or uv lock files with markers: a new tool for one file. Revisit if CI or a
+    second platform needs them.
