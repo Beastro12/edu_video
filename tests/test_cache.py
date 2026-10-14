@@ -4,6 +4,7 @@ ElevenLabs and the image model are faked at the HTTP/SDK boundary, so the agents
 logic runs for real and every paid call is counted. FFmpeg runs for real at low
 resolution to keep the test fast."""
 import hashlib
+import shutil
 from types import SimpleNamespace
 
 import pytest
@@ -12,7 +13,7 @@ from conftest import ff
 import assembly
 import config
 import pipeline
-from agents import manim_agent, music, voice
+from agents import image_agent, manim_agent, music, voice
 from utils import duration, load_json
 
 PAD = config.LEAD_IN_S + config.TAIL_S
@@ -219,3 +220,24 @@ def test_every_scenes_picture_is_made_for_an_ordinary_tail_the_last_one_included
 
     last = load_json(film.work / "manifest.json")["scenes"][-1]["clip"]
     assert duration(film.work / last) == pytest.approx(speech_s(C) + config.LEAD_IN_S + config.FINAL_TAIL_S, abs=0.08)
+
+
+def test_rebuilding_every_clip_costs_nothing_and_moves_no_paid_file(film):
+    """P2-6 changed every clip's arguments, so every clip is made once more (clips aren't paid). What
+    was bought keeps its name and its bytes: no narration or picture is asked for again, the files
+    sit under the names the key functions give, and the loudness readings live with the clips."""
+    _, script = film.render([A, B, C])
+    paid = {p.relative_to(film.work): p.read_bytes() for d in ("audio", "visuals") for p in (film.work / d).rglob("*")
+            if p.is_file()}
+    shutil.rmtree(film.work / "clips")  # an upgrade finds none of the old clips under the new arguments
+
+    film.render([A, B, C])
+    assert film.paid == {"tts": [], "image": []}
+    assert len(film.rebuilt(lambda r: r.endswith(".mp4") and "/clips/" in r)) == 3
+    assert {p.relative_to(film.work): p.read_bytes() for d in ("audio", "visuals") for p in (film.work / d).rglob("*")
+            if p.is_file()} == paid
+    for scene, m in zip(script["scenes"], load_json(film.work / "manifest.json")["scenes"], strict=True):
+        assert m["audio"] == str(voice.cache_path(scene["narration"], film.work / "audio").relative_to(film.work))
+        assert m["visual"] == str(image_agent.cache_path(scene, film.work / "visuals").relative_to(film.work))
+    assert len(list((film.work / "clips").glob("level_*.json"))) == 3
+    assert not list(film.work.glob("audio/level_*")) and not list(film.work.glob("visuals/level_*"))

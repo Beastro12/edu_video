@@ -497,3 +497,39 @@ so every run leaves one file saying what happened, what it cost and what to look
 - **QA.** The duration estimate adds the 2.1 s.
 - **Not chosen:** `FADE_OUT_S <= TAIL_S`, because a 1.4 s fade is abrupt for a sleep film. The
   extra second of stillness is a pacing choice (D14); NEEDS_PIETRO has it.
+
+**D28 — Each narration is levelled by one constant gain; a limiter joins only when that gain
+would pass the true-peak ceiling (P2-6; 2026-10-14; amends D12's audio chain).**
+- **The defect.** The scene clip's single-pass `loudnorm` (dynamic mode) played every
+  narration's first second about 1.85 dB louder than the rest (up to 2.7 dB on synthetic
+  speech). It left scenes between -15.8 and -18.5 LUFS. D12's chain
+  `adelay → loudnorm → asetpts → apad/atrim` and its "first ~1.5 s +1 dB" note are replaced.
+- **The fix.**
+  - The scene's own audio (lead-in and tail included) is read with `ebur128=peak=true`.
+  - `volume` applies `VOICE_LUFS` minus that reading.
+  - If true peak plus gain passes `VOICE_TP_DBTP` (-2.0), an `alimiter` also runs.
+  - The limiter runs in a 192 kHz copy, because at 48 kHz a burst overshot to -0.6 dBTP between
+    samples. It uses `latency=1`, because without it the voice lands 239 samples late; lag and
+    length were checked sample-exact (D12).
+  - A make-up loop of at most 3 re-readings, capped at +3 dB, restores what the limiter takes.
+    It can't oscillate: a limiter only takes level away, so each correction approaches from
+    below.
+  - Anything under -69 LUFS is left alone.
+  - The tunables are in config.py.
+- **Caching.** Readings are cached in `clips/level_<key>.json`. The key covers the narration's
+  content, the filter chain and every levelling setting. The gain is part of the clip's
+  arguments, so every clip is rebuilt once (free). Paid files keep their keys.
+- **Not chosen:** two-pass `loudnorm` with `linear=true`. It silently fell back to dynamic mode in
+  the hard case (back to +2.6 dB) and on a steady tone, because it reads `measured_LRA=0` as "not
+  measured".
+- **Evidence:** a tone, pink noise, three synthetic voices (flite) and three hard cases.
+  - First-second excess is now +0.00 to +0.29 dB; the larger values are the limiter acting at
+    bursts.
+  - Scenes measure -18.0 to -18.2 LUFS. On a 6-scene film every clip is at -18.0 (before: -15.8
+    to -17.6). QA still passes.
+  - Time: about −0.6 s per scene without the limiter, and up to +1.4 s with it, on the first
+    build only.
+- **Not verified, and still open:**
+  - Real ElevenLabs speech. The limiter's attack and release are FFmpeg's defaults.
+  - The film's first narration is still about +1.8 dB in its first second, from the master's
+    single-pass `loudnorm` (P2-8).

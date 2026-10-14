@@ -11,9 +11,13 @@ from utils import (
     atomic_output,
     content_key,
     duration,
+    ebur128_summary,
     file_hash,
     is_fresh,
+    load_json,
+    log,
     run,
+    save_json,
     stamped_output,
     video_duration,
 )
@@ -22,9 +26,12 @@ W, H, FPS = config.WIDTH, config.HEIGHT, config.FPS
 RATE = config.AUDIO_RATE
 VIDEO_ENC = ["-c:v", "libx264", "-preset", config.FILM_X264[0], "-crf", str(config.FILM_X264[1])]
 AUDIO_ENC = ["-c:a", "aac", "-b:a", "192k", "-ar", str(RATE)]
-# loudnorm's output timestamps skip at the end of its input; FFmpeg then drops samples
-# under a duration limit. Re-stamping from the sample count after it fixes that (D12).
+# loudnorm's output timestamps skip at the end of its input; FFmpeg then drops samples under a
+# duration limit. Re-stamping from the sample count fixes that (D12): the master mix needs it, and
+# cutting the voice to exact samples is as safe with it.
 RESTAMP = "asetpts=N/SR/TB"
+SILENT_LUFS = -69.0     # ebur128 reads silence as -70.0: nothing to level
+LEVEL_TOL_LU = 0.1      # a reading this close to VOICE_LUFS is accepted (it has one decimal)
 
 
 def scene_tail(index: int, count: int) -> float:
@@ -83,6 +90,87 @@ def clip_encoder(kind: str) -> list[str]:
     return ["-c:v", "libx264", "-preset", preset, "-crf", str(crf)]
 
 
+def _limiter() -> str:
+    """Peaks over the ceiling are limited in a LIMITER_RATE copy, where a sample peak is the true peak
+    (at 48 kHz the burst peaks overshot by ~1.1 dB between samples), LIMITER_MARGIN_DB under the ceiling
+    for rounding. `latency=1` hands every sample back where it came in (without it: 239 samples late, D12)."""
+    limit = 10 ** ((config.VOICE_TP_DBTP - config.LIMITER_MARGIN_DB) / 20)
+    return (f"aresample={config.LIMITER_RATE},alimiter=limit={limit:.4f}:attack={config.LIMITER_ATTACK_MS:g}"
+            f":release={config.LIMITER_RELEASE_MS:g}:level=0:latency=1,aresample={RATE}")
+
+
+def _voice_stage(gain_db: float, limited: bool) -> str:
+    return f"volume={gain_db:.2f}dB" + (f",{_limiter()}" if limited else "")
+
+
+def _read_level(narration: Path, graph: str) -> tuple[float, float]:
+    """(integrated LUFS, true peak dBTP) of what `graph` makes of the narration."""
+    return ebur128_summary(run(["ffmpeg", "-nostats", "-i", str(narration), "-af", f"{graph},ebur128=peak=true",
+                                "-f", "null", "-"]).stderr)
+
+
+def _miss(reading: float) -> float:
+    """How far a reading is from VOICE_LUFS. Rounded: -18 - -18.1 is 0.10000000000000142 in floats,
+    which is not within a tolerance of 0.1."""
+    return round(abs(config.VOICE_LUFS - reading), 2)
+
+
+def voice_gain(narration: Path, lead: str, fit: str, cache_dir: Path) -> tuple[float, bool]:
+    """(gain in dB, whether a limiter is needed) that brings the scene's audio to VOICE_LUFS.
+
+    One constant gain, because loudnorm in dynamic mode plays the first second ~1.7 dB louder (P2-6).
+    The reading is of the scene's own audio (`lead`, then `fit`: lead-in, tail), so it is the loudness
+    a test or QA measures. If that gain would push the true peak over VOICE_TP_DBTP the peaks are limited
+    instead of the gain lowered (a lower gain misses VOICE_LUFS), and the loudness the limiter takes away
+    is made up by re-reading the limited result. Kept in `cache_dir` by the narration's content, so a
+    rerun or a rebuilt clip doesn't read it again."""
+    key = content_key("voice level", file_hash(narration), lead, fit, _limiter(), config.VOICE_LUFS,
+                      config.VOICE_TP_DBTP, config.LIMITER_ATTACK_MS, config.LIMITER_RELEASE_MS, config.LIMITER_RATE,
+                      config.LIMITER_MARGIN_DB, config.LEVEL_ROUNDS, config.LEVEL_MAX_BOOST_DB,
+                      config.LEVEL_MAX_ERR_LU, SILENT_LUFS, LEVEL_TOL_LU)  # everything the decision depends on
+    saved = cache_dir / f"level_{key}.json"
+    if saved.exists():
+        try:
+            found = load_json(saved)
+            return float(found["gain_db"]), bool(found["limited"])
+        except (ValueError, KeyError, TypeError):
+            pass  # unreadable: read it again
+    loudness, peak = _read_level(narration, f"{lead},{fit}")
+    gain, limited, result = 0.0, False, loudness
+    if loudness > SILENT_LUFS:
+        linear = gain = round(config.VOICE_LUFS - loudness, 2)
+        limited = peak + gain > config.VOICE_TP_DBTP
+        result = config.VOICE_LUFS
+        tried = []  # (miss in LU, gain, reading) of each limited result read
+        for _ in range(config.LEVEL_ROUNDS if limited else 0):
+            reading, _ = _read_level(narration, f"{lead},{_voice_stage(gain, True)},{fit}")
+            tried.append((_miss(reading), gain, reading))
+            if tried[-1][0] <= LEVEL_TOL_LU:
+                break
+            gain = round(min(gain + config.VOICE_LUFS - reading, linear + config.LEVEL_MAX_BOOST_DB), 2)
+            if gain == tried[-1][1]:
+                break  # at the cap already: reading it again would change nothing
+        if tried:  # the best reading, not the last correction, which was never read
+            _, gain, result = min(tried)
+        if _miss(result) > config.LEVEL_MAX_ERR_LU:
+            log(f"    {narration.name}: its loudness is in its peaks; limited to {config.VOICE_TP_DBTP} dBTP "
+                f"it reaches {result} LUFS, not {config.VOICE_LUFS}")
+    save_json(saved, {"measured_lufs": loudness, "true_peak_dbtp": peak, "gain_db": gain, "limited": limited,
+                      "levelled_lufs": result})
+    return gain, limited
+
+
+def scene_audio_filter(narration: Path, cache_dir: Path, samples: int) -> str:
+    """The narration as the scene's audio, exactly `samples` long: the lead-in silence, then one
+    constant gain to VOICE_LUFS (D2: ducking is only predictable if every scene arrives at the same
+    loudness), re-stamped and cut to the sample (D12)."""
+    lead = (f"aresample={RATE},aformat=channel_layouts=stereo,"
+            f"adelay=delays={int(config.LEAD_IN_S * 1000)}:all=1")
+    fit = f"{RESTAMP},apad=whole_len={samples},atrim=end_sample={samples}"
+    gain, limited = voice_gain(narration, lead, fit, cache_dir)
+    return f"{lead},{_voice_stage(gain, limited)},{fit}"
+
+
 def build_scene_clip(visual: Path, narration: Path, out_dir: Path, kind: str, scene_id: int,
                      tail_s: float | None = None) -> Path:
     """Scene length is set by the voice: lead-in + narration + tail, in whole frames.
@@ -93,13 +181,7 @@ def build_scene_clip(visual: Path, narration: Path, out_dir: Path, kind: str, sc
     target, samples = n / FPS, n * RATE // FPS
     vf = (_still_filter(target, scene_id) if kind == "still"
           else _moving_filter(target, duration(visual), kind == "ai"))
-    # Level the voice: the ducking threshold is absolute, so it only behaves predictably if
-    # every scene's narration arrives at the same loudness (D2). The lead-in is added before
-    # loudnorm, and the result is re-stamped and cut to exactly `samples` (D12).
-    af = (f"aresample={RATE},aformat=channel_layouts=stereo,"
-          f"adelay=delays={int(config.LEAD_IN_S * 1000)}:all=1,"
-          f"loudnorm=I={config.VOICE_LUFS}:TP=-2:LRA=7,aresample={RATE},{RESTAMP},"
-          f"apad=whole_len={samples},atrim=end_sample={samples}")
+    af = scene_audio_filter(narration, out_dir, samples)
     args = ["-filter_complex", f"[0:v]{vf}[v];[1:a]{af}[a]",
             "-map", "[v]", "-map", "[a]", "-frames:v", str(n),
             *clip_encoder(kind), "-r", str(FPS), *AUDIO_ENC]

@@ -236,7 +236,8 @@ it); batch mode waits for one verified live film.
   (`audio/`, `visuals/`) no manifest references are only listed, with what they cost; they
   are deleted only with `--prune-paid` (a reverted script edit would otherwise pay again).
   Since P3-2 a build can hold pictures of two styles (D25); `--prune-paid` keeps those the
-  last manifest of each style used, or a switch back would buy them all again.
+  last manifest of each style used, or a switch back would buy them all again. `clips/level_*.json`
+  (P2-6) are free but save a reading per scene: keep the ones the kept clips used.
   Nothing in `music/` is touched. Test: after a settings change and rebuild, `--prune` leaves
   exactly the referenced clips and every paid file.
 - [ ] P2-2 — Thumbnail generation (1280×720, no text baked in by the image model; title
@@ -244,7 +245,7 @@ it); batch mode waits for one verified live film.
 - [~] P2-1 — Batch mode from `topics.txt`, with a variety check against past titles
   and outlines (avoid near-duplicate videos; YouTube demonetises mass-produced content).
   [blocked: needs one verified live film first, PLAN.md phase 3]
-- [ ] P2-6 — Each narration's first second is louder than the rest
+- [x] P2-6 — Each narration's first second is louder than the rest
   Found in P1-8 (measured on the voice-only track, before mixing; confirmed by the reviewer):
   each scene's single-pass `loudnorm` (dynamic mode) plays a steady narration's first second
   ~1.7 dB louder, then holds it level (scene 5: −18.3 dB in the first second, −20.0 after);
@@ -261,4 +262,17 @@ it); batch mode waits for one verified live film.
   ≤ `TAIL_S`, or a longer final tail), asserted in `config.py`; a test on a built film finds no
   darkening while the last narration sounds. If a fade under the last words is wanted
   instead, record that in DECISIONS and close this.
+- [ ] P2-8 — The master `loudnorm` plays the film's first narration louder
+  Found in P2-6 (implementer and reviewer): after per-scene levelling, scenes 2–6 of a built
+  film are within 0.1 dB from their first second, but scene 1's first second is +1.8 dB: the
+  final mix's single-pass `loudnorm` (dynamic mode) starting up.
+  Accept: the finished film's first narration holds its level within 0.5 dB from its first
+  second on; the master still lands at `TARGET_LUFS` ± 1 LU with QA passing; test on a built
+  film.
+- [ ] P2-9 — True-peak margin on dense bursts
+  Found in P2-6's review: on a film of dense percussive bursts the final true peak reaches
+  -0.3 dBTP (QA's ceiling is -1.0) before and after P2-6: the master `loudnorm` plus AAC (D15).
+  Real narration is far less peaky; not seen on speech-like tests.
+  Accept: a film made from the test's burst narrations passes QA's true-peak check, without
+  lowering `TARGET_LUFS`; ordinary films unchanged.
 - [ ] P2-4 — README refresh reflecting everything above.

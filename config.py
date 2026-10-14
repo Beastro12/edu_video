@@ -78,6 +78,17 @@ DUCK_RATIO = 6
 MUSIC_FADE_S = 6.0           # fade in/out of the whole bed
 MUSIC_XFADE_S = 5.0          # crossfade between tracks / loop repeats (no audible seam)
 VOICE_LUFS = -18             # every scene's narration is levelled to this before mixing
+VOICE_TP_DBTP = -2.0         # true-peak ceiling of a levelled narration: a limiter joins only if the gain would pass it (P2-6)
+assert -20 <= VOICE_TP_DBTP <= 0, "the narration limiter's ceiling must lie between -20 and 0 dBTP"
+LEVEL_ROUNDS = 3             # a limited narration's loudness is re-read at most this often, each time correcting the gain
+LEVEL_MAX_BOOST_DB = 3.0     # ...and its gain may rise at most this far above the linear one: past it the limiter eats what it adds
+LEVEL_MAX_ERR_LU = 0.5       # a narration further than this from VOICE_LUFS is reported
+LIMITER_ATTACK_MS = 5        # the narration limiter (alimiter): lookahead...
+LIMITER_RELEASE_MS = 50      # ...and release
+LIMITER_RATE = 192000        # it works at this rate, where a sample peak is the true peak (at 48 kHz bursts overshoot ~1.1 dB)
+LIMITER_MARGIN_DB = 0.1      # its limit sits this far under VOICE_TP_DBTP, for rounding
+assert 0.1 <= LIMITER_ATTACK_MS <= 80 and 1 <= LIMITER_RELEASE_MS <= 8000, "outside what alimiter accepts"
+assert 0.0625 <= 10 ** ((VOICE_TP_DBTP - LIMITER_MARGIN_DB) / 20) <= 1, "the limiter's limit must lie between -24 and 0 dBFS"
 TARGET_LUFS = -16            # final master
 MASTER_TP_DBTP = -2.0        # true-peak ceiling for loudnorm; AAC adds a little, QA allows -1 (was -1.5)
 

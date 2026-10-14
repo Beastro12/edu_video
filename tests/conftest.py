@@ -6,6 +6,7 @@ import sys
 import tempfile
 import wave
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -47,6 +48,32 @@ def decoded_audio(path) -> tuple[float, list[float]]:
 def onset_s(levels: list[float], threshold_db: float = -40) -> float:
     """When sound first rises above the threshold (10 ms resolution)."""
     return next(i for i, db in enumerate(levels) if db > threshold_db) / 100
+
+
+QUIET_NARRATION_READING = """[Parsed_ebur128_1 @ 0x0] Summary:
+
+  Integrated loudness:
+    I:         -24.0 LUFS
+    Threshold: -34.0 LUFS
+
+  Loudness range:
+    LRA:         0.0 LU
+
+  True peak:
+    Peak:      -20.0 dBFS
+"""
+
+
+def fake_ffmpeg(cmd, cwd=None, encodes=None):
+    """Stands in for assembly.run in tests about a clip's name or arguments, not its pictures or
+    sound (P2-6 reads a narration's loudness before it encodes): a loudness reading (`-f null -`)
+    is answered with a quiet narration, anything else writes its output file as a stub and is
+    appended to `encodes` if given."""
+    if cmd[-3:] == ["-f", "null", "-"]:
+        return SimpleNamespace(stderr=QUIET_NARRATION_READING)
+    if encodes is not None:
+        encodes.append(cmd)
+    Path(cmd[-1]).write_bytes(b"clip")
 
 
 class PaidCallInOfflineTest(BaseException):

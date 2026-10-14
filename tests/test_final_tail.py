@@ -7,7 +7,7 @@ import math
 from pathlib import Path
 
 import pytest
-from conftest import ROOT
+from conftest import ROOT, fake_ffmpeg
 
 import assembly
 import config
@@ -52,9 +52,9 @@ def test_scene_frames_default_tail_is_unchanged_and_a_given_tail_adds_its_frames
 
 @pytest.fixture
 def commands(monkeypatch):
-    """The FFmpeg commands that scene clips would run, without running them."""
+    """The FFmpeg encodes that scene clips would run, without running them."""
     seen = []
-    monkeypatch.setattr(assembly, "run", lambda cmd, cwd=None: seen.append(cmd) or Path(cmd[-1]).write_bytes(b"clip"))
+    monkeypatch.setattr(assembly, "run", lambda cmd, cwd=None: fake_ffmpeg(cmd, cwd, seen))
     return seen
 
 

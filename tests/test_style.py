@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from conftest import ff
+from conftest import fake_ffmpeg, ff
 
 import assembly
 import config
@@ -600,7 +600,7 @@ def old_moving_filter(target, v_len, is_ai):
 @pytest.fixture
 def clip_name(monkeypatch, small, media, tmp_path):
     """The name a scene clip gets (a hash of its files and exact filters, D9), without encoding it."""
-    monkeypatch.setattr(assembly, "run", lambda cmd, cwd=None: Path(cmd[-1]).write_bytes(b"clip"))
+    monkeypatch.setattr(assembly, "run", fake_ffmpeg)  # answers P2-6's loudness reading, writes a stub clip
     made = iter(range(100))
 
     def name(kind):

@@ -803,3 +803,53 @@ change `FINAL_TAIL_S`.
 DIVERGED — none (D27 is new).
 
 NEXT — P2-6.
+
+## 2026-10-14 P2-6 Each narration's first second is louder than the rest
+CHANGED:
+- `assembly.py`: the scene clip's single-pass `loudnorm` is replaced.
+  - `scene_audio_filter`, `voice_gain`, `_read_level` and `_limiter`: read the scene's own audio
+    with `ebur128=peak=true`, then apply one `volume` gain to `VOICE_LUFS`.
+  - An `alimiter` (192 kHz, `latency=1`) runs only when the gain would pass `VOICE_TP_DBTP`,
+    followed by a make-up loop of at most 3 re-readings, capped at +3 dB.
+  - Anything under -69 LUFS is left alone.
+  - Readings are cached in `clips/level_<key>.json`, keyed by the narration, the chain and every
+    levelling setting.
+- `config.py`: `VOICE_TP_DBTP`, `LEVEL_*` and `LIMITER_*` settings.
+- `utils.ebur128_summary`, shared with `qa.loudness`.
+- Tests:
+  - `tests/test_voice_level.py` (new, about 40);
+  - `conftest.fake_ffmpeg` (answers the reading for tests that stub encodes);
+  - `test_closing_fade` now also checks the last narration's first and last seconds;
+  - `test_cache`: the free rebuild keeps every paid file.
+- D28 (amends D12's chain); BACKLOG P2-8 and P2-9 (new), plus a P2-5 note.
+
+CHECKED:
+- First second vs the rest on the clip's voice: from +1.85 dB to 0.00 on a tone; from +1.84 to
+  0.00 on pink noise; from +0.74…+2.68 to +0.01 on three synthetic voices; from +0.70…+2.58 to
+  +0.14…+0.29 on three hard burst cases, where the residual is the limiter at the bursts.
+- Scenes measure -18.0 to -18.2 LUFS.
+- On a 6-scene film: every clip at -18.0 (before -15.8 to -17.6); the voice-only track's first
+  seconds are flat; QA passes.
+- Timing is sample-exact (D12): a 1-sample shift or an uncompensated limiter fails the sign test.
+- The reviewer verified independently:
+  - a tone's +1.85 → 0.00 at -18.0 LUFS;
+  - limiter lag of 0 samples and a full-length flush;
+  - paid file keys unchanged.
+- Mutation checks: 20 mutants, killed. One is equivalent: `VOICE_TP_DBTP` is already in the
+  limiter text.
+- **Reviewer: no Critical.** Fixed after it:
+  - the level cache key now covers every setting;
+  - a 0.1 LU miss is accepted (a float comparison had forced an extra reading);
+  - the tunables are in config;
+  - a test checks that FFmpeg's alimiter has `latency`.
+  The limiter text and clip keys are unchanged by these fixes (pinned).
+- `make check`: 422 passed (implementer, on this exact code).
+
+ASSUMED — real ElevenLabs speech behaves like the synthetic voices. How often the limiter
+engages is not verified; the level files' `limited` field will show it on the first live run.
+
+DIVERGED — none (D28 records the change to D12's chain).
+
+NEXT:
+- P2-2 (thumbnail), then P2-4 (README and runbook).
+- P2-8: the master `loudnorm` still lifts the film's first second by about 1.8 dB, once per film.

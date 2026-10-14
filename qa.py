@@ -16,7 +16,7 @@ from pathlib import Path
 
 import config
 from assembly import mix_graph, mix_key, xfade_offsets
-from utils import is_fresh, load_json, run, video_duration
+from utils import ebur128_summary, is_fresh, load_json, run, video_duration
 
 WINDOW_S = 0.1
 
@@ -40,12 +40,8 @@ def levels_db(inputs: list[Path], graph: str | None = None) -> list[float]:
 
 def loudness(path: Path) -> tuple[float, float]:
     """(integrated loudness LUFS, true peak dBTP), EBU R128."""
-    log = run(["ffmpeg", "-nostats", "-i", str(path), "-map", "0:a", "-af", "ebur128=peak=true",
-               "-f", "null", "-"]).stderr
-    summary = log[log.rfind("Summary:"):]
-    integrated = float(re.search(r"I:\s+(-?[\d.]+) LUFS", summary).group(1))
-    peak = float(re.search(r"Peak:\s+(-?[\d.]+|-inf) dBFS", summary).group(1))
-    return integrated, peak
+    return ebur128_summary(run(["ffmpeg", "-nostats", "-i", str(path), "-map", "0:a", "-af", "ebur128=peak=true",
+                                "-f", "null", "-"]).stderr)
 
 
 def black_segments(path: Path) -> list[tuple[float, float]]:

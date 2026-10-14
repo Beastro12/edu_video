@@ -27,6 +27,15 @@ def run(cmd: list[str], cwd: str | None = None) -> subprocess.CompletedProcess:
     return result
 
 
+def ebur128_summary(log: str) -> tuple[float, float]:
+    """(integrated loudness LUFS, true peak dBTP) from the log of an `ebur128=peak=true` run.
+    Silence reads -70.0 LUFS and -inf dBTP."""
+    summary = log[log.rfind("Summary:"):]
+    integrated = float(re.search(r"I:\s+(-?[\d.]+) LUFS", summary).group(1))
+    peak = float(re.search(r"Peak:\s+(-?[\d.]+|-inf) dBFS", summary).group(1))
+    return integrated, peak
+
+
 def duration(path: str | Path) -> float:
     out = run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
                "-of", "json", str(path)]).stdout
