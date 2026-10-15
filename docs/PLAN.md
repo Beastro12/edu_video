@@ -1,99 +1,103 @@
-# Plan from here — Pietro and Claude (written 2026-09-27)
+# Plan from here — Pietro and Claude (rewritten 2026-10-14)
 
 BACKLOG.md stays the list of tasks and their acceptance criteria. This file says in what order
 they happen, what gates them, and who unblocks what. Claude updates it when a phase ends.
 
-## Where we are (checked 2026-09-27, after P1-7)
+## Where we are (checked 2026-10-14)
+
+**Goal (Pietro, 2026-10-14):** "finish this project to MVP", with a first film on a New Scientist
+headline, "Do AIs already process information in a way that gives rise to consciousness?",
+"in kurzgesagt style + others I said I like". MVP = one real film made end to end by the
+pipeline and watched by Pietro (Phase 3 below).
 
 Verified:
-- P0-1…P0-7 (except P0-3) and P1-1…P1-7 are done, each with an offline test, a reviewer pass
-  and a PROGRESS entry.
-- `make check`: 134 tests pass, also from a fresh clone of the pushed branch.
-- No key pattern and no `.env` anywhere in git history.
-- Dependencies are consistent (`pip check`).
-- The CLI runs with no keys, and `--estimate` calls nothing.
-- PR #3's CI is green (the Next.js jobs).
+- **Offline MVP work, done:** P3-1 research briefs, P3-3 the first film's brief and script,
+  P3-2 the flat style, P1-11 the lock file, P2-3 the run report, P2-7 the fade after the last
+  word, P2-6 even narration levels, P2-2 the thumbnail, P2-4 the README and runbook.
+  - Each has offline tests, an independent reviewer pass (every Critical fixed before commit)
+    and a PROGRESS entry.
+  - Each is pushed to `auto/dev` in Beastro12/edu_video.
+- **`make check`:** 517 tests pass (2026-10-15, rerun after a container restart).
+- **The first film's script** is in `topics/ai-global-workspace/`: 39 scenes, about 16 min of
+  narration.
+  - Every fact is traced to a brief line labelled by source: Anthropic's own 6 July 2026 post,
+    or established science.
+  - It was critic-reviewed and fact-checked. It never says or implies an AI is, or isn't,
+    conscious.
+  - `script.md` is the readable version.
+- **Without keys**, `--script-only` seeds and builds the script with zero calls.
+- **`--estimate` for the first film** (run 2026-10-15 with a dummy Google key, so the stills are
+  priced; nothing was called):
+  - without Veo: **€3.31 typical, €10.96 worst case**;
+  - with Veo: €9.06 typical, €16.24 worst case;
+  - against the €10 budget (NEEDS_PIETRO, 2026-10-15).
 
 Not verified, and why it matters:
-1. **Nothing has run against the real APIs.** Model names, request shapes and prices come
-   from documentation and secondary sources, checked only against mocks. This is the
-   project's biggest risk: every feature added before the first live run is built on it.
-2. **With a Google key, the first film may stop partway.** Veo is on by default. A 15-min
-   film is estimated at €8.85 typical and €15.16 worst case (`--estimate`, Veo capped at 2
-   clips a day), against a €10 budget for all runs together. Until you decide (NEEDS_PIETRO),
-   check `--estimate` first, or run with `--no-ai-video` (€2.06 typical). With Veo 3.1 Lite
-   (D20: no Veo 4 found) the film is €4.14 typical, still €10.45 in the worst case.
-3. **Every film has a known defect:** the closing fade also dims the last narration (P1-8).
-4. **Not publishable yet:** `music/` is empty (a synthetic placeholder bed is used), and the
-   YouTube description is a placeholder.
-5. **No CI runs the Python tests.** `Beastro12/edu_video` has no CI at all (since the move
-   on 2026-09-30), so a regression is caught only if the agent runs `make check`.
-6. **Dependencies are unpinned** (`>=` only). The installed versions are exactly the tested
-   minimums, so a new SDK release could break the calls that the tests mock.
+1. **Nothing has run against the real APIs** (no keys in this environment, and the network
+   policy blocks `api.elevenlabs.io`). Model names, request shapes and prices are checked only
+   against mocks. This is still the biggest risk.
+2. **The flat look is unseen.** 12 of the script's 29 still and Veo descriptions use photographic
+   words, which may pull pictures away from flat. Look at the first few stills (NEEDS_PIETRO).
+3. **Levelling is tested on synthetic voices only.** Real ElevenLabs speech is not. The run
+   report and `clips/level_*.json` will show how often the limiter engages.
+4. **Not publishable yet:** `music/` is empty (a placeholder pad is used), and the YouTube
+   description text is a placeholder.
+5. **Known, small, open:**
+   - P2-8: the film's first second is about 1.8 dB louder, from the master `loudnorm`, once per
+     film.
+   - P2-9: true-peak margin on dense bursts.
+   - P1-14: a millisecond Ctrl-C window.
+   - P3-4: a rerun without `--brief` doesn't re-seed a deleted chapter.
 
 ## Phase 1 — Claude, now (needs no keys)
 
-In this order; each is a normal loop task (test, change, review, commit, PROGRESS):
-1. **P1-8**: fade only the music at the end, not the voice (fixes a defect in every film).
-2. **P1-9**: faster final film encode: blocked (D22), no setting meets the bar; your trade-off.
-3. **P1-11**: pin dependency versions in a lock file (new; foundation).
-4. **P2-3**: run report per film (costs, timings, QA, fallbacks). The first live run needs it.
-5. **P2-5**: prune unused clips.
-6. **P2-2**: thumbnail.
-7. **P2-6**: even out each narration's louder first second (found in P1-8).
-8. **P2-7**: start the picture's fade to black after the last word (found in P1-8's review).
-9. **P2-4**: README refresh, last.
+Done 2026-10-15: P2-2 (thumbnail) and P2-4 (README with the first-film runbook). Offline work
+left, none of it blocking the first film: P2-8, P3-4, P1-14, P2-9, P2-5. P2-1 (batch mode) waits
+for one real film.
 
-P2-1 (batch mode) waits for Phase 3: producing many films makes sense only after one real
-film has been verified. When only Pietro-blocked tasks remain, Claude stops and says so in
-chat and PROGRESS. The `STOP` file is git-ignored, so it exists only on the machine it's made on.
-
-## Phase 2 — Pietro (unblocks everything else)
+## Phase 2 — Pietro (unblocks the film)
 
 Most useful first:
-1. **Veo vs budget** (NEEDS_PIETRO, first and last entries): Veo on or off by default,
-   Veo 3.1 or the ~5× cheaper Lite, and what `BUDGET_EUR` should be. About 5 minutes.
-2. **Keys, then `make smoke` once** (NEEDS_PIETRO, keys entry): about €0.10–0.50, on your
-   machine or in a cloud environment with the four variables and the three API hosts allowed.
-   This is the gate for Phase 3.
-3. **Harden the ledger** (NEEDS_PIETRO): two deny rules and one CLAUDE.md line.
-4. **CI for the Python tests** (NEEDS_PIETRO): yes or no to an `edu_video` job in
-   `.github/workflows/ci.yml`. Claude writes it if you say yes.
-5. **The repository** (NEEDS_PIETRO): it's public on GitHub, though the move note says
-   private. Say which you want. Claude pushes to `auto/dev`, never `main`: merge it when you're
-   happy, or say "push to main". PR #3 in Mise was closed unmerged.
-6. **Taste, whenever:**
-   - music you have rights to (NEEDS_PIETRO);
-   - the YouTube description text;
-   - whether the drift stutters visibly (P1-10: a 2-minute look);
-   - Eleven v4 for the narration (NEEDS_PIETRO: a €0.12 listening check, once the keys work);
-   - the pause lengths (FYI entry);
-   - two stale "Imagen" lines in CLAUDE.md (the stills now use the Gemini image model).
+1. **Keys and hosts.** Either:
+   - in this cloud environment's settings (title bar → environment → Edit), add
+     `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` and `GOOGLE_API_KEY` as
+     environment variables, and add `api.elevenlabs.io` to Allowed domains; or
+   - run on your machine with `.env`.
+   Never paste keys into chat.
+2. **The look** (NEEDS_PIETRO, 2026-10-14): is "Kurzgesagt-inspired pictures, calm
+   SleepOnPhysics voice" what you meant, and which "others"?
+3. **Veo** on or off for this film (default off), and `BUDGET_EUR` (€10 now): the no-Veo
+   worst case is €10.96 (NEEDS_PIETRO, 2026-10-15).
+4. **Music** you hold rights to (otherwise the placeholder pad).
+5. **Earlier open items** (NEEDS_PIETRO): CI, repository visibility, Eleven v4, pacing, the
+   film encode trade-off, ledger hardening, and the opusplan settings diffs (still waiting
+   for your yes).
 
-## Phase 3 — together, after `make smoke` passes
+## Phase 3 — the first film, together
 
-1. Claude fixes whatever the smoke run shows wrong (model names, response shapes, prices)
-   and records it in PROGRESS.
-2. **First real film**:
-   - Claude runs `--estimate` first, then a 15-min film (without Veo unless you've decided
-     otherwise), with its QA report and run report.
-   - **You watch it.** This is the real acceptance test of the product.
-3. Claude fixes what the first film shows. Then P2-1 (batch mode with the variety check) and,
-   if you want Veo, the one-clip `live_veo` check.
-4. Publishing stays yours: the pipeline makes the film, subtitles, metadata and thumbnail.
-   Uploading to YouTube is not automated.
+1. `make smoke` once (about €0.10–0.50). Claude fixes whatever it shows wrong.
+2. The film. README's "Make the first film" section has the exact commands:
+   - `--estimate` first;
+   - then the run with `--brief topics/ai-global-workspace/brief.md --style flat --no-ai-video`;
+   - look at the first stills;
+   - read `run_report.md` and `qa.json`.
+3. **You watch it.** That is the acceptance test of the MVP.
+4. Claude fixes what the film shows. Then P2-1 (batch mode).
+5. Publishing stays yours. The pipeline makes the film, subtitles, metadata (with the brief's
+   Sources) and thumbnail.
 
 ## How we work
 
-- **Claude** runs the CLAUDE.md loop:
-  - one task per commit, pushed to `auto/dev` in `Beastro12/edu_video` (not `main`);
-  - a reviewer pass before each commit;
-  - each PROGRESS entry labels what was verified vs assumed;
-  - anything that needs you goes to NEEDS_PIETRO, and its task is marked `[~]`.
-- **Where this departs from CLAUDE.md:** CLAUDE.md says "work on `auto/dev`. No `git push`".
-  The branch now matches. The push remains, because a cloud session's work is lost unless it's
-  pushed, so Claude pushes `auto/dev` only. Update CLAUDE.md if you want the file to match.
-- **Pietro** reads NEEDS_PIETRO (newest last) and the latest PROGRESS entries, and answers in
-  chat or by editing an entry.
-- **Money:** Claude makes no live call without keys and budget. `make smoke` runs once;
-  Veo is capped at 2 clips a day; the ledger total is the cap.
+- **Claude Code** runs the CLAUDE.md loop: one task per commit, pushed to `auto/dev` (not
+  `main`), a reviewer pass before each commit, a PROGRESS entry labelling what was verified vs
+  assumed, and NEEDS_PIETRO for what needs you.
+- **Operating model (Pietro, 2026-10-14):**
+  - The main session plans, researches, fact-checks and reviews diffs.
+  - Sonnet subagents implement each task from a written spec.
+  - An independent reviewer subagent checks each diff.
+  - The `opusplan` / Haiku-helper settings themselves are not applied yet: they wait for
+    Pietro's yes.
+- **Where this departs from CLAUDE.md:** CLAUDE.md says "No `git push`". A cloud session's work
+  is lost unless pushed, so Claude pushes `auto/dev` only.
+- **Money:** no live call without keys and budget. `make smoke` runs once; Veo is capped at 2
+  clips a day; the ledger total is the cap. Each run's costs are in its `run_report.md`.

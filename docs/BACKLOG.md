@@ -277,4 +277,5 @@ it); batch mode waits for one verified live film.
   Real narration is far less peaky; not seen on speech-like tests.
   Accept: a film made from the test's burst narrations passes QA's true-peak check, without
   lowering `TARGET_LUFS`; ordinary films unchanged.
-- [ ] P2-4 — README refresh reflecting everything above.
+- [x] P2-4 — README refresh reflecting everything above. Done 2026-10-15, with a "Make the
+  first film" runbook.

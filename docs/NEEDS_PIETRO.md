@@ -255,3 +255,16 @@ the picture viewers see most. The layout has only been seen on stand-in backgrou
 **Recommend:** if the picture has letters in it or the composition fights the title, say so. I'd
 then add the still critic for this one picture, or adjust the composition note. To redraw just
 the thumbnail, delete `thumbnail.jpg` and the picture it used.
+
+## 2026-10-15 — The first film's budget: €10 covers the typical case, not the worst (money)
+**What:** `--estimate` for the first film (dummy Google key, so the stills are priced; nothing
+called):
+- **without Veo:** €3.31 typical, €10.96 worst case;
+- **with Veo:** €9.06 typical, €16.24 worst case.
+The worst case is every critic round and every Manim retry, plus every still rejected twice.
+**Why it matters:** `BUDGET_EUR` is €10 for all runs together, including `make smoke`. The cap
+stops the run before it overspends (`BudgetExceeded`), so nothing is lost: raise the budget and
+rerun the same command, and it resumes without paying twice. But a worst-case run would stop
+before the film is finished.
+**Recommend:** `BUDGET_EUR=15` in `.env` for the first film without Veo. With Veo, `BUDGET_EUR=20`,
+or decide after seeing the no-Veo film. The run report shows what it actually cost.

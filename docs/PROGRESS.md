@@ -917,3 +917,37 @@ ASSUMED — the picture needs no still critic (D29), and Pietro looks at the fir
 DIVERGED — D29 departs from D10 and D16 on purpose, with the reasons recorded.
 
 NEXT — P2-4 (README and runbook). P2-5's acceptance now covers the thumbnail's picture.
+
+## 2026-10-15 P2-4 README refresh and the first-film runbook
+CHANGED:
+- `README.md`:
+  - the intro covers research briefs and the two looks;
+  - the agents table has the style, narration levelling and a wrap-up row (QA, metadata with
+    Sources, subtitles, thumbnail, run report);
+  - new "Make the first film" runbook: keys, `make smoke`, `--estimate`, the run, what to look
+    at, music before publishing;
+  - new "Another research film" and "Research briefs" sections;
+  - a "Run report" section.
+- `docs/PLAN.md`: rewritten for 2026-10-14/15.
+- NEEDS_PIETRO: the first film's budget.
+
+CHECKED:
+- The runbook's estimate command, run exactly as written from the repo root: exit 0, nothing
+  written. It printed the flat style, "would seed outline.json, chapter_01–05", and €2.05 /
+  €5.06 without keys.
+- With a dummy Google key (no calls; the estimate never calls):
+  - no Veo: €3.31 typical, €10.96 worst case, which "may EXCEED" the €10 budget;
+  - with Veo: €9.06 typical, €16.24 worst case.
+  Recorded in NEEDS_PIETRO.
+- Docs only: no code changed since `make check` passed (517).
+
+ASSUMED — none.
+
+DIVERGED:
+- CLAUDE.md's file table (no rows for `run_report.py`, `thumbnail.py`, `topics/`) and its two
+  stale "Imagen" lines are left for Pietro. It's his instruction file.
+
+NEXT:
+- **Offline MVP work is done.** The first film needs Pietro: keys and the ElevenLabs host, the
+  budget, the look, music.
+- Offline backlog left: P2-8, P3-4, P1-14, P2-9, P2-5.
