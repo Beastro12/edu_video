@@ -20,12 +20,13 @@ import ledger
 import pipeline
 import qa
 import run_report
+import thumbnail
 from agents import ai_video, google_client, image_agent, manim_agent, still_critic, voice
 from utils import brief_key, load_json, save_json
 
 REAL_GET_SCRIPT = pipeline.get_script  # the film fixture fakes it
 REAL_RUN_QA = qa.run_qa  # the fixtures replace it on the module
-STAGES = ["script", "narration", "visuals", "scene clips", "assembly", "metadata", "QA"]
+STAGES = ["script", "narration", "visuals", "scene clips", "assembly", "metadata", "thumbnail", "QA"]
 OLD_KEYS = {"time", "provider", "model", "units", "est_cost_eur"}  # what an entry had before P2-3
 
 
@@ -198,6 +199,7 @@ def make_film(monkeypatch, tmp_path, media):
     monkeypatch.setattr(manim_agent, "render_scene", render_manim)
     monkeypatch.setattr(pipeline, "get_script", get_script)
     monkeypatch.setattr(pipeline.metadata, "write_metadata", lambda work: None)
+    monkeypatch.setattr(pipeline.thumbnail, "make", lambda work, failures: None)  # test_thumbnail.py's
     monkeypatch.setattr(pipeline.qa, "print_report", lambda report: None)
     state = SimpleNamespace(
         script=script, work=Path(config.BUILD_DIR) / "topic",
@@ -338,6 +340,58 @@ def test_a_clean_run_has_nothing_to_do(film):
     assert sec["Next steps"].strip() == "None: the run finished, QA passed and no scene fell back."
 
 
+THUMB = Path("thumbnail.jpg")
+
+
+def thumbnail_made(monkeypatch, outcome):
+    monkeypatch.setattr(pipeline.thumbnail, "make", lambda work, failures: outcome)
+
+
+def test_the_report_says_where_the_thumbnail_came_from_and_a_good_one_is_no_next_step(film, monkeypatch):
+    film.script["scenes"] = [a_scene(1, "still", "picture one"), a_scene(2, "manim", "diagram two")]
+    thumbnail_made(monkeypatch, thumbnail.Outcome("picture", None, None, THUMB))
+    film.run()
+    sec = sections(film.report())
+    assert field(sec["header"], "Thumbnail") == "the image model's picture with the title drawn on it (`thumbnail.jpg`)"
+    assert sec["Next steps"].strip() == "None: the run finished, QA passed and no scene fell back."
+
+
+@pytest.mark.parametrize("outcome, header, step", [
+    (thumbnail.Outcome("frame", "no GOOGLE_API_KEY", None, THUMB),
+     "a frame of the film (`thumbnail.jpg`): no GOOGLE_API_KEY",
+     "- Thumbnail is a frame of the film: no GOOGLE_API_KEY."),
+    (thumbnail.Outcome("frame", "image model failed (RuntimeError: no image)", thumbnail.RETRY, THUMB),
+     "a frame of the film (`thumbnail.jpg`): image model failed (RuntimeError: no image)",
+     "- Thumbnail is a frame of the film: image model failed (RuntimeError: no image); "
+     "`--retry-failed` asks again."),
+    (thumbnail.Outcome("frame", "budget spent (over BUDGET_EUR)", "a rerun with budget left draws it", THUMB),
+     "a frame of the film (`thumbnail.jpg`): budget spent (over BUDGET_EUR)",
+     "- Thumbnail is a frame of the film: budget spent (over BUDGET_EUR); a rerun with budget left draws it."),
+    (thumbnail.Outcome("none", "ValueError: boom", "see the console log", None),
+     "none: ValueError: boom", "- Thumbnail is not made: ValueError: boom; see the console log."),
+], ids=["no key", "failure recorded", "budget spent", "none"])
+def test_a_thumbnail_that_is_not_the_models_picture_is_a_line_in_the_header_and_a_next_step(
+        film, monkeypatch, outcome, header, step):
+    film.script["scenes"] = [a_scene(1, "still", "picture one"), a_scene(2, "manim", "diagram two")]
+    thumbnail_made(monkeypatch, outcome)
+    film.run()
+    sec = sections(film.report())
+    assert field(sec["header"], "Thumbnail") == header
+    assert [line for line in sec["Next steps"].splitlines() if line.startswith("- ")] == [step]
+
+
+def test_the_thumbnail_line_says_not_made_when_the_stage_was_not_reached_and_no_key_reaches_it(film, monkeypatch):
+    film.run("--script-only")
+    assert field(sections(film.report())["header"], "Thumbnail") == "not made"
+    assert "Thumbnail" not in sections(film.report())["Next steps"]
+
+    monkeypatch.setattr(config, "GOOGLE_API_KEY", "AIza-offline-secret-456")
+    thumbnail_made(monkeypatch, thumbnail.Outcome("frame", "image model failed (key=AIza-offline-secret-456)", None,
+                                                  THUMB))
+    film.run()
+    assert "AIza" not in film.report() and "key=***" in film.report()
+
+
 def test_veo_switched_off_is_one_line_not_one_per_scene(film):
     film.run("--no-ai-video")
     sec = sections(film.report())
@@ -405,7 +459,7 @@ def test_a_run_that_raises_in_the_visuals_stage_still_writes_its_report(film, mo
     timings = dict(rows(sec["Timings"]))
     assert re.fullmatch(r"\d+\.\d s", timings["script"]) and re.fullmatch(r"\d+\.\d s", timings["narration"])
     assert re.fullmatch(r"\d+\.\d s \(stopped here\)", timings["visuals"])
-    assert [timings[s] for s in ("scene clips", "assembly", "metadata", "QA")] == ["not reached"] * 4
+    assert [timings[s] for s in ("scene clips", "assembly", "metadata", "thumbnail", "QA")] == ["not reached"] * 5
     costs = {r[0]: r[1:] for r in rows(sec["Costs"])}
     assert set(costs) == {"anthropic", "elevenlabs", "Total"}, "what was bought before it stopped, and nothing else"
     assert costs["elevenlabs"][0] == "5" and euros(costs["Total"][1]) > 0
@@ -423,7 +477,7 @@ def test_a_stop_after_the_clips_still_shows_the_scenes_that_were_built(film, mon
     assert [r[3] for r in rows(sec["Scenes"])] == ["ai", "still", "still", "manim", "manim"]
     timings = dict(rows(sec["Timings"]))
     assert timings["scene clips"] != "not reached" and timings["assembly"].endswith("(stopped here)")
-    assert timings["metadata"] == timings["QA"] == "not reached"
+    assert timings["metadata"] == timings["thumbnail"] == timings["QA"] == "not reached"
     assert sec["QA"].strip() == "Not run."
 
 
@@ -483,7 +537,7 @@ def test_a_stop_before_the_first_stage_is_a_stop_at_setup(tmp_path):
         raise OSError("disk full")
     sec = sections((work / "run_report.md").read_text(encoding="utf-8"))
     assert field(sec["header"], "Outcome") == "stopped at setup: OSError: disk full"
-    assert [dict(rows(sec["Timings"]))[s] for s in STAGES] == ["not reached"] * 7
+    assert [dict(rows(sec["Timings"]))[s] for s in STAGES] == ["not reached"] * len(STAGES)
 
 
 def test_a_review_log_that_cannot_be_read_does_not_cost_the_report(tmp_path):
@@ -504,7 +558,7 @@ def test_a_script_only_run_writes_a_report_that_says_so(film):
     assert field(sec["header"], "Film") == "Test film"
     timings = dict(rows(sec["Timings"]))
     assert re.fullmatch(r"\d+\.\d s", timings["script"])
-    assert [timings[s] for s in STAGES[1:]] == ["not reached"] * 6
+    assert [timings[s] for s in STAGES[1:]] == ["not reached"] * (len(STAGES) - 1)
     assert sec["QA"].strip() == "Not run."
     assert "rerun without --script-only" in sec["Next steps"]
     assert {r[0] for r in rows(sec["Costs"])} == {"anthropic", "Total"}
@@ -724,4 +778,5 @@ def test_the_layout_and_the_numbers_with_a_fixed_clock(tmp_path, monkeypatch):
     assert field(text, "Started") == "2026-10-14 09:30:05 UTC"
     assert dict(rows(sections(text)["Timings"])) == {
         "script": "3.0 s", "narration": "4.5 s", "visuals": "not reached", "scene clips": "not reached",
-        "assembly": "not reached", "metadata": "not reached", "QA": "not reached", "Total": "9.5 s"}
+        "assembly": "not reached", "metadata": "not reached", "thumbnail": "not reached", "QA": "not reached",
+        "Total": "9.5 s"}

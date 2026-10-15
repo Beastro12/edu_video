@@ -853,3 +853,67 @@ DIVERGED — none (D28 records the change to D12's chain).
 NEXT:
 - P2-2 (thumbnail), then P2-4 (README and runbook).
 - P2-8: the master `loudnorm` still lifts the film's first second by about 1.8 dB, once per film.
+
+## 2026-10-14 P2-2 Thumbnail
+CHANGED:
+- `thumbnail.py` (new): `make(work, failures)` writes `build/<slug>/thumbnail.jpg`, a 1280×720
+  JPEG under 2 MB.
+  - **Picture:** one image through `image_agent.render_still`. The subject is the first still
+    scene's description, never a still rejected for good. The prompt adds a composition note,
+    filled from `THUMBNAIL_COLUMN` ("No text", empty space on the left ~45%), and the style
+    suffix. It is bought only when the thumbnail is stale.
+  - **Fallback:** a frame of the first still or Manim clip.
+  - **Title:** drawn with Pillow's bundled font. A ": " splits it into a headline and a smaller
+    subtitle. Characters the font lacks get stand-ins (− → -, π → pi), and anything else is
+    logged.
+  - **Stamp:** covers the title, picture, style, layout, stand-ins and the Pillow version.
+  - **Failures:** a failed redraw removes the stale jpg and its metadata entry.
+  - `make()` returns an `Outcome` (source, reason, hint).
+- `config.py`: `THUMBNAIL_*` settings.
+- `metadata.py`: names the thumbnail; `drop_thumbnail`.
+- `pipeline.py`: a `thumbnail` stage between metadata and QA, and a `thumbnail` line in the
+  estimate.
+- `run_report.py`: a Thumbnail header line, and a next step on a fallback.
+- `ledger.BudgetExceeded`: the docstring names the one exception.
+- `utils.remove_output`.
+- README.
+- Tests: `tests/test_thumbnail.py` (new), `test_run_report`, `test_still_review`.
+- D29; NEEDS_PIETRO (look at the first real thumbnail); a BACKLOG note on P2-5.
+
+CHECKED:
+- Samples rendered offline from the frame fallback, on a dark and a bright stand-in: the headline
+  "A Small / Lit Stage" at 89 px and the subtitle at 44 px, legible on both. I looked at both.
+- Mutation checks by the implementer: over 40 mutants across three rounds, all killed. They
+  include:
+  - a deleted picture bought again;
+  - the estimate ignoring a current thumbnail;
+  - an odd font range hanging, now a test with a timeout;
+  - the outcome missing from the report;
+  - style left out of the key;
+  - budget re-raised.
+- **Reviewer:** one Critical, the D29 entry was missing. D29 now records the two deliberate
+  exceptions:
+  - to D16: no still critic for this picture;
+  - to D10: a spent budget falls back to a frame instead of stopping, since nothing paid
+    follows.
+- **The reviewer's six warnings, all fixed:**
+  - a rerun could buy an unused picture;
+  - a stale thumbnail could stay named after a failed redraw;
+  - `fit_title` could hang on an odd font range;
+  - characters were dropped silently;
+  - the run report didn't mention the thumbnail;
+  - the prompt and the title column disagreed.
+- Also applied from its suggestions:
+  - a stop or Ctrl-C is never absorbed;
+  - font pins are skipped on another FreeType, with portable property tests added;
+  - a rejected still is never the subject;
+  - redaction before cutting;
+  - an opaque scrim across the column.
+- Not re-reviewed after the fix round. Verified by tests and mutants, and by `make check`: 517
+  passed, rerun after the container restart on 2026-10-15.
+
+ASSUMED — the picture needs no still critic (D29), and Pietro looks at the first one.
+
+DIVERGED — D29 departs from D10 and D16 on purpose, with the reasons recorded.
+
+NEXT — P2-4 (README and runbook). P2-5's acceptance now covers the thumbnail's picture.

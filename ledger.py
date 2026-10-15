@@ -23,7 +23,9 @@ interrupted = threading.Event()  # set on Ctrl-C: jobs in flight give up too (a 
 
 class BudgetExceeded(Exception):
     """A paid call would take total spend past BUDGET_EUR. The fallback chain must never
-    swallow this: the run stops."""
+    swallow this: the run stops. The one deliberate exception is the thumbnail (thumbnail.py):
+    nothing paid runs after it and the film is already made, so it falls back to a frame of the
+    film and QA still runs."""
 
 
 def ledger_path() -> Path:

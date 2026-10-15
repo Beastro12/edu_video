@@ -177,6 +177,29 @@ def write_metadata(work: Path) -> dict:
         raise ValueError(f"description is over YouTube's {DESCRIPTION_MAX_BYTES} bytes; "
                          "shorten YOUTUBE_DESCRIPTION or the brief's Sources")
     meta = {"title": title, "description": description, "chapters": chapters, "duration_s": round(total, 3)}
+    if (work / config.THUMBNAIL_FILE).exists():  # one from an earlier run; thumbnail.py renews it
+        meta["thumbnail"] = config.THUMBNAIL_FILE
     save_json(work / "metadata.json", meta)
     (work / "subtitles.srt").write_text(subtitles(work, script["scenes"], manifest, starts))
     return meta
+
+
+def add_thumbnail(work: Path) -> None:
+    """The thumbnail takes its title from metadata.json, so it is made after it: name it there once
+    it exists."""
+    path = work / "metadata.json"
+    meta = load_json(path)
+    if meta.get("thumbnail") != config.THUMBNAIL_FILE:
+        save_json(path, {**meta, "thumbnail": config.THUMBNAIL_FILE})
+
+
+def drop_thumbnail(work: Path) -> None:
+    """The thumbnail on disk was for other inputs and has been removed: stop naming it, so that
+    nothing is uploaded with the old title."""
+    path = work / "metadata.json"
+    try:
+        meta = load_json(path)
+    except (OSError, ValueError):
+        return
+    if meta.pop("thumbnail", None) is not None:
+        save_json(path, meta)

@@ -150,6 +150,35 @@ assert LEAD_IN_S + TAIL_S - XFADE_S >= QA_PAUSE_S + 0.2, \
 # First lines of every description; chapter timestamps follow. Change to taste.
 YOUTUBE_DESCRIPTION = "A calm, slow science documentary to relax or fall asleep to."
 
+# --- Thumbnail (thumbnail.py, P2-2) -----------------------------------------------
+# The image model draws the picture and is never asked for text (it garbles letters); the title
+# is drawn by us over a dark gradient, in the left of the frame. The picture's prompt is the first
+# still's description + THUMBNAIL_COMPOSITION + the active style's still suffix.
+THUMBNAIL_FILE = "thumbnail.jpg"      # in the build folder, next to metadata.json, which names it
+THUMBNAIL_SIZE = (1280, 720)          # YouTube's recommended size
+THUMBNAIL_MAX_BYTES = 2_000_000       # YouTube's limit is 2 MB
+THUMBNAIL_JPEG_QUALITY = (92, 85, 78, 70, 60)  # tried in turn until the file fits
+# Doesn't say what the empty space is for: naming a title could make the model draw one. {pct} is
+# filled in from THUMBNAIL_COLUMN (to the nearest 5), so the picture is asked to keep clear what the title covers.
+THUMBNAIL_COMPOSITION = (" Composition: calm, dark, empty space across about the left {pct}% of the frame; "
+                         "the subject sits to the right of it. No text.")
+THUMBNAIL_MARGIN_PX = 72              # the title's distance from the left edge...
+THUMBNAIL_COLUMN = 0.46               # ...and where its right edge may reach, as a share of the width
+THUMBNAIL_MAX_LINES = 3
+THUMBNAIL_FONT_PX = (110, 30)         # the title starts at the first size and shrinks to fit, down to the second
+THUMBNAIL_SPLIT_LINES = (2, 2)        # a title with a ": " is split there into a headline and a subtitle: their line limits
+THUMBNAIL_SUBTITLE_RATIO = 0.5        # the subtitle's size as a share of the headline's (never under the smallest THUMBNAIL_FONT_PX)
+THUMBNAIL_SUBTITLE_GAP = 0.25         # the space between them, as a share of the headline's size
+THUMBNAIL_SUBTITLE_OPACITY = 0.85     # the subtitle's off-white, a little dimmer than the headline's
+THUMBNAIL_LINE_SPACING = 1.2
+THUMBNAIL_TITLE_RGB = (244, 239, 230)  # warm off-white
+THUMBNAIL_SCRIM = ((8, 10, 14), 0.8, 0.7)  # colour, opacity (held across the title column) and the share of the width where it has faded out
+THUMBNAIL_SHADOW = (0.1, 1.6, 0.05)   # the title's soft shadow: blur, strength, and how far it drops (blur and drop as shares of the font size)
+assert 0 < THUMBNAIL_FONT_PX[1] <= THUMBNAIL_FONT_PX[0], "THUMBNAIL_FONT_PX is (largest, smallest)"
+assert THUMBNAIL_MARGIN_PX < THUMBNAIL_COLUMN * THUMBNAIL_SIZE[0], "the title column would have no width"
+assert THUMBNAIL_SCRIM[2] > THUMBNAIL_COLUMN, "the scrim must fade out beyond the title column"
+assert 0 < THUMBNAIL_SUBTITLE_RATIO <= 1 and 0 <= THUMBNAIL_SUBTITLE_OPACITY <= 1, "ratio and opacity are shares"
+
 # --- Pipeline ---------------------------------------------------------------
 BRIEF_FILE = "brief.md"         # the research brief (--brief), kept in the build folder; metadata reads its Sources
 BRIEF_KEY_FILE = "brief.key"    # which brief the script stage was written with, so a change can't go unnoticed

@@ -27,7 +27,7 @@ from utils import atomic_output, brief_key, load_json, log, redact
 
 FILE = "run_report.md"
 PREVIOUS = "run_report.prev.md"  # the report this run replaced: one is kept
-STAGES = ("script", "narration", "visuals", "scene clips", "assembly", "metadata", "QA")
+STAGES = ("script", "narration", "visuals", "scene clips", "assembly", "metadata", "thumbnail", "QA")
 PLAN_ORDER = ("ai_video", "still", "manim")  # best first: a scene fell back when it ended up later
 USED = {"ai": "ai_video", "still": "still", "manim": "manim"}  # manifest kind -> script visual_type
 FELL_BACK_TO = {"still": "a still", "manim": "Manim"}
@@ -112,6 +112,7 @@ class Run:
         self.argv = sys.argv[1:]
         self.script: dict | None = None
         self.qa: dict | None = None
+        self.thumbnail = None  # thumbnail.Outcome (P2-2), once the thumbnail stage has run
         self.outcome: str | None = None  # "script only"; otherwise worked out from error and qa
         self.error: BaseException | None = None
         self.timeline = _Timeline()
@@ -178,6 +179,17 @@ class Run:
     def _veo_off(self) -> str:
         return "--no-ai-video" if ai_video.available() else "no GOOGLE_API_KEY"
 
+    def _thumbnail(self) -> str:
+        """What the thumbnail came from, or why there is none; "not made" if the stage wasn't reached."""
+        t = self.thumbnail
+        if t is None:
+            return "not made"
+        if t.source == "picture":
+            return f"the image model's picture with the title drawn on it (`{t.path.name}`)"
+        if t.source == "frame":
+            return _line(f"a frame of the film (`{t.path.name}`): {t.reason}", 300)
+        return _line(f"none: {t.reason}", 300)
+
     def _header(self) -> str:
         title = (self.script or {}).get("title") or "not known yet"
         return "\n".join([
@@ -191,7 +203,8 @@ class Run:
             f"- **Style:** {config.STYLE}",
             f"- **Brief:** {self._brief()}",
             f"- **Models:** Claude `{config.CLAUDE_MODEL}`, narration `{config.TTS_MODEL}`, "
-            f"images `{config.IMAGE_MODEL}`, Veo `{config.VEO_MODEL}` ({self._veo()})", ""])
+            f"images `{config.IMAGE_MODEL}`, Veo `{config.VEO_MODEL}` ({self._veo()})",
+            f"- **Thumbnail:** {self._thumbnail()}", ""])
 
     # --- costs ---
 
@@ -335,6 +348,10 @@ class Run:
                 hints = list(dict.fromkeys(x.hint for x in why if x.hint))
                 steps.append(f"Scene {r.id} fell back to {FELL_BACK_TO.get(r.used, r.used)}: "
                              + "; ".join([x.text for x in why] + hints))
+        if self.thumbnail is not None and self.thumbnail.source != "picture":
+            what = "a frame of the film" if self.thumbnail.source == "frame" else "not made"
+            steps.append(f"Thumbnail is {what}: {self.thumbnail.reason}"
+                         + (f"; {self.thumbnail.hint}" if self.thumbnail.hint else ""))
         off = sum(1 for r in rows or [] if any(x.veo_off for x in r.reasons))
         if off:
             fix = ("rerun without it to use Veo (it costs money)" if ai_video.available()

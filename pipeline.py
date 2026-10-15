@@ -16,6 +16,7 @@ import ledger
 import metadata
 import qa
 import run_report
+import thumbnail
 from agents import ai_video, critic, image_agent, manim_agent, music, script_agent, voice
 from assembly import add_music, build_scene_clip, crossfade_concat, scene_tail
 from failures import FailedEarlier, Failures
@@ -372,7 +373,7 @@ def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool
     manim_tries = config.MAX_MANIM_ATTEMPTS + 1 if worst_case else 1  # worst: every fix round, then a retime
     est = {"claude": sum(ledger.claude_eur(model, i, o) * (reviews if label == "review" else 1)
                          for label, i, o in calls),
-           "elevenlabs": 0.0, "images": 0.0, "veo": 0.0}
+           "elevenlabs": 0.0, "images": 0.0, "veo": 0.0, "thumbnail": 0.0}
     veo_left = max(0, config.VEO_MAX_PER_DAY - ledger.veo_clips_today())
     for scene in scenes:
         audio = voice.cache_path(scene["narration"], work / "audio")
@@ -400,6 +401,7 @@ def estimate_cost(minutes: float, work: Path, allow_veo: bool, skip_critic: bool
                 atmospheric=vt != "manim").exists()
             if not cached:
                 est["claude"] += manim_tries * ledger.claude_eur(model, *config.EST_MANIM_TOKENS)
+    est["thumbnail"] = thumbnail.estimate(scenes, work, failed)  # P2-2
     return est
 
 
@@ -601,6 +603,8 @@ def main():
         run_report.stage("metadata")
         metadata.write_metadata(work)  # metadata.json + subtitles.srt for YouTube
         print(f"• YouTube metadata: {work / 'metadata.json'}, {work / 'subtitles.srt'}")
+        run_report.stage("thumbnail")  # after metadata: the title is its
+        run.thumbnail = thumbnail.make(work, Failures(failure_log.path(work), retry=args.retry_failed))
         run_report.stage("QA")
         run.qa = qa.run_qa(final)  # writes qa.json next to the film
         qa.print_report(run.qa)

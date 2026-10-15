@@ -533,3 +533,52 @@ would pass the true-peak ceiling (P2-6; 2026-10-14; amends D12's audio chain).**
   - Real ElevenLabs speech. The limiter's attack and release are FFmpeg's defaults.
   - The film's first narration is still about +1.8 dB in its first second, from the master's
     single-pass `loudnorm` (P2-8).
+
+**D29 — The thumbnail: one picture from the image model, the title drawn by us, a frame as the
+fallback; two deliberate exceptions to D10 and D16 (P2-2; 2026-10-14).**
+- **What.**
+  - Between metadata and QA, a `thumbnail` stage writes `build/<slug>/thumbnail.jpg`: 1280×720
+    JPEG under YouTube's 2 MB limit, using a quality ladder.
+  - `metadata.json` names it only while it matches the current title and picture. A failed
+    redraw removes the stale file and the entry, so an upload can't ship an old title.
+  - It costs at most one image per film, shown as its own `thumbnail` line in `--estimate`. The
+    stamp is checked before anything is bought, so a rerun with a fresh thumbnail buys nothing.
+  - The run report says what the picture came from, and why it fell back if it did.
+- **The picture.**
+  - It goes through `image_agent.render_still`: same model, 16:9 request, budget reservation,
+    ledger entry (attributed per D26), failures.json and content-key cache.
+  - Prompt: the first still scene's description (else the first Veo scene's; never a still the
+    critic rejected for good), then a composition note ("No text", empty space on the left ~45%
+    for the title), then the active style's still suffix.
+  - The style is in the picture's key and in the jpg's stamp, so a thumbnail is never reused
+    across styles.
+  - Not chosen:
+    - a chapter summary as the subject: abstract prose invites diagrams or lettering;
+    - naming the title in the prompt: the model might draw it.
+- **Exception to D16 (every still is reviewed).** The thumbnail's picture is not sent to the still
+  critic. It is only a background behind our own title, and a review would add a call and up to
+  two retries.
+  - The risk this leaves: stray letters, D16's main catch, on the picture viewers see most.
+  - Mitigation: the prompt says "No text", and Pietro looks at the first real thumbnail
+    (NEEDS_PIETRO). If letters appear, add the critic for this one picture.
+- **Exception to D10 (the fallback chain never swallows `BudgetExceeded`).** A spent budget during
+  the thumbnail falls back to a free frame instead of stopping the run. That holds only because
+  nothing paid runs after the thumbnail (QA calls no provider) and the film is already made:
+  stopping would only lose QA. A stop or Ctrl-C (`ledger.stopping`/`interrupted`) still stops.
+  The `BudgetExceeded` docstring names this exception.
+- **The title.**
+  - Drawn with Pillow's bundled font (`load_default(size=)`), pinned by the lock, so no system
+    font path is needed.
+  - It goes in the left 46% of the frame, not a third, because a third would make it too small.
+  - A title with ": " and text on both sides is split into a headline (at most 2 lines, as large
+    as fits) and a subtitle (0.5×, at most 2 lines, slightly dimmer).
+  - Other titles get up to 3 lines. Sizes shrink to 30 px, then the text is cut with "…".
+  - Characters the font lacks get plain stand-ins (− → -, π → pi), and any dropped character is
+    logged.
+  - The dark scrim is opaque across the title column, so the title stays readable on bright
+    pictures.
+- **Caching.** `thumbnail.jpg` has a stamp covering the title, picture, style and layout settings.
+  - A rerun leaves it alone, and a new title redraws it for free.
+  - A hand-made replacement survives only while those inputs stay the same; changing any of them
+    redraws over it.
+- **Not verified live:** whether the model honours the composition note and draws no text.

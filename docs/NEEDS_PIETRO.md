@@ -244,3 +244,14 @@ Films are 2.1 s longer.
 **Why:** a fade that dims the last words felt rushed for a sleep film. A shorter fade (1.4 s) was
 the other option, and is abrupt.
 **Recommend:** keep it. Otherwise change `FINAL_TAIL_S` in config.py (at least `FADE_OUT_S`).
+
+## 2026-10-14 — Look at the first real thumbnail (P2-2, taste)
+**What:** `build/<topic>/thumbnail.jpg`, made with the film.
+- The picture is from the image model, with no still critic (D29).
+- The title is drawn by us: "A Small Lit Stage" large, "Global Workspace Theory and Language
+  Models" smaller.
+**Why:** the prompt says "No text", but nothing checks the picture for stray letters, and it's
+the picture viewers see most. The layout has only been seen on stand-in backgrounds.
+**Recommend:** if the picture has letters in it or the composition fights the title, say so. I'd
+then add the still critic for this one picture, or adjust the composition note. To redraw just
+the thumbnail, delete `thumbnail.jpg` and the picture it used.

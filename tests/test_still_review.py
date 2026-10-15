@@ -190,7 +190,8 @@ def test_estimate_prices_a_still_by_what_is_left_to_decide(world, tmp_path):
     world.verdicts[:] = [(True, [])]
     image_agent.reviewed_still(SCENE, visuals)
     assert estimate_for(tmp_path, SCENE)[0] == {"claude": 0, "elevenlabs": pytest.approx(est["elevenlabs"]),
-                                               "images": 0, "veo": 0}
+                                               "images": 0, "veo": 0,  # (P2-2) the thumbnail's picture is still to buy
+                                               "thumbnail": pytest.approx(ledger.image_eur())}
     log = image_agent.review_log(SCENE, visuals)
     (visuals / log["accepted"]).unlink()  # accepted still lost: it will be made again
     assert estimate_for(tmp_path, SCENE)[0]["images"] == pytest.approx(ledger.image_eur())

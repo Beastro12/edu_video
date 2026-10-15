@@ -238,10 +238,12 @@ it); batch mode waits for one verified live film.
   Since P3-2 a build can hold pictures of two styles (D25); `--prune-paid` keeps those the
   last manifest of each style used, or a switch back would buy them all again. `clips/level_*.json`
   (P2-6) are free but save a reading per scene: keep the ones the kept clips used.
+  The thumbnail's picture (P2-2) is a paid file in `visuals/` that no manifest names: keep it
+  (its path is `image_agent.cache_path(thumbnail.picture_scene(...))`).
   Nothing in `music/` is touched. Test: after a settings change and rebuild, `--prune` leaves
   exactly the referenced clips and every paid file.
-- [ ] P2-2 — Thumbnail generation (1280×720, no text baked in by the image model; title
-  text added by FFmpeg/Pillow).
+- [x] P2-2 — Thumbnail generation (1280×720, no text baked in by the image model; title
+  text added by FFmpeg/Pillow). Done 2026-10-14 (D29).
 - [~] P2-1 — Batch mode from `topics.txt`, with a variety check against past titles
   and outlines (avoid near-duplicate videos; YouTube demonetises mass-produced content).
   [blocked: needs one verified live film first, PLAN.md phase 3]

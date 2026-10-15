@@ -165,6 +165,12 @@ def is_fresh(out: Path, key: str) -> bool:
     return out.exists() and stamp.exists() and stamp.read_text().strip() == key
 
 
+def remove_output(out: Path) -> None:
+    """Delete a fixed-name output and the stamp that vouched for it."""
+    _stamp(out).unlink(missing_ok=True)
+    out.unlink(missing_ok=True)
+
+
 @contextmanager
 def stamped_output(out: Path, key: str) -> Iterator[Path]:
     """Rebuild a fixed-name output: drop the old stamp first, write atomically,

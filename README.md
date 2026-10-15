@@ -130,6 +130,15 @@ Chapters follow YouTube's rules: the first at 00:00, each at least 10 s, and at 
 (otherwise the list is left out of the description). The description's opening line is
 `YOUTUBE_DESCRIPTION` in `config.py`.
 
+It also writes `thumbnail.jpg` (1280×720 JPEG, under YouTube's 2 MB) and names it in
+`metadata.json`. The picture is one image from the image model, drawn from the first still
+scene's description in the build's style and asked for no text (about the cost of a still; a
+rerun doesn't buy it again); the title is drawn on the left with Pillow, and a title with a
+": " (colon and space, with text on both sides) is split there into a large headline and a
+smaller subtitle. Without a
+`GOOGLE_API_KEY`, or when the image can't be had, it is a frame of the film instead. A thumbnail
+that can't be made is logged and never fails the run.
+
 ## Tuning
 
 Scenes are narrated and illustrated `WORKERS` at a time (see `config.py`). The budget cap
