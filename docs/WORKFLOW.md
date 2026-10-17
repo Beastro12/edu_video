@@ -28,6 +28,12 @@ file.
 
 1. **Spec** (orchestrator), from the template below, saved in the session scratchpad.
 2. **Design check** (Opus). Verdict GO, GO-with-changes or STOP. The spec is edited until GO.
+   - Every spec gets one, content-only specs included (A5: P3-5 skipped it and contradicted D25).
+   - A fix the orchestrator writes in answer to a finding is written as a state table: for each
+     recorded file it touches, the rows none, same, different and malformed (A5: P3-7's fix
+     covered one row of three).
+   - Trial: before the design check, a Haiku spec linter quotes into the spec every DECISIONS
+     entry whose subject the spec touches.
 3. **Worktree:**
    `git worktree add -b wt/<task> <scratchpad>/wt/<task> auto/dev`.
    - One worktree per implementer, so no agent ever shares a working tree. This rule exists
@@ -63,7 +69,8 @@ file.
   - a crash after each write, then a rerun;
   - an artifact deleted, then a rerun;
   - a hand edit, then a rerun.
-- **DECISIONS touched,** found by the design checker.
+- **DECISIONS touched,** with the lines the spec relies on quoted, including what must stay
+  shared (e.g. D25's "what every style shares"). The design checker adds any that were missed.
 - **Fast test subset.**
 - **Rules:** worktree path; no live calls; no `.env`; no docs/ edits. A reversible gap you find
   yourself: fix it and note it under ASSUMED. Ask only before deleting user files or changing

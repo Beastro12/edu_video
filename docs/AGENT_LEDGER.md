@@ -151,6 +151,65 @@ So a success streak isn't proof the spec was right.
 - Full `make check` runs (7–10 min) were repeated 4+ times per task where a subset would have done.
 - Rebuilding context at each re-review was the reviewer's biggest cost.
 
+### A5. Needs fix three times in a row: the orchestrator (main, Opus), 2026-10-17
+This is a self-analysis: the orchestrator can't be interviewed by anyone but itself. The evidence
+is the live log and the specs in the scratchpad.
+
+**The record:**
+- **P3-7 spec.**
+  - Design check a07d3 flagged that a film run without `--style` re-buys the pilot's pictures.
+  - My binding fix refused a film build that records a *different* style. It missed a build with
+    *no* record, which is the normal case for a new film.
+  - Implementer acf40 found the gap and flagged it rather than deviating, because the spec forbade
+    the fix.
+- **Process.** I ran four full suites at once on 4 cores (load average 23). a1297's wall-clock
+  test failed, and each suite took about 20 min instead of 12.
+- **P3-5 spec.**
+  - It said "each such cue is rewritten into flat-vector terms" and required "lens" in the cue
+    list.
+  - D25 says "a reviewed script serves any style", and "lens" was the subject of scene #31.
+  - I had skipped the design check for this task ("content-only, no cache logic").
+- **Earlier:**
+  - P2-7's visual target (D9) and P1-14's flag invariant (D17);
+  - constraints dropped in the plan merge.
+
+**Why it happens:**
+- **Every error is a rule from elsewhere that the spec didn't carry.** D9, D17 and D25 are
+  standing decisions, and four cores is a fact about the machine. I write specs from the task's
+  goal outward.
+- **Both errors that reached code had gone round the design check,** the one step that reads a
+  spec against everything else:
+  - P3-5 skipped it;
+  - P3-7's error was in my fix to a design-check finding, which nobody checked.
+- **The P3-7 miss has a precise shape:** a recorded file with three states (none, same,
+  different), and a fix that covered one of them. This is A1's cross-run-state cause, in the
+  orchestrator.
+
+**Why it fails:** the exception rule assumed only cache logic could conflict with a decision.
+Content can too: D25 is about content.
+
+**Why the work needs fixing:** the orchestrator writes specs, merges and runs agents in one
+context. The check it saves time on is the one that fails.
+
+**More efficient:**
+1. No exceptions to the design check. P3-5's would have cost minutes of Opus. Skipping it cost
+   an implementer round and a review round on W1 and W3.
+2. A fix written in answer to a design-check finding is written as a state table: for each
+   recorded file it touches, the rows none, same, different and malformed.
+3. Each spec quotes the DECISIONS lines it relies on, not only their numbers, including what must
+   stay shared (D25's "what every style shares").
+4. Parallel work is planned against the machine: one full suite at a time. Done with `flock`, in
+   WORKFLOW.md.
+
+**Replace?**
+- Not the model: these are steps skipped, not reasoning another model would do better.
+- The design checker, an Opus instance with a separate context, already stands in for the
+  orchestrator checking itself. The fix is to stop going round it.
+
+**Idea worth trying:** a Haiku "spec linter" before the design check. It lists every DECISIONS
+entry whose subject the spec touches (style, record, cache key, Veo, brief, seed) and pastes the
+quoted lines into the spec. It is cheap, mechanical, and aimed at exactly this error class.
+
 ## Actions taken (2026-10-16)
 
 | From | Change | Where |
@@ -169,6 +228,16 @@ So a success streak isn't proof the spec was right.
 - Haiku checks [A] quotes against the source mechanically (a84d);
 - probe harnesses kept as reusable files (a84d).
 Each will be tried on the first task it fits, and logged here.
+
+## Actions taken (2026-10-17)
+
+| From | Change | Where |
+|---|---|---|
+| A5 | No exceptions to the design check, content-only specs included | WORKFLOW.md |
+| A5 | A fix to a design-check finding is written as a state table (none / same / different / malformed) for each recorded file it touches | WORKFLOW.md |
+| A5 | Specs quote the DECISIONS lines they rely on, including what must stay shared | WORKFLOW.md (spec template) |
+| A5, process | One full test suite at a time (`flock`) | WORKFLOW.md, tests.md, implementer.md |
+| A5 (trial) | Haiku spec linter before the design check: quotes the DECISIONS entries a spec touches | first used on P2-5's re-spec; measured here |
 
 ## Live log (from 2026-10-16)
 Rows are appended per round; see docs/WORKFLOW.md for the format.
@@ -190,3 +259,7 @@ dropped constraints. Those are the reasons the design check and the plan review 
 | 2026-10-17 | — | — | (exception) | P3-5 | — | — | no design check: content-only task with no cache logic; logged as a deliberate exception |
 | 2026-10-17 | main | Opus | orchestrator (spec) | P3-7 | 1 | needs fix | my design-check change refused a film build recording a DIFFERENT style but missed one with NO record (a film run without --style re-buys the pilot's pictures); found and flagged by implementer acf40, who kept to the spec |
 | 2026-10-17 | main | Opus | orchestrator (process) | wave 1–2 | — | needs fix | 4 full suites at once on 4 cores (load 23): a wall-clock test failed for a1297 and each suite took 20 min; fix: one full suite at a time (flock), in WORKFLOW.md, tests.md, implementer.md |
+| 2026-10-17 | a8b73 | Haiku | tests verifier | P3-5 | 1 | success | 520 passed, 7 deselected, matches the claim; a first run hit its own 20-min background limit at 83% (not a failure), rerun with a longer limit |
+| 2026-10-17 | a3288 | Sonnet | implementer | P3-5 | 1 | success | no Critical; 3 Warnings (lens subject lost to the banned word "lens"; inflections missing though the comment promised them; rewrites added flat-only medium words against D25) |
+| 2026-10-17 | a3c18 | Opus | reviewer | P3-5 | 1 | success | no Critical; probes: base files fail the new check (18 hits / 11 scenes), invariants byte-checked, full suite 520; W1 root cause traced to the spec's own required cue ("lens") |
+| 2026-10-17 | main | Opus | orchestrator (spec) | P3-5 | 1 | needs fix | spec asked for "flat-vector terms" (against D25: "a reviewed script serves any style") and required "lens", the subject of #31; the design check was skipped as an exception. Trigger: 3rd needs-fix in a row → A5 |
