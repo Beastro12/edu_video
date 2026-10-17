@@ -173,6 +173,10 @@ Each will be tried on the first task it fits, and logged here.
 ## Live log (from 2026-10-16)
 Rows are appended per round; see docs/WORKFLOW.md for the format.
 
+Note on the orchestrator rows: the orchestrator's own work (specs, merges) is logged too. Its two
+known spec errors were P2-7's visual target (D9) and P1-14's flag invariant (D17); the plan merge
+dropped constraints. Those are the reasons the design check and the plan review exist.
+
 | Date | Agent | Model | Role | Task | Round | Outcome | Notes |
 |---|---|---|---|---|---|---|---|
 | 2026-10-16 | a9a77 | Haiku | search (facts) | planning | 1 | success | 244-line cited fact sheet; found PLAN/NEEDS inconsistency (opusplan entry missing) |
@@ -182,7 +186,5 @@ Rows are appended per round; see docs/WORKFLOW.md for the format.
 | 2026-10-16 | main | Opus | orchestrator (merge) | planning | 1 | needs fix | plan review: 3 Criticals in the merge (pilot files need copying; no voice-sample tool; reruns can buy Veo); guesses stated as fact |
 | 2026-10-16 | af9ed | Opus | plan reviewer | planning | 1 | success | every code claim checked; ACCEPT-with-edits, all applied |
 | 2026-10-17 | accdd | Opus | design checker | P2-8/9, P1-14/P3-4, P2-5 | 1 | success | before any code: 1 DECISIONS conflict (D17 in P1-14), missing no-paid-key rule, ~15 traps; measured the master fix in advance |
-
-Note on the orchestrator rows: the orchestrator's own work (specs, merges) is logged too. Its two
-known spec errors were P2-7's visual target (D9) and P1-14's flag invariant (D17); the plan merge
-dropped constraints. Those are the reasons the design check and the plan review exist.
+| 2026-10-17 | a07d3 | Opus | design checker | P3-6/7/8 | 1 | success | before any code: 3 spec Criticals (ffmpeg -h exits 0 for a missing filter; a film rerun without --style re-buys stills; estimate line vacuous) |
+| 2026-10-17 | — | — | (exception) | P3-5 | — | — | no design check: content-only task with no cache logic; logged as a deliberate exception |
