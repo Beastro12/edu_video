@@ -34,6 +34,9 @@ file.
      because of a 2026-10-14 `git stash` that took another agent's work.
 4. **Implement** (Sonnet), in its worktree only.
    - Use the spec's fast test subset while working, and the full `make check` once at the end.
+   - Every full suite, by any agent, runs as `flock <scratchpad>/makecheck.lock make check`, so
+     only one runs at a time. Added on 2026-10-17: four suites at once on 4 cores (load average 23)
+     failed the wall-clock test in tests/test_parallel.py and took 20 min each.
    - Commit on the worktree branch, one commit per task.
 5. **Adversary** (Haiku, trial). Its tests are added in the worktree. A test that fails is a
    finding; it goes back to the implementer.

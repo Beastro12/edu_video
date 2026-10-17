@@ -35,7 +35,8 @@ CLAUDE.md's hard rules. docs/WORKFLOW.md says where your step sits.
 4. **Measure before choosing** between options, and report the numbers.
 5. **Mutation-check the tests.** Break the change in two or three ways and show a test fails each
    time. Then revert.
-6. Use the spec's fast test subset while working. Run the full `make check` once at the end.
+6. Use the spec's fast test subset while working. Run the full `make check` once at the end, as
+   `flock <scratchpad>/makecheck.lock make check` (one full suite on the machine at a time).
 7. **A gap you find yourself:**
    - If closing it is reversible and deletes nothing, close it and list it under ASSUMED.
    - Ask, by stopping and explaining, only if closing it would delete user files, change policy,
