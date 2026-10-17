@@ -10,6 +10,12 @@ from utils import atomic_output, content_key, output_lock
 
 URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_128"
 
+# One fixed calm line, for the checks that narrate a sample (scripts/preflight.py --tts-sample and
+# the opt-in live voice test): the same text every time, so its narration is cached and its pace
+# (words per minute) is comparable across models.
+SAMPLE_LINE = ("Far above us, the stars keep their slow and quiet watch. Their light set out long ago, "
+               "and it is only now, tonight, that it reaches your eyes.")
+
 
 def voice_settings() -> dict:
     """The VOICE_SETTINGS this model is sent: the ones it takes (Eleven v4 reportedly has no

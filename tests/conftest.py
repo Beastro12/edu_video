@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import anthropic.resources.messages  # noqa: E402
+import anthropic.resources.models  # noqa: E402
 import google.genai  # noqa: E402
 
 # Saved before the guard below replaces them, for tests that run the real SDKs against a
@@ -134,6 +135,7 @@ def offline(request, monkeypatch, tmp_path):
     monkeypatch.setattr(requests.Session, "request", blocked)  # requests.post and friends
     monkeypatch.setattr(requests, "post", blocked)
     monkeypatch.setattr(anthropic.resources.messages.Messages, "create", blocked)  # any client
+    monkeypatch.setattr(anthropic.resources.models.Models, "retrieve", blocked)
     monkeypatch.setattr(google.genai, "Client", blocked)
 
 

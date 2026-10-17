@@ -31,10 +31,6 @@ def test_veo_model_makes_one_clip(monkeypatch):
     assert f"{height}p" == config.VEO_RESOLUTION, "the model honoured the requested resolution"
 
 
-VOICE_LINE = ("Far above us, the stars keep their slow and quiet watch. Their light set out long ago, "
-              "and it is only now, tonight, that it reaches your eyes.")
-
-
 @pytest.mark.live_voice
 def test_voice_models_side_by_side(monkeypatch):
     """A/B for P1-13 (D21): the same calm line from the current model; from Eleven v4 as the
@@ -47,13 +43,13 @@ def test_voice_models_side_by_side(monkeypatch):
         pytest.skip(f"missing {', '.join(missing)}")
     from agents import voice
     monkeypatch.setattr(config, "BUDGET_EUR", min(config.BUDGET_EUR, ledger.spent_eur() + 0.5))
-    words = len(VOICE_LINE.split())
+    words = len(voice.SAMPLE_LINE.split())
     everything = {m: s for m, s in config.TTS_SETTINGS_ACCEPTED.items() if m != "eleven_v4"}
     for label, model, text, accepted in (
-            ("current", "eleven_multilingual_v2", VOICE_LINE, config.TTS_SETTINGS_ACCEPTED),
-            ("v4", "eleven_v4", VOICE_LINE, config.TTS_SETTINGS_ACCEPTED),
-            ("v4-slowly", "eleven_v4", "[slowly] " + VOICE_LINE, config.TTS_SETTINGS_ACCEPTED),
-            ("v4-speed", "eleven_v4", VOICE_LINE, everything)):
+            ("current", "eleven_multilingual_v2", voice.SAMPLE_LINE, config.TTS_SETTINGS_ACCEPTED),
+            ("v4", "eleven_v4", voice.SAMPLE_LINE, config.TTS_SETTINGS_ACCEPTED),
+            ("v4-slowly", "eleven_v4", "[slowly] " + voice.SAMPLE_LINE, config.TTS_SETTINGS_ACCEPTED),
+            ("v4-speed", "eleven_v4", voice.SAMPLE_LINE, everything)):
         monkeypatch.setattr(config, "TTS_MODEL", model)
         monkeypatch.setattr(config, "TTS_SETTINGS_ACCEPTED", accepted)
         try:

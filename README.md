@@ -58,6 +58,7 @@ chapters and a readable `script.md` are in `topics/ai-global-workspace/`.
    set them as environment variables instead, and allow `api.elevenlabs.io`.
 2. **Check the keys and model names once, for about €0.10–0.50:**
    ```bash
+   python scripts/preflight.py --image --tts-sample   # hosts, models, FFmpeg, disk; one picture and one line (≈ €0.08)
    make smoke
    ```
 3. **See what the film will cost.** This calls nothing and writes nothing:

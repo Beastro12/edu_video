@@ -236,6 +236,11 @@ RETRY_MAX_S = 30.0
 GOOGLE_TIMEOUT_S = 120        # per HTTP request to Google (the SDK has none by default)
 BUILD_DIR = str(PROJECT_DIR / "build")
 
+# --- Preflight (scripts/preflight.py, P3-6) -----------------------------------------
+PREFLIGHT_TIMEOUT_S = 10      # per request of a free probe; the probes never retry (D11 is for the real run)
+PREFLIGHT_MIN_FREE_GB = 5     # free space needed under build/ (a film's build folder is a few GB)
+PREFLIGHT_WPM_OK = (100, 160) # the sample narration's pace outside this range prints a WARN: WORDS_PER_MIN assumes 120
+
 # --- Money --------------------------------------------------------------------
 # Total spend allowed across all runs, summed from build/ledger.jsonl. Checked before
 # every paid call; a call that would pass it stops the run.

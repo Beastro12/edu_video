@@ -18,11 +18,13 @@ def make_client(**kwargs) -> anthropic.Anthropic:
 _client = make_client()
 
 
-def _create(est_in: int | None = None, **kwargs):
+def _create(est_in: int | None = None, client: anthropic.Anthropic | None = None, **kwargs):
+    """`client` swaps the module's client for one call: scripts/preflight.py passes one that
+    doesn't retry and has a short timeout (P3-6)."""
     if est_in is None:
         est_in = ledger.claude_input_estimate(json.dumps(kwargs, default=str))
     with ledger.reserve("anthropic", ledger.claude_eur(config.CLAUDE_MODEL, est_in, kwargs["max_tokens"])):
-        resp = _client.messages.create(model=config.CLAUDE_MODEL, **kwargs)
+        resp = (_client if client is None else client).messages.create(model=config.CLAUDE_MODEL, **kwargs)
         usage = resp.usage
         ledger.record("anthropic", config.CLAUDE_MODEL,
                       {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens},
