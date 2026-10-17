@@ -268,3 +268,16 @@ rerun the same command, and it resumes without paying twice. But a worst-case ru
 before the film is finished.
 **Recommend:** `BUDGET_EUR=15` in `.env` for the first film without Veo. With Veo, `BUDGET_EUR=20`,
 or decide after seeing the no-Veo film. The run report shows what it actually cost.
+
+## 2026-10-16 — The opusplan settings and agent definitions (settings: yours to approve)
+**What:** two changes, proposed in chat before 2026-10-14 and still waiting for your explicit yes:
+- in `.claude/settings.json`, `"model": "opusplan"` and `"effortLevel": "high"`;
+- an offline-tests-only hook for the Haiku tests agent.
+The agent definitions themselves (`.claude/agents/implementer.md`, `tests.md`, `search.md`,
+`docs.md`, and the updated `reviewer.md`) are written as of 2026-10-16, because you asked for the
+Opus→Sonnet→Haiku workflow to be created (docs/WORKFLOW.md).
+**Why:** settings change how every future session runs and what it may do without asking, so you
+approve them rather than Claude.
+**Recommend:** yes to `opusplan` + `high` for sessions started in edu_video. Note that unattended
+runs then implement on Sonnet, which the ledger shows is as reliable as Opus here when specs state
+their invariants (docs/AGENT_LEDGER.md A4).

@@ -215,6 +215,69 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   Accept: pool creation and submission inside the `try`; a test that interrupts during
   submission sees `ledger.interrupted` set and no further paid call started.
 
+- [ ] P3-5 — Flat-safe prompts for the first film (planning group N4, 2026-10-16)
+  12 of the 29 still and Veo descriptions in `topics/ai-global-workspace/` carry photographic
+  cues (blur, mist, depth of field, dew). Under `--style flat`, they may pull pictures away from
+  flat vector.
+  Accept:
+  - those cues are rewritten into flat-vector terms, with the composition kept;
+  - no narration changes;
+  - `script.md` and its fact table are regenerated and `tests/test_topics.py` passes;
+  - a new test_topics check fails if a still or Veo description uses a word from a
+    photographic-cue list in config;
+  - `brief.key` unchanged (the brief isn't edited).
+- [ ] P3-6 — `scripts/preflight.py`: check every provider before money is spent (N1)
+  Accept:
+  - Free checks:
+    - host reachability for api.anthropic.com, api.elevenlabs.io and
+      generativelanguage.googleapis.com;
+    - Claude model retrieve, plus a 16-token forced-tool call (a 200 with stop_reason
+      max_tokens passes);
+    - ElevenLabs models, voice and subscription;
+    - Google `models.get` for IMAGE_MODEL and VEO_MODEL;
+    - local FFmpeg filters (loudnorm, alimiter, sidechaincompress, xfade, ebur128);
+    - `manim --version`;
+    - free disk space.
+  - `--image` buys one 1K image (≈ €0.06); `--tts-sample` buys one line (≤ €0.02), saves the mp3
+    and prints the words per minute.
+  - Every paid probe goes through the ledger; the total is at most €0.10.
+  - Output is PASS/FAIL per line, with errors redacted.
+  - The exit code is non-zero on any FAIL.
+  - Offline tests mock every provider.
+- [ ] P3-7 — Pilot tool: one chapter as a seed folder (N3)
+  Accept:
+  - `scripts/make_pilot.py --chapters 1 OUT` writes into OUT (outside `topics/`): brief.md, a
+    correct brief.key, a one-chapter outline.json and chapter_01.json.
+  - It prints the pilot command (its own topic string, `--brief OUT/brief.md --style flat
+    --no-ai-video`) and the command that copies the pilot's `audio/` and `visuals/` into the
+    full film's build without overwriting.
+  - `--estimate` on the pilot works with no keys.
+  - Test: a faked pilot then a faked full film; the full film buys nothing the pilot bought.
+- [ ] P3-8 — Run report lines for the first live runs (N5)
+  Accept: `run_report.md` adds:
+  - narrations limited out of the total, and the largest boost (from `clips/level_*.json`);
+  - image attempts per still, from the review logs;
+  - each QA check's margin to its limit;
+  - this run's estimate vs its ledger total, when an estimate was made in the same run.
+  Tests on faked runs.
+- [ ] P3-9 — The build remembers `--no-ai-video` (N6)
+  Veo is on whenever a Google key is set (ai_video.available). A rerun without the flag could
+  therefore buy Veo clips (about €2.94 each) unasked.
+  Accept:
+  - like the style (D25), `build/<slug>/` records whether Veo is allowed;
+  - a rerun without `--no-ai-video` keeps the recorded choice and prints it;
+  - an explicit `--ai-video` (new) or `--no-ai-video` switches, with a line saying so;
+  - `--estimate` honours the record.
+  - Tests: a rerun after `--no-ai-video` requests no Veo; an explicit `--ai-video` does.
+- [ ] P3-10 — Record redacted live responses as contract fixtures (N2)
+  Accept:
+  - with `RECORD_LIVE=1`, every provider response is saved under `build/recorded/`, redacted
+    (keys, headers, binary bodies stored as hash, length and head);
+  - `tests/test_contract.py` replays fixtures dropped into `tests/fixtures/live/` through the
+    real parsing code, and skips when there are none;
+  - a test proves no key string appears in any saved file.
+  `make smoke` with `RECORD_LIVE=1` then pays once for real fixtures.
+
 ## P2 — scale and polish
 
 Order set by docs/PLAN.md (2026-09-27): the run report first (the first live run needs
