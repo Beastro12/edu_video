@@ -1,4 +1,5 @@
 import math
+import re
 import shutil
 import struct
 import subprocess
@@ -20,6 +21,23 @@ import google.genai  # noqa: E402
 # mock HTTP transport (see `real_anthropic`, `real_google`).
 _REAL_ANTHROPIC_CREATE = anthropic.resources.messages.Messages.create
 _REAL_GENAI_CLIENT = google.genai.Client
+
+
+PHOTO_CUE_TYPES = ("still", "ai_video")  # a manim description is a diagram, not a photo
+
+
+def photo_cue_problems(scenes):
+    """One message per use of a word from config.FLAT_PHOTO_CUES in a still's or ai_video's
+    description, for (chapter number, scene number, scene) triples. Whole words, any case; a space
+    in a phrase also matches a hyphen or a line break."""
+    import config
+
+    cues = sorted(config.FLAT_PHOTO_CUES, key=len, reverse=True)
+    cue = re.compile(r"\b(?:" + "|".join(r"[\s-]+".join(map(re.escape, c.split())) for c in cues) + r")\b",
+                     re.IGNORECASE)
+    return [f"chapter {number} scene {i}: {m[0]!r} in a {scene['visual_type']} description"
+            for number, i, scene in scenes if scene["visual_type"] in PHOTO_CUE_TYPES
+            for m in cue.finditer(scene["visual_description"])]
 
 
 def ff(*args):

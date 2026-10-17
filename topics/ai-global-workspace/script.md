@@ -14,13 +14,13 @@ what the pipeline reads; this file is for reading.
 
 Right now, a body is breathing, holding its balance, and keeping its posture, mostly without being asked.
 
-*Visual: One continuous, slow camera move gliding low and forward over a calm dark sea at dusk. The swell lifts and settles in a slow, even rhythm, like breathing. Far ahead, a few small warm points of light on a distant shore. Deep blue-grey water, soft amber lights, thin mist, a wide empty sky. Nothing else in frame.*
+*Visual: One continuous, slow camera move gliding low and forward over a calm dark sea at dusk. The swell lifts and settles in a slow, even rhythm, like breathing. Far ahead, a few small warm points of light on a distant shore. Deep blue-grey water in smooth layered bands, soft amber lights, a thin pale gradient band along the horizon, a wide empty sky. Nothing else in frame.*
 
 **2. Most of the work is hidden** [still]
 
 Most of what a brain does goes on without our awareness. Even reading depends on hidden work. The eyes meet shapes on a page, and somewhere out of sight those shapes are turned into words. We meet only the result, finished and quiet, as if it had arrived by itself.
 
-*Visual: A close, dim view of a page of small abstract strokes (not letters) set in even lines, softly blurred at the edges. A few of the strokes glow faintly from behind, as if a lamp were beneath the paper. Charcoal and deep brown ground, pale cream strokes, one soft amber glow, large areas of empty dark. No text.*
+*Visual: A close, dim view of a page of small abstract strokes (not letters) set in even lines, the strokes at the edges of the page dissolving into the dark ground in a soft gradient. A few of the strokes glow faintly from behind, as if a lamp were beneath the paper. Charcoal and deep brown ground, pale cream strokes, one soft amber glow, large areas of empty dark. No text.*
 
 **3. Masking: seen without being seen** [manim]
 
@@ -114,7 +114,7 @@ Reading these patterns gives a list of words that are, in the researchers' phras
 
 The researchers report that nobody designed the J-space. Like a stream finding its own channel through sand, it emerged during training. They also report that it is already present before the model is trained to be an assistant, and that afterwards it begins to hold what they call the assistant's own reactions.
 
-*Visual: A shallow stream finding its own thin, winding channel through pale sand under a dim moon, seen from above. The channel branches once. Deep blue-black ground, silver moonlight on the water, pale sand, wide empty margins. No text.*
+*Visual: A shallow stream finding its own thin, winding channel through pale sand under a dim moon, seen from above. The channel branches once. Deep blue-black ground, the stream a smooth ribbon of flat silver-blue, pale sand in flat curved shapes, wide empty margins. No text.*
 
 **18. Content beyond the text** [still]
 
@@ -144,7 +144,7 @@ In another test, the model was told not to think about a concept. The concept th
 
 The researchers also followed multi-step reasoning. For the number of legs on the animal that spins webs, spider appeared in the J-space partway through, and the answer was eight. With spider swapped for ant, the answer became six. When the model wrote a rhyming couplet, the planned rhyme word sat in the J-space at the start of the line.
 
-*Visual: A single dew-beaded web strung between two dry grass stems at dusk, empty and still, catching a little silver light. Below it, a small pale stone on dark ground. Silver-blue and charcoal, cool soft light, wide dark negative space. No creatures, no text.*
+*Visual: A simple web of thin pale lines strung between two dry grass stems at dusk, a few round silver dots on it, empty and still. Below it, a small pale stone on dark ground. Silver-blue and charcoal, a faint cool glow around the web, wide dark negative space. No creatures, no text.*
 
 **23. France becomes China** [manim]
 
@@ -156,13 +156,13 @@ The researchers asked four questions about France: its capital, its language, it
 
 A workspace is not only a place where things are held. It also has to be heard widely. The researchers report that far more parts of the network read from and write to J-space patterns than do so with ordinary patterns.
 
-*Visual: A river basin seen from high above at night in moonlight: many thin streams gather from all sides into one broad river, which then fans out again into a wide branching delta. Deep navy land, silver water, no lights or buildings, wide margins. No text.*
+*Visual: A river basin seen from high above at night, in simple flat shapes: many thin streams gather from all sides into one broad river, which then fans out again into a wide branching delta. Deep navy land, silver water in smooth flat ribbons, no lights or buildings, wide margins. No text.*
 
 **25. A broadcasting hub** [ai_video]
 
 In some parts of the network, they report, it is about a hundred times more: wiring like a broadcasting hub.
 
-*Visual: One continuous slow camera move along the face of layered stone-coloured strata, gliding toward a single small bright point set in the middle layer. As the camera drifts, fine threads of warm gold light spread outward from the point and reach gently into each layer above and below, then settle. Dark slate, warm gold, soft haze. No people, no machinery, no text.*
+*Visual: One continuous slow camera move along the face of layered stone-coloured strata, gliding toward a single small bright point set in the middle layer. As the camera drifts, fine threads of warm gold light spread outward from the point and reach gently into each layer above and below, then settle. Dark slate, warm gold, a soft glow around the bright point. No people, no machinery, no text.*
 
 **26. With the J-space removed** [manim]
 
@@ -188,19 +188,19 @@ The researchers also describe a practical use. The lens shows some things the mo
 
 A distinction from philosophy helps here. In 1995, the philosopher Ned Block separated access consciousness from phenomenal consciousness. Access is information available for reasoning, for report and for action. Phenomenal consciousness is experience: what it is like. Some philosophers dispute the distinction, and whether either can come without the other is debated.
 
-*Visual: Two soft circles of light side by side on a dark ground: the left one a clear, sharply edged disc, the right one a diffuse glow with no edge. Between them lies a faint haze in which the two halos fade into each other, so that it is not clear where one ends and the other begins. Muted teal and warm amber, wide negative space. No text.*
+*Visual: Two circles of light side by side on a dark ground: the left one a solid flat disc with a clean edge, the right one a round glow that fades out softly with no edge. Between them lies a faint band of overlapping gradient in which the two halos blend into each other, so that it is not clear where one ends and the other begins. Muted teal and warm amber, wide negative space. No text.*
 
 **30. What the study does not show** [still]
 
 The researchers are careful about where their study stops. They write that their experiments do not show that Claude can have experiences, or feel things in the way humans do. They add that it is unclear whether any scientific experiment could prove this to be true or false. They think the findings say something about access, not experience.
 
-*Visual: A single calm line of pale gold light running across a dark ground and ending at a soft boundary, beyond which there is only dim, undefined haze; the line neither crosses nor turns back. Deep indigo, pale gold, very low contrast, wide empty space. No text.*
+*Visual: A single calm line of pale gold light running across a dark ground and ending at a soft boundary, beyond which there is only a smooth, dim gradient with no shapes in it; the line neither crosses nor turns back. Deep indigo, pale gold, very low contrast, wide empty space. No text.*
 
 **31. An imperfect lens** [still]
 
 They describe the J-lens as an imperfect method. It captures only concepts that match single word pieces, and the researchers do not know what decides which concepts enter the J-space. What the lens shows is only part of the picture.
 
-*Visual: A lens of clear glass resting on a dark table, tilted so that it brings a small circle of the surface into sharp focus while the rest of the frame stays soft and out of focus. Warm grey, soft amber, shallow depth, quiet shadows. No people, no text.*
+*Visual: A round disc of clear glass resting on a dark table, tilted, so that a small circle of the table seen through it shows fine pale lines and tiny details, while everywhere else the table is a plain, smooth, empty flat shape. Warm grey, soft amber, quiet flat shadows. No people, no text.*
 
 **32. Loops and layers** [manim]
 
@@ -218,7 +218,7 @@ There are two more differences. Human working memory, the mind's short-term hold
 
 Researchers also differ on what consciousness depends on. Global workspace theory is a functional theory: it is about what a system does, not what it is made of. Others think consciousness may depend on more than function, for example on living biology, or on the physical structure of a system. Which view is right is not known.
 
-*Visual: A fork in a path through a quiet forest at dusk: one branch runs between living trees and moss, the other across smooth, geometric stone slabs; both lead gently into pale mist. Deep green and slate, soft grey mist, plenty of empty space. No people, no text.*
+*Visual: A fork in a path through a quiet forest at dusk: one branch runs between living trees and moss, all drawn as simple rounded silhouettes, the other across smooth, geometric stone slabs; both lead gently into a pale, empty gradient. Deep green and slate, a soft grey gradient where the paths end, plenty of empty space. No people, no text.*
 
 **35. Outside voices** [still]
 
@@ -244,7 +244,7 @@ So here is where things stand. The researchers report a small, shared, workspace
 
 There is no verdict to give, because nobody knows. What the experiments speak to is access: information that is available to report, to reason with and to act on. Whether there is anything it is like to be such a system is a question they cannot answer.
 
-*Visual: A calm night sky over still water, the horizon low in the frame and a single reflected pale light on the water. Nothing else. Deep navy, silver, extreme negative space. No text.*
+*Visual: A calm night sky over still water, the horizon low in the frame and a single pale light on the water, drawn as a short flat vertical stripe. Nothing else. Deep navy, silver, extreme negative space. No text.*
 
 **39. A quiet stage** [ai_video]
 

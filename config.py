@@ -128,6 +128,23 @@ STYLES = {
         "manim_background": "#162044",  # luma 32.5/255 against calm's 19.3: above QA_BLACK_PIX_TH too
     },
 }
+# Words that pull an image model toward a photograph or a painting. Under `flat` a still's or
+# clip's description comes BEFORE the suffix, so one of these can outweigh it (P3-5). The
+# test_topics check keeps them out of every `still` and `ai_video` description in topics/ (a
+# `manim` description is a diagram, so it is exempt). Matched whole-word and case-insensitive,
+# a space in a phrase also matching a hyphen or a line break, so "blur" does not catch "blurred"
+# and each inflection is listed. Camera-motion words ("slow camera move") are not cues: Veo is
+# prompted with them. A description edit re-keys its picture (D9): do the edit before buying it.
+FLAT_PHOTO_CUES = (
+    # optics and focus
+    "blur", "blurred", "blurry", "soft focus", "out of focus", "focus", "depth of field",
+    "shallow depth", "bokeh", "lens", "lenses", "sharp", "sharply", "diffuse",
+    # air and surface texture
+    "mist", "misty", "haze", "hazy", "fog", "foggy", "dew", "dewy",
+    # light on water, and the camera's own words
+    "moonlight", "moonlit", "reflected", "reflection", "reflections",
+    "photograph", "photographic", "photo", "photos", "photorealistic", "cinematic",
+)
 # Not named STYLE in the environment: a stray one in a shell would stop every import.
 STYLE = os.getenv("VISUAL_STYLE", "calm")
 assert STYLE in STYLES, f"VISUAL_STYLE must be one of {sorted(STYLES)}, got {STYLE!r}"

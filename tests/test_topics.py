@@ -1,11 +1,13 @@
 """Content rules for the films prepared under topics/<name>/ (a brief with its reviewed script):
 what the prompts ask of a script, checked on the files, so a hand edit can't quietly break them.
 Runs on every topic folder that has an outline.json; costs nothing."""
+import copy
 import json
 import re
 from pathlib import Path
 
 import pytest
+from conftest import PHOTO_CUE_TYPES, photo_cue_problems
 
 import metadata
 from agents.script_agent import SCENE
@@ -75,6 +77,27 @@ def test_ai_video_scenes_are_short_and_at_most_one_per_chapter(topic):
                             f"not under {AI_VIDEO_MAX_WORDS}")
     problems += [f"chapter {n}: {count} ai_video scenes, at most one" for n, count in per_chapter.items() if count > 1]
     assert not problems, "; ".join(problems)
+
+
+def test_still_and_ai_video_descriptions_use_no_photographic_cue(topic):
+    """Under --style flat the description comes before the flat suffix (D25), so blur, mist, depth of
+    field and the like can pull the picture toward a photograph. Say it in flat shapes, gradients and
+    glows instead (config.FLAT_PHOTO_CUES lists the words). Changing a description re-keys its picture
+    (D9), so do it before the picture is bought."""
+    problems = photo_cue_problems(scenes_of(topic))
+    assert not problems, "; ".join(problems)
+
+
+def test_the_photographic_cue_check_sees_a_cue_in_a_still_or_a_clip_but_not_in_a_diagram(topic):
+    scenes = scenes_of(topic)
+    dirty = copy.deepcopy(scenes)
+    for _, _, scene in dirty:  # whatever the folder says now, each scene gets one clean sentence and two cues
+        scene["visual_description"] = "A pale disc on a dark ground. A thin Mist, soft-focus edges."
+    found = photo_cue_problems(dirty)
+    wanted = [(n, i) for n, i, s in scenes if s["visual_type"] in PHOTO_CUE_TYPES]
+    assert len(found) == 2 * len(wanted), found
+    assert all(any(f"chapter {n} scene {i}:" in f for f in found) for n, i in wanted)
+    assert not any("manim" in f for f in found)
 
 
 def test_the_brief_exists_and_has_sources_for_the_description(topic):
