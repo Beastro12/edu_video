@@ -1,9 +1,10 @@
 """Check every provider before money is spent (P3-6): a blocked host, a wrong model name, a bad
 key, a free-tier key, a missing FFmpeg filter or a full disk, for (almost) nothing.
 
-    python scripts/preflight.py                 # free, plus one 16-token Claude call (~EUR 0.0005)
-    python scripts/preflight.py --image         # ...and one 1K picture (~EUR 0.06): a free-tier key is refused here
-    python scripts/preflight.py --tts-sample    # ...and one narrated line (~EUR 0.015): prints its pace
+    python scripts/preflight.py                 # free, plus one 16-token Claude call (a fraction of a cent)
+    python scripts/preflight.py --image         # ...and one picture: a free-tier key is refused here
+    python scripts/preflight.py --tts-sample    # ...and one narrated line: prints its pace
+    python scripts/preflight.py --help          # what each costs, from the ledger's own price functions
 
 One line per check, `PASS|WARN|SKIP|FAIL <check>: <detail>`, then a summary line; the exit code is 0
 only if no check FAILed. Nothing here retries for minutes: a probe has a short timeout and one attempt.
@@ -11,6 +12,7 @@ Errors are redacted (utils.redact), so no key is printed. The only files written
 (every paid call is reserved and recorded as in a run) and build/preflight/ (the sample picture and
 narration)."""
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -35,11 +37,31 @@ FILTERS = ("loudnorm", "alimiter", "sidechaincompress", "xfade", "acrossfade", "
 ENCODER = "libx264"
 SAMPLE_PICTURE = "A calm, dark night sky with a few faint stars over a quiet horizon"
 Result = tuple[str, str]  # (status, detail)
+# The Claude call: a forced tool call that fits in 16 tokens (a 200 cut off at max_tokens is a PASS too).
+PING = dict(max_tokens=16, system="Preflight check. Answer by calling the tool.",
+            messages=[{"role": "user", "content": "Call the tool."}],
+            tools=[{"name": "ping", "description": "Return ok.", "input_schema": {"type": "object", "properties": {}}}],
+            tool_choice={"type": "tool", "name": "ping"})
+
+
+def clip(text, limit: int) -> str:
+    """One line of provider text, at most `limit` characters, redacted BEFORE it is cut: cut first and
+    a key that straddles the cut is no longer whole, so redact() misses it and its first characters print."""
+    return redact(" ".join(str(text).split()))[:limit]
 
 
 def describe(e: BaseException) -> str:
     """One redacted line for an error: its type and text."""
-    return redact(f"{type(e).__name__}: {' '.join(str(e).split())}")[:300]
+    return clip(f"{type(e).__name__}: {e}", 300)
+
+
+def first_line(out: str, err: str = "") -> str:
+    """The first non-empty line of a command's stdout, else of its stderr, else "no output"."""
+    for text in (out, err):
+        line = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
+        if line:
+            return clip(line, 100)
+    return "no output"
 
 
 class Report:
@@ -109,12 +131,7 @@ def check_claude(report: Report) -> None:
     def call() -> Result:
         # llm._create, not llm.structured: structured raises on max_tokens, which is the expected
         # stop here. It reserves and records in the ledger like every Claude call (D10).
-        resp = llm._create(
-            client=_anthropic_client() if client is None else client, max_tokens=16,
-            system="Preflight check. Answer by calling the tool.",
-            messages=[{"role": "user", "content": "Call the tool."}],
-            tools=[{"name": "ping", "description": "Return ok.", "input_schema": {"type": "object", "properties": {}}}],
-            tool_choice={"type": "tool", "name": "ping"})
+        resp = llm._create(client=_anthropic_client() if client is None else client, **PING)
         usage = resp.usage
         return "PASS", (f"200, stop_reason {resp.stop_reason}, {usage.input_tokens} in / {usage.output_tokens} out "
                         f"(forced tool call, max_tokens 16)")
@@ -134,16 +151,29 @@ def _eleven_get(path: str):
                         timeout=config.PREFLIGHT_TIMEOUT_S)
 
 
-def _eleven_detail(r) -> tuple[str, str]:
-    """(status code word, message) of an ElevenLabs error body: {"detail": {"status", "message"}},
-    {"detail": "text"} or anything else."""
+def _eleven_fields(r) -> tuple[str, str, str]:
+    """(status word, code, message) of an ElevenLabs error body: {"detail": {"status", "code",
+    "message"}}, {"detail": "text"} or anything else. Redacted and cut to 200 characters."""
     try:
         detail = r.json()["detail"]
     except Exception:
-        return "", " ".join(str(getattr(r, "text", "")).split())[:200]
+        return "", "", clip(getattr(r, "text", ""), 200)
     if isinstance(detail, dict):
-        return str(detail.get("status", "")), " ".join(str(detail.get("message", "")).split())[:200]
-    return "", " ".join(str(detail).split())[:200]
+        return clip(detail.get("status", ""), 60), clip(detail.get("code", ""), 60), clip(detail.get("message", ""), 200)
+    return "", "", clip(detail, 200)
+
+
+def _eleven_detail(r) -> tuple[str, str]:
+    """(status word, message): the word is the body's `status`, else its `code`."""
+    status, code, message = _eleven_fields(r)
+    return status or code, message
+
+
+def _lacks_permission(r) -> bool:
+    """A 401 that says the key lacks a permission, as ElevenLabs words it: a `status` or `code` of
+    missing_permissions, or the message "... is missing the permission ..."."""
+    status, code, message = _eleven_fields(r)
+    return r.status_code == 401 and ("missing_permissions" in (status, code) or "missing the permission" in message.lower())
 
 
 def _eleven_error(r) -> str:
@@ -158,7 +188,7 @@ def check_elevenlabs(report: Report) -> None:
             return "FAIL", _eleven_error(r)
         body = r.json()
         if not isinstance(body, list):
-            return "FAIL", f"unexpected answer: {str(body)[:100]}"
+            return "FAIL", f"unexpected answer: {clip(body, 100)}"
         ids = [m.get("model_id") for m in body]
         if config.TTS_MODEL not in ids:
             return "FAIL", f"model {config.TTS_MODEL} is not listed (fix TTS_MODEL in .env); listed: {', '.join(map(str, ids))}"
@@ -174,17 +204,19 @@ def check_elevenlabs(report: Report) -> None:
 
     def subscription() -> Result:
         r = _eleven_get("/v1/user/subscription")
-        if r.status_code == 401 and _eleven_detail(r)[0] == "missing_permissions":
+        if _lacks_permission(r):
             return "FAIL", "key lacks user_read; TTS may still work"
         if r.status_code != 200:
             return "FAIL", _eleven_error(r)
         body = r.json()
-        tier, limit, used = body.get("tier", "?"), body.get("character_limit"), body.get("character_count")
+        tier, limit, used = body.get("tier"), body.get("character_limit"), body.get("character_count")
         left = f"{limit - used:,} of {limit:,} characters left" if isinstance(limit, int) and isinstance(used, int) \
             else "characters left unknown"
-        if tier == "free":
-            return "WARN", f"plan free, {left}; the free plan may refuse some voices over the API"
-        return "PASS", f"plan {tier}, {left}"
+        if not tier:  # no plan named: we can't tell a free key from a paid one
+            return "WARN", f"the answer names no plan, {left}; cannot tell whether this is the free plan"
+        if str(tier).lower().startswith("free"):  # "free", "Free", "free_tier"...
+            return "WARN", f"plan {clip(tier, 40)}, {left}; the free plan may refuse some voices over the API"
+        return "PASS", f"plan {clip(tier, 40)}, {left}"
 
     key = ("ELEVENLABS_API_KEY",)
     report.run("elevenlabs models", models, key)
@@ -201,8 +233,9 @@ def check_google(report: Report) -> None:
         # Per request: one attempt and a short timeout, whatever the shared client is set to (D11).
         probe = types.GetModelConfig(http_options=types.HttpOptions(
             timeout=int(config.PREFLIGHT_TIMEOUT_S * 1000), retry_options=types.HttpRetryOptions(attempts=1)))
+        client = google_client.make()  # kept in a variable: a temporary Client closes its own HTTP client (P0-8)
         try:
-            info = google_client.make().models.get(model=name, config=probe)
+            info = client.models.get(model=name, config=probe)
         except Exception as e:
             if getattr(e, "code", None) == 404:
                 return "FAIL", f"model {name} not found (404); fix {setting} in .env"
@@ -247,9 +280,9 @@ def _option_block(help_text: str, name: str) -> list[str] | None:
 def _filter(name: str) -> Result:
     # `ffmpeg -h filter=X` exits 0 even for a filter that doesn't exist: only its text says (FFmpeg 6.1.1
     # prints "Unknown filter 'X'." and a header `Filter X` for a real one).
-    _, out, _ = _tool(["ffmpeg", "-hide_banner", "-h", f"filter={name}"])
+    _, out, err = _tool(["ffmpeg", "-hide_banner", "-h", f"filter={name}"])
     if not re.search(rf"^Filter {re.escape(name)}\s*$", out, re.M):
-        return "FAIL", f"this FFmpeg has no filter {name} ({(out.strip().splitlines() or ['no output'])[0][:100]})"
+        return "FAIL", f"this FFmpeg has no filter {name} ({first_line(out, err)})"
     if name == "alimiter" and _option_block(out, "latency") is None:
         return "FAIL", "alimiter has no `latency` option (assembly.py needs it): FFmpeg is too old"
     if name == "ebur128":
@@ -262,16 +295,16 @@ def _filter(name: str) -> Result:
 
 
 def _encoder(name: str) -> Result:
-    _, out, _ = _tool(["ffmpeg", "-hide_banner", "-h", f"encoder={name}"])
+    _, out, err = _tool(["ffmpeg", "-hide_banner", "-h", f"encoder={name}"])
     if not re.search(rf"^Encoder {re.escape(name)} \[", out, re.M):
-        return "FAIL", f"this FFmpeg has no encoder {name} ({(out.strip().splitlines() or ['no output'])[0][:100]})"
+        return "FAIL", f"this FFmpeg has no encoder {name} ({first_line(out, err)})"
     return "PASS", "present"
 
 
 def _manim() -> Result:
     code, out, err = _tool(["manim", "--version"])
-    first = next((line.strip() for line in (out + "\n" + err).splitlines() if line.strip()), "no output")
-    return ("PASS", first) if code == 0 else ("FAIL", f"manim --version exited {code}: {first[:150]}")
+    first = first_line(out, err)
+    return ("PASS", first) if code == 0 else ("FAIL", f"manim --version exited {code}: {first}")
 
 
 def _disk() -> Result:
@@ -353,15 +386,27 @@ def probe_tts(pace: dict) -> Result:
 
 # --- Main -----------------------------------------------------------------------
 
+def prices() -> tuple[float, float, float]:
+    """(the Claude call's worst case, one picture, the sample line) in EUR, from the ledger's own
+    price functions and the configured models, so --help never quotes a stale number."""
+    claude_in = ledger.claude_input_estimate(json.dumps(PING, default=str))
+    return (ledger.claude_eur(config.CLAUDE_MODEL, claude_in, PING["max_tokens"]), ledger.image_eur(),
+            ledger.tts_eur(len(voice.SAMPLE_LINE)))
+
+
 def main(argv: list[str] | None = None) -> int:
+    claude, image, tts = prices()
+    low, high = config.PREFLIGHT_WPM_OK
     ap = argparse.ArgumentParser(description="Check every provider before money is spent. Free, except one "
-                                 "16-token Claude call (~EUR 0.0005) and the options below.")
+                                 f"{PING['max_tokens']}-token Claude call (up to EUR {claude:.4f}) and the options below.")
     ap.add_argument("--image", action="store_true",
-                    help="also buy one 1K picture (~EUR 0.06) to build/preflight/image.png: catches a free-tier or "
-                         "unbilled Google key. Buys a new one every time")
+                    help=f"also buy one {config.IMAGE_SIZE} picture (~EUR {image:.3f} on {config.IMAGE_MODEL}) to "
+                         "build/preflight/image.png: catches a free-tier or unbilled Google key. Buys a new one "
+                         "every time")
     ap.add_argument("--tts-sample", action="store_true",
-                    help="also narrate one fixed calm line (<= EUR 0.02) to build/preflight/: prints its length and "
-                         "words per minute (WARN outside 100-160). Cached, so a rerun is free")
+                    help=f"also narrate one fixed calm line (~EUR {tts:.3f} on {config.TTS_MODEL}) to "
+                         f"build/preflight/: prints its length and words per minute (WARN outside {low}-{high}). "
+                         "Cached, so a rerun is free")
     args = ap.parse_args(argv)
 
     report = Report()
@@ -376,7 +421,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.tts_sample:
         pace: dict = {}
         report.run("tts sample", lambda: probe_tts(pace), ("ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID"))
-        low, high = config.PREFLIGHT_WPM_OK
         if "wpm" in pace and not low <= pace["wpm"] <= high:
             report.add("WARN", "tts pace", f"{pace['wpm']:.0f} words per minute is outside {low}-{high}; scripts are "
                        f"sized at WORDS_PER_MIN={config.WORDS_PER_MIN} (D21): listen to the file")

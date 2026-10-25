@@ -1,10 +1,10 @@
 """P3-6: scripts/preflight.py finds a blocked host, a wrong model name, a bad key, a free-tier key, a
 missing FFmpeg filter or a full disk before money is spent. Every provider is mocked: the tests
 assert which calls reach each one (the offline guard in conftest blocks any that slips through)."""
-import functools
 import json
 import re
 import shutil
+import socket
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,8 +20,6 @@ import config
 import ledger
 from agents import google_client, llm, voice
 from scripts import preflight
-
-REAL_GOOGLE_MAKE = google_client.make  # before `world` replaces it
 
 KEYS = {"ANTHROPIC_API_KEY": "sk-ant-test-AAAA1111", "ELEVENLABS_API_KEY": "xi-test-BBBB2222",
         "ELEVENLABS_VOICE_ID": "voice-abc123", "GOOGLE_API_KEY": "AIza-test-CCCC3333"}
@@ -231,7 +229,7 @@ class World:
     def get(self, url, headers=None, timeout=None, allow_redirects=True):
         self.get_urls.append((url, timeout))
         if url.startswith("https://api.elevenlabs.io/v1/"):
-            assert headers == {"xi-api-key": KEYS["ELEVENLABS_API_KEY"]}
+            assert headers == {"xi-api-key": config.ELEVENLABS_API_KEY}
             outcome = self.eleven[url.removeprefix("https://api.elevenlabs.io")]
         else:
             outcome = self.host.get(url.split("/")[2], 404)
@@ -631,27 +629,83 @@ def test_llm_create_uses_the_given_client_and_still_the_module_client_by_default
 
 
 def test_the_offline_guard_blocks_models_retrieve():
-    client = anthropic.Anthropic(api_key="offline-test")
+    """Even with the guard line gone this test must not reach the network: the client's transport fails
+    the test instead of sending."""
+    def unreachable(request):
+        pytest.fail("reached the transport: the offline guard on Models.retrieve is gone")
+
+    client = anthropic.Anthropic(api_key="offline-test", max_retries=0,
+                                 http_client=anthropic.DefaultHttpxClient(transport=httpx2.MockTransport(unreachable)))
     with pytest.raises(PaidCallInOfflineTest):
         client.models.retrieve("claude-sonnet-5")
 
 
-def test_one_google_attempt_really_means_one_request(real_google, monkeypatch, world, capsys):
-    """The real google-genai client on a mock transport: the shared client retries a 503 four times,
-    the probe's per-request options must stop that."""
-    seen = []
+class SocketOpened(BaseException):
+    """Not an Exception: no retry loop or fallback may swallow it."""
 
-    def handler(request):
-        seen.append(request.url.path)
-        return httpx.Response(503, content=json.dumps({"error": {"code": 503, "message": "overloaded"}}))
 
-    mock = httpx.Client(transport=httpx.MockTransport(handler))
-    monkeypatch.setattr(google_client, "make", functools.partial(REAL_GOOGLE_MAKE, httpx_client=mock))
+@pytest.fixture
+def sdk_transport(monkeypatch):
+    """The real google-genai SDK building its OWN httpx client (so Client.close() really closes it, P0-8),
+    with the fake below it, at httpx.HTTPTransport.handle_request. Yields a control: `.seen` is the
+    requests that reached the transport, `.missing` the model names that answer 404, `.status` an
+    override for every answer. A socket opened anywhere in the test fails it."""
+    ctl = SimpleNamespace(seen=[], missing=set(), status=None, sockets=[])
+
+    def no_connect(self, address):
+        if self.family in (socket.AF_INET, socket.AF_INET6):
+            ctl.sockets.append(address)
+            raise SocketOpened(address)
+
+    def handle_request(self, request):
+        name = request.url.path.rsplit("/", 1)[-1]
+        ctl.seen.append((request.method, request.url.path))
+        status = ctl.status or (404 if name in ctl.missing else 200)
+        body = {"name": f"models/{name}", "displayName": f"Display {name}", "supportedActions": ["generateContent"]} \
+            if status == 200 else {"error": {"code": status, "message": f"models/{name} is unavailable", "status": "X"}}
+        return httpx.Response(status, content=json.dumps(body).encode(), headers={"content-type": "application/json"})
+
+    monkeypatch.setattr(socket.socket, "connect", no_connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", lambda self, address: no_connect(self, address))
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", handle_request)
+    monkeypatch.setattr(config, "GOOGLE_API_KEY", "offline-test")
+    yield ctl
+    assert ctl.sockets == [], "the test opened a network connection"
+
+
+def run_google_checks(capsys):
+    preflight.check_google(preflight.Report())
+    out = capsys.readouterr().out
+    return [tuple(line.split(": ", 1)) for line in out.splitlines()]
+
+
+def test_the_google_checks_work_with_the_real_sdk_and_its_own_http_client(real_google, sdk_transport, capsys):
+    """P0-8 in preflight (P3-6 review C1): `google_client.make().models.get(...)` inline lost its Client to the
+    garbage collector, whose __del__ closed the SDK's own HTTP client: 'Cannot send a request, as the client
+    has been closed'. Every other test gave the SDK a client of its own making (which close() leaves alone) or
+    replaced make() altogether."""
+    lines = run_google_checks(capsys)
+    assert lines == [("PASS google image model", f"{config.IMAGE_MODEL} exists (Display {config.IMAGE_MODEL})"),
+                     ("PASS google veo model", f"{config.VEO_MODEL} exists (Display {config.VEO_MODEL})")]
+    assert sdk_transport.seen == [("GET", f"/v1beta/models/{config.IMAGE_MODEL}"),
+                                  ("GET", f"/v1beta/models/{config.VEO_MODEL}")]
+
+
+def test_a_404_from_the_real_sdk_names_the_setting(real_google, sdk_transport, capsys):
+    sdk_transport.missing = {config.VEO_MODEL}
+    lines = run_google_checks(capsys)
+    assert lines[0][0] == "PASS google image model"
+    assert lines[1] == ("FAIL google veo model", f"model {config.VEO_MODEL} not found (404); fix VEO_MODEL in .env")
+
+
+def test_one_google_attempt_really_means_one_request(real_google, sdk_transport, monkeypatch, capsys):
+    """The shared client retries a 503 four times; the probe's per-request options must stop that."""
     monkeypatch.setattr(config, "RETRY_BASE_S", 0.001)
     monkeypatch.setattr(config, "RETRY_JITTER_S", 0.001)
-    world.run(capsys)
-    assert world.status("google image model") == "FAIL" and "503" in world.detail("google image model")
-    assert len(seen) == 2, "one request for each of the two models"
+    sdk_transport.status = 503
+    lines = run_google_checks(capsys)
+    assert [name for name, _ in lines] == ["FAIL google image model", "FAIL google veo model"]
+    assert "503" in lines[0][1] and len(sdk_transport.seen) == 2, "one request for each of the two models"
 
 
 # --- 3. --image ---------------------------------------------------------------------------------
@@ -921,3 +975,164 @@ def test_the_real_ffmpeg_passes_every_filter_and_x264_and_rejects_an_unknown_one
     status, detail = preflight._filter("nosuchfilter")
     assert status == "FAIL" and "Unknown filter" in detail
     assert preflight._encoder("nosuchencoder")[0] == "FAIL"
+
+
+# --- P3-6 review W1: redact before you cut ----------------------------------------------------------
+
+STRADDLE_KEY = "K3Y5TART-" + "a1b2c3d4e5f6g7h8i9j0" * 2 + "ZZ"  # 51 characters, as long as a real key
+assert len(STRADDLE_KEY) == 51
+
+
+def starts_to_show(text: str) -> bool:
+    """True if any 8-character run of the key is in `text`: the partial key a cut-then-redact leaves."""
+    return any(STRADDLE_KEY[i:i + 8] in text for i in range(len(STRADDLE_KEY) - 7))
+
+
+def key_across(cut: int, lead: int = 0) -> str:
+    """A text whose `cut`th character falls in the middle of the key (about 30 of its characters before it)."""
+    return "A" * (cut - 30 - lead) + STRADDLE_KEY
+
+
+def test_the_helper_would_see_a_partial_key():
+    assert starts_to_show("xx" + STRADDLE_KEY[:20]) and not starts_to_show("xx" + STRADDLE_KEY[:7])
+
+
+@pytest.mark.parametrize("site, set_up", [
+    ("an ElevenLabs body that is not JSON (cut 200)",
+     lambda w: w.eleven.update({"/v1/models": FakeResponse(500, text=key_across(200))})),
+    ("a detail message (cut 200)",
+     lambda w: w.eleven.update({"/v1/models": refusal(401, "x", key_across(200))})),
+    ("a detail given as a string (cut 200)",
+     lambda w: w.eleven.update({"/v1/models": FakeResponse(400, {"detail": key_across(200)})})),
+    ("a detail status word (cut 60)",
+     lambda w: w.eleven.update({"/v1/models": refusal(401, key_across(60), "m")})),
+    ("an unexpected models answer (cut 100)",
+     lambda w: w.eleven.update({"/v1/models": FakeResponse(200, {"error": key_across(100, lead=11)})})),
+    ("a plan name (cut 40)",
+     lambda w: w.eleven.update({"/v1/user/subscription": FakeResponse(200, {"tier": key_across(40)})})),
+    ("an exception (cut 300)",
+     lambda w: setattr(w, "retrieve_error", RuntimeError(key_across(300)))),
+    ("FFmpeg's first line (cut 100)",
+     lambda w: w.tools.update({("filter", "xfade"): "Unknown filter '" + key_across(100, lead=16) + "'.\n"})),
+    ("manim's first line (cut 100)",
+     lambda w: setattr(w, "manim", (1, "", key_across(100)))),
+], ids=lambda v: v if isinstance(v, str) else "")
+def test_a_key_straddling_a_cut_never_prints_even_its_first_characters(world, capsys, monkeypatch, site, set_up):
+    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", STRADDLE_KEY)
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", STRADDLE_KEY)
+    set_up(world)
+    world.run(capsys)
+    assert not starts_to_show(world.out + world.err), site
+    assert "***" in world.out or "FFmpeg's" in site or "manim's" in site
+
+
+def test_the_tts_sample_surfaces_voice_py_errors_without_a_partial_key(world, capsys, monkeypatch):
+    """voice.py cuts a transient error at 200 characters and any other at 500: redact() first."""
+    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", STRADDLE_KEY)
+    for status, cut in ((429, 200), (400, 500)):
+        world.post_status = status
+        monkeypatch.setattr(world, "post", lambda url, headers, json, timeout, s=status, c=cut: FakeResponse(
+            s, content=b"", text=key_across(c)))
+        monkeypatch.setattr(requests, "post", world.post)
+        assert world.run(capsys, "--tts-sample") == 1
+        assert not starts_to_show(world.out + world.err), status
+        assert str(status) in world.detail("tts sample")
+        assert status != 429 or "***" in world.detail("tts sample"), "the detail shows 300 characters: the 500 cut is past that"
+
+
+@pytest.mark.parametrize("status, cut", [(429, 200), (503, 200), (400, 500), (401, 500)])
+def test_voice_narrate_redacts_a_key_before_it_cuts_the_error(monkeypatch, tmp_path, status, cut):
+    monkeypatch.setattr(config, "ELEVENLABS_API_KEY", STRADDLE_KEY)
+    monkeypatch.setattr(config, "ELEVENLABS_VOICE_ID", "voice-1")
+    monkeypatch.setattr(config, "MAX_RETRIES", 0)
+    monkeypatch.setattr(requests, "post", lambda url, headers, json, timeout: FakeResponse(
+        status, content=b"", text=key_across(cut)))
+    with pytest.raises(RuntimeError) as caught:  # retries.TransientError is a RuntimeError too
+        voice.narrate("A calm line.", tmp_path)
+    assert str(status) in str(caught.value) and "***" in str(caught.value)
+    assert not starts_to_show(str(caught.value))
+
+
+# --- P3-6 review W2: the free tier ----------------------------------------------------------------------
+
+@pytest.mark.parametrize("tier", ["free", "Free", "FREE", "free_tier", "free_trial"])
+def test_any_free_tier_name_warns(world, capsys, tier):
+    world.eleven["/v1/user/subscription"] = FakeResponse(200, {"tier": tier, "character_count": 0, "character_limit": 10_000})
+    assert world.run(capsys) == 0
+    assert world.status("elevenlabs subscription") == "WARN"
+    assert f"plan {tier}, 10,000 of 10,000 characters left" in world.detail("elevenlabs subscription")
+
+
+@pytest.mark.parametrize("body", [{"character_count": 5, "character_limit": 100}, {"tier": None, "character_limit": 100},
+                                  {"tier": "", "character_count": 5, "character_limit": 100}], ids=["absent", "null", "empty"])
+def test_a_subscription_that_names_no_plan_warns(world, capsys, body):
+    world.eleven["/v1/user/subscription"] = FakeResponse(200, body)
+    assert world.run(capsys) == 0
+    assert world.status("elevenlabs subscription") == "WARN"
+    assert "names no plan" in world.detail("elevenlabs subscription")
+
+
+@pytest.mark.parametrize("tier", ["starter", "creator", "pro", "scale", "business", "enterprise"])
+def test_a_paid_tier_passes(world, capsys, tier):
+    world.eleven["/v1/user/subscription"] = FakeResponse(200, {"tier": tier, "character_count": 1, "character_limit": 100})
+    world.run(capsys)
+    assert world.status("elevenlabs subscription") == "PASS" and f"plan {tier}," in world.detail("elevenlabs subscription")
+
+
+# --- P3-6 review W3: a key without a permission ------------------------------------------------------------
+
+@pytest.mark.parametrize("body", [
+    {"detail": {"status": "missing_permissions", "message": "x"}},
+    {"detail": {"code": "missing_permissions", "message": "x"}},
+    {"detail": {"message": "The API key you used is missing the permission user_read to execute this operation."}},
+    {"detail": "The API key you used is missing the permission user_read to execute this operation."},
+], ids=["status", "code", "message", "string"])
+def test_every_wording_of_a_missing_permission_gets_its_own_text(world, capsys, body):
+    world.eleven["/v1/user/subscription"] = FakeResponse(401, body)
+    assert world.run(capsys) == 1
+    assert world.detail("elevenlabs subscription") == "key lacks user_read; TTS may still work"
+
+
+def test_a_different_401_is_not_a_missing_permission(world, capsys):
+    world.eleven["/v1/user/subscription"] = refusal(401, "invalid_api_key", "Invalid API key")
+    world.run(capsys)
+    assert world.detail("elevenlabs subscription") == "HTTP 401 invalid_api_key: Invalid API key"
+
+
+def test_a_missing_permission_text_on_another_status_is_not_that_failure(world, capsys):
+    world.eleven["/v1/user/subscription"] = refusal(500, "missing_permissions", "x")
+    world.run(capsys)
+    assert world.detail("elevenlabs subscription").startswith("HTTP 500")
+
+
+# --- review suggestions ---------------------------------------------------------------------------------
+
+def test_an_empty_stdout_shows_the_first_line_of_stderr(world, capsys):
+    world.tool_calls.clear()
+    original = world.tool
+
+    def tool(cmd):
+        if cmd[-1] == "filter=xfade":
+            return 1, "", "\nffmpeg: error while loading shared libraries: libx.so\nmore\n"
+        if cmd[-1] == "encoder=libx264":
+            return 1, "  \n", ""
+        return original(cmd)
+    world.mp.setattr(preflight, "_tool", tool)
+    assert world.run(capsys) == 1
+    assert "(ffmpeg: error while loading shared libraries: libx.so)" in world.detail("ffmpeg filter xfade")
+    assert "(no output)" in world.detail("ffmpeg encoder libx264")
+
+
+def test_help_quotes_the_prices_from_the_ledgers_own_functions(capsys, monkeypatch):
+    with pytest.raises(SystemExit):
+        preflight.main(["--help"])
+    text = " ".join(capsys.readouterr().out.split())
+    assert f"one {config.IMAGE_SIZE} picture (~EUR {ledger.image_eur():.3f} on {config.IMAGE_MODEL})" in text
+    assert f"~EUR {ledger.tts_eur(len(voice.SAMPLE_LINE)):.3f} on {config.TTS_MODEL}" in text
+    monkeypatch.setitem(config.IMAGE_USD_PER_IMAGE, "4K", 0.5)
+    monkeypatch.setattr(config, "IMAGE_SIZE", "4K")
+    with pytest.raises(SystemExit):
+        preflight.main(["--help"])
+    text = " ".join(capsys.readouterr().out.split())
+    assert f"one 4K picture (~EUR {0.5 * config.USD_TO_EUR:.3f} on {config.IMAGE_MODEL})" in text
+    assert "0.062" not in text

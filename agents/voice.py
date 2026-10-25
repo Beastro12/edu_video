@@ -6,7 +6,7 @@ import requests
 import config
 import ledger
 import retries
-from utils import atomic_output, content_key, output_lock
+from utils import atomic_output, content_key, output_lock, redact
 
 URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_128"
 
@@ -52,13 +52,14 @@ def _buy(text: str, out: Path, cost: float) -> Path:
             timeout=120,
         )
         if r.status_code in retries.TRANSIENT_STATUS:
-            raise retries.TransientError(f"ElevenLabs {r.status_code}: {r.text[:200]}",
+            # redact() before the cut: a key that straddles it would no longer be whole, and would print
+            raise retries.TransientError(f"ElevenLabs {r.status_code}: {redact(r.text)[:200]}",
                                          retries.retry_after_s(r.headers))
         return r
 
     r = retries.call(post, "ElevenLabs")
     if r.status_code != 200:
-        raise RuntimeError(f"ElevenLabs {r.status_code}: {r.text[:500]}")
+        raise RuntimeError(f"ElevenLabs {r.status_code}: {redact(r.text)[:500]}")
     ledger.record("elevenlabs", config.TTS_MODEL, {"characters": len(text)}, cost)
     with atomic_output(out) as tmp:
         tmp.write_bytes(r.content)
