@@ -74,6 +74,19 @@ Work top to bottom within a priority.
   Accept: `VEO_MAX_PER_DAY` in config (default 2) counts today's (UTC) Veo entries in the
   ledger; past it, Veo is skipped with a log line and the scene falls back to a still
   (not a run stop). `--estimate` counts only the Veo clips still allowed today. Mocked test.
+- [ ] P0-8 — A temporary google-genai Client closes its own HTTP client: every still fails
+  Found in P3-6's review (2026-10-25), reproduced by the orchestrator with the real SDK and the
+  transport faked.
+  - `image_agent.py:53` calls `google_client.make().models.generate_content(...)` inline. The
+    Client is collected at once, and its `__del__` closes its own httpx client.
+  - So the request never goes out: "Cannot send a request, as the client has been closed".
+  - On a real run every still falls back to Manim and the thumbnail to a frame, as in D13.
+  - Offline tests replace `google_client.make()` wholesale, so they never saw it.
+  Accept:
+  - every genai call keeps its Client referenced for the whole call;
+  - a real-SDK regression test, with the transport faked, fails on the base and passes fixed;
+  - an import-resolving AST guard flags any attribute read on a temporary Client, with a
+    self-test.
 
 ## P1 — quality
 
@@ -215,7 +228,7 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   Accept: pool creation and submission inside the `try`; a test that interrupts during
   submission sees `ledger.interrupted` set and no further paid call started.
 
-- [ ] P3-5 — Flat-safe prompts for the first film (planning group N4, 2026-10-16)
+- [x] P3-5 — Flat-safe prompts for the first film (planning group N4, 2026-10-16)
   12 of the 29 still and Veo descriptions in `topics/ai-global-workspace/` carry photographic
   cues (blur, mist, depth of field, dew). Under `--style flat`, they may pull pictures away from
   flat vector.
@@ -226,6 +239,13 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   - a new test_topics check fails if a still or Veo description uses a word from a
     photographic-cue list in config;
   - `brief.key` unchanged (the brief isn't edited).
+  Done 2026-10-25. **Amended acceptance (orchestrator, with the reason):**
+  - The cues were rewritten in style-neutral terms, not "flat-vector terms". The line above
+    contradicted D25, "a reviewed script serves any style". The style suffix supplies the
+    medium, and calm is still the default. Review W3; analysis A5.
+  - 11 descriptions carried cues, not 12. The reviewer searched for a 12th too.
+  - A second list, `STYLE_MEDIUM_CUES`, keeps medium words out of descriptions.
+  - The fact table is unchanged, because no narration changed.
 - [ ] P3-6 — `scripts/preflight.py`: check every provider before money is spent (N1)
   Accept:
   - Free checks:
@@ -277,6 +297,19 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
     real parsing code, and skips when there are none;
   - a test proves no key string appears in any saved file.
   `make smoke` with `RECORD_LIVE=1` then pays once for real fixtures.
+
+- [ ] P3-11 — Feed the description word lists into the writer and critic (P3-5 review S5)
+  The cue checks only cover hand-made `topics/` folders. A script the pipeline writes (G4) goes
+  to `build/<slug>/` and is never checked.
+  Accept:
+  - `photo_cue_problems` and `medium_cue_problems` move from tests/conftest.py into a module;
+  - the writer's visuals prompt names the two lists' intent;
+  - the critic flags a description that uses either list;
+  - `--estimate` lists such scenes before anything is bought.
+- [ ] P1-15 — A socket-level backstop for offline tests (P3-6 review)
+  The conftest guard blocks known SDK entry points; a new path could still open a socket.
+  Accept: an autouse fixture refuses `socket.connect` to any non-loopback address in offline
+  tests, with a self-test; live tests (`-m live`) are exempt.
 
 ## P2 — scale and polish
 

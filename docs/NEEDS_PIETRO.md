@@ -229,9 +229,15 @@ The narration stays calm because CLAUDE.md's hard rule says so (D25).
 **Why:** if you also want Kurzgesagt's lively, joke-dense narration, that changes a hard rule in
 CLAUDE.md and the script prompts, so it's your call. If "others I said I like" means channels I
 don't know about, name them.
-**Tried:** the flat look has not been seen yet: no Google key here. 12 of the 29 still and Veo
-descriptions in the script use photographic words (mist, depth of field), which may pull some
-pictures away from flat.
+**Tried:**
+- The flat look has not been seen yet, because there is no Google key here.
+- P3-5 (2026-10-25) took photographic and medium words out of the 11 descriptions that had
+  them. The wording is now neutral, so the same script serves calm or flat.
+- Three stills to watch, from the review:
+  - scene 22's web with water droplets may still read as a macro photo;
+  - scene 31's magnifier lies flat on the table, where it would enlarge little;
+  - scene 29's two discs may come out far apart.
+  Each has a one-line rewrite ready if it drifts.
 **Recommend:** on the first live run, look at the first few stills in `build/<slug>/visuals/`
 before letting the rest run (Ctrl-C is safe; the run resumes). Tell me if the medium drifts:
 - the fix is a stronger flat suffix or a flat-only line for the still critic;

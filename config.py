@@ -133,8 +133,8 @@ STYLES = {
 # test_topics checks keep both lists out of every `still` and `ai_video` description in topics/ (a
 # `manim` description is a diagram, so it is exempt). Both are matched whole-word and
 # case-insensitive, a space in a phrase also matching a hyphen or a line break, so "blur" does not
-# catch "blurred" and each inflection is listed. A description edit re-keys its picture (D9): do the
-# edit before the picture is bought.
+# catch "blurred" and the common inflections are listed; review catches the rest. A description edit
+# re-keys its picture (D9): do the edit before the picture is bought.
 #
 # FLAT_PHOTO_CUES: words that pull the picture toward a photograph, in any style. Camera-motion
 # words ("slow camera move") are not cues: Veo is prompted with them.
@@ -142,15 +142,18 @@ FLAT_PHOTO_CUES = (
     # optics and focus
     "blur", "blurred", "blurry", "blurring", "blurs", "soft focus", "out of focus", "focus", "focused",
     "unfocused", "defocused", "focusing", "depth of field", "shallow depth", "bokeh", "lens", "lenses",
-    "sharp", "sharply", "sharper", "sharpness", "diffuse",
+    "sharp", "sharply", "sharper", "sharpness", "sharpened", "diffuse", "diffused", "diffusion", "diffusing",
+    "blurrier", "focuses", "vignette",
     # air and surface texture
-    "mist", "mists", "misty", "misted", "misting", "haze", "hazy", "hazier", "fog", "foggy", "foggier",
+    "mist", "mists", "misty", "misted", "misting", "haze", "hazes", "hazy", "hazier", "fog", "fogs", "fogged",
+    "foggy", "foggier",
     "dew", "dewy", "dewdrop", "dewdrops",
     # light on water, and the camera's own words
-    "moonlight", "moonlit", "reflect", "reflects", "reflecting", "reflected", "reflection", "reflections",
-    "photograph", "photographs", "photographed", "photography", "photographic", "photo", "photos",
-    "photorealistic", "hyperrealistic", "cinematic", "footage", "film grain", "grainy", "exposure",
-    "long exposure", "aperture", "macro", "telephoto", "volumetric", "god ray", "god rays",
+    "moonlight", "moonlit", "moonbeam", "moonbeams", "reflect", "reflects", "reflecting", "reflected",
+    "reflection", "reflections",
+    "photograph", "photographs", "photographed", "photographing", "photography", "photographic", "photo",
+    "photos", "photorealistic", "hyperrealistic", "realistic", "lifelike", "cinematic", "footage", "film grain",
+    "grainy", "exposure", "long exposure", "aperture", "macro", "telephoto", "volumetric", "god ray", "god rays",
 )
 # STYLE_MEDIUM_CUES: words that name the medium (vector, painting, cartoon). The medium belongs to
 # the style suffix; a description names the subject, composition, light and colour only, so one

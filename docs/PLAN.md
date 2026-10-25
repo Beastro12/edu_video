@@ -36,8 +36,11 @@ Not verified, and why it matters:
 1. **Nothing has run against the real APIs** (no keys in this environment, and the network
    policy blocks `api.elevenlabs.io`). Model names, request shapes and prices are checked only
    against mocks. This is still the biggest risk.
-2. **The flat look is unseen.** 12 of the script's 29 still and Veo descriptions use photographic
-   words, which may pull pictures away from flat. Look at the first few stills (NEEDS_PIETRO).
+2. **The flat look is unseen.**
+   - P3-5 took the photographic and medium words out of the script's descriptions (11 of the
+     29 carried them).
+   - No picture has been made yet. Look at the first few stills (NEEDS_PIETRO).
+   - P0-8 must land first: until then, every still falls back to Manim on a real run.
 3. **Levelling is tested on synthetic voices only.** Real ElevenLabs speech is not. The run
    report and `clips/level_*.json` will show how often the limiter engages.
 4. **Not publishable yet:** `music/` is empty (a placeholder pad is used), and the YouTube

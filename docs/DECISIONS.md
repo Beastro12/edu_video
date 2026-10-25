@@ -430,6 +430,18 @@ scripts calm. So only the look changes.
   script serves any style.
 - **No studio name in prompts.** A test checks that no preset names a studio; only the traits
   are described.
+- **Amendment (P3-5, 2026-10-25): descriptions are style-neutral.**
+  - A still or Veo description names subject, composition, light and colour; the medium belongs
+    to the style suffix. That is what lets one reviewed script serve every style.
+  - `config.FLAT_PHOTO_CUES` holds words that pull toward a photograph in any style (blur, mist,
+    lens, footage…).
+  - `config.STYLE_MEDIUM_CUES` holds medium words (vector, painting, "drawn as"…).
+  - test_topics keeps both out of every still and ai_video description in `topics/`; Manim is
+    exempt.
+  - Why not flat-vector wording, as P3-5 first asked: under calm, the default, it would pull
+    pictures toward illustration. That is the same fault in the other direction (review W3).
+  - The lists are a guard, not a proof. Review catches adjective uses of "flat" and the forms
+    no list holds.
 - **Calm is unchanged.** `calm` stays the default. Under it every prompt, clip argument and cache
   key is byte-identical to before (pinned by tests), so nothing paid is bought again.
 - **Caching.** The suffix is part of every picture's cache key, review key and failures key. A
@@ -443,8 +455,9 @@ scripts calm. So only the look changes.
   - This is the same per-run-flag versus per-topic-build problem D23 solved for briefs.
 - **Not verified live:**
   - How the image model renders the suffix.
-  - Twelve of the first film's 29 still and Veo descriptions carry photographic cues (blur,
-    mist, depth of field), which may pull some pictures away from flat.
+  - Twelve of the first film's 29 still and Veo descriptions carried photographic cues (blur,
+    mist, depth of field), which could pull some pictures away from flat. P3-5 (2026-10-25)
+    rewrote the 11 it found. The amendment below says how.
   - Check the first few flat stills before buying the rest (NEEDS_PIETRO). If the medium drifts,
     strengthen the flat suffix or give the still critic a flat-only line; calm's keys stay
     unchanged either way.

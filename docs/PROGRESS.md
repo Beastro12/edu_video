@@ -951,3 +951,51 @@ NEXT:
 - **Offline MVP work is done.** The first film needs Pietro: keys and the ElevenLabs host, the
   budget, the look, music.
 - Offline backlog left: P2-8, P3-4, P1-14, P2-9, P2-5.
+
+## 2026-10-25 P3-5 Flat-safe, style-neutral picture descriptions for the first film
+CHANGED:
+- `topics/ai-global-workspace/chapter_01/03/04/05.json`:
+  - 11 still and Veo descriptions are rewritten to drop photographic cues (mist, dew, blur, depth
+    of field, a "lens" subject…), keeping each scene's subject and composition;
+  - narration, concept, visual_type, outline.json, brief.md and brief.key are byte-identical.
+- `script.md`: the 11 Visual lines changed to match.
+- `config.py`:
+  - `FLAT_PHOTO_CUES` and `STYLE_MEDIUM_CUES`, matched whole-word;
+  - at merge, the review's S1 forms were added (diffused, fogged, moonbeam, realistic…) and the
+    comment no longer claims every inflection is listed.
+- `tests/conftest.py`: `photo_cue_problems` and `medium_cue_problems`.
+- `tests/test_topics.py`, `tests/test_style.py`: checks for both lists, a self-test, and false
+  friends ("flat calm sea", "oil lamp", "mistake", "macrophage").
+- `docs/`:
+  - D25 amendment (descriptions are style-neutral);
+  - BACKLOG: P3-5 ticked with an amended acceptance, plus new P0-8, P3-11 and P1-15;
+  - PLAN risk 2; NEEDS_PIETRO: three stills to watch.
+
+CHECKED:
+- Worked by implementer a3288 in two rounds, reviewed by Opus a3c18 in two rounds.
+- Round 1: no Critical, 3 Warnings:
+  - the lens subject was lost to the banned word "lens";
+  - inflections were missing;
+  - the rewrites added flat-only medium words, against D25.
+- Round 2: all closed; no Critical, no Warning.
+- The reviewer's probes:
+  - the new checks fail on 81c59dc's chapter files (18 hits in 11 scenes);
+  - a cue put back fails;
+  - only visual_description changed;
+  - D9: 9 stills and 2 Veo clips re-key, audio 39/39 and Manim 10/10 unchanged. Nothing has
+    been bought for this film, so nothing is lost.
+- Full suite: 523 passed on the worktree (orchestrator's run) and 523 passed on auto/dev after the
+  merge and the S1 additions. None of the S1 forms hits any of the 29 descriptions (checked).
+
+ASSUMED — none.
+
+DIVERGED:
+- BACKLOG's own acceptance said "rewritten into flat-vector terms". That line was the
+  orchestrator's, and it contradicted D25 ("a reviewed script serves any style"). The cues were
+  rewritten in neutral terms instead; the BACKLOG entry records the amendment and why.
+- The design check was skipped for this task as an "exception". That was wrong (AGENT_LEDGER A5),
+  and the rule is now no exceptions.
+
+NEXT:
+- P0-8 before any still is bought: every still would otherwise fall back to Manim.
+- P3-11: put the word lists in front of the writer and critic, for scripts the pipeline writes.
