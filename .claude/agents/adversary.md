@@ -24,3 +24,7 @@ Run `pytest -q tests/test_adversary_<task>.py` in the worktree. Edit no other fi
 Report each test's name, the sequence it runs, the invariant it asserts, and whether it passes or
 fails (with the assertion line). A failing test is a finding. A test that can't be written
 because the spec's invariant is unclear is also a finding: say what is unclear.
+
+Scratch files: only in your own folder, `<scratchpad>/<task>-<first 5 chars of your agent id, or your role>/`.
+Never write to the scratchpad root: generic names (mutate.py, probe.py) collided between agents
+on 2026-10-25, and one agent ran another's script in its own worktree.

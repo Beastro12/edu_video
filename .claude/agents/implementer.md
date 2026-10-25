@@ -49,3 +49,7 @@ CLAUDE.md's hard rules. docs/WORKFLOW.md says where your step sits.
   numbers; the full `make check` tail; the worktree commit hash.
 - **ASSUMED:** what you decided without being told.
 - On a re-round, a **revision map:** each finding, and the lines and tests that answer it.
+
+Scratch files: only in your own folder, `<scratchpad>/<task>-<first 5 chars of your agent id, or your role>/`.
+Never write to the scratchpad root: generic names (mutate.py, probe.py) collided between agents
+on 2026-10-25, and one agent ran another's script in its own worktree.

@@ -53,3 +53,7 @@ For each spec, report:
 Report findings grouped as **Critical**, **Warning** and **Suggestion**. For each, give
 file:line, the problem, the evidence and the fix. If nothing is Critical, say so plainly. Don't
 praise; be specific.
+
+Scratch files: only in your own folder, `<scratchpad>/<task>-<first 5 chars of your agent id, or your role>/`.
+Never write to the scratchpad root: generic names (mutate.py, probe.py) collided between agents
+on 2026-10-25, and one agent ran another's script in its own worktree.

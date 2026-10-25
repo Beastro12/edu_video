@@ -44,6 +44,9 @@ file.
      only one runs at a time. Added on 2026-10-17: four suites at once on 4 cores (load average 23)
      failed the wall-clock test in tests/test_parallel.py and took 20 min each.
    - Commit on the worktree branch, one commit per task.
+   - Scratch files go in the agent's own folder, `<scratchpad>/<task>-<id>/`, never the
+     scratchpad root. Added on 2026-10-25: two agents' `mutate.py` collided, and one ran the
+     other's script in its own worktree (caught and cleaned by the agent; nothing committed).
 5. **Adversary** (Haiku, trial). Its tests are added in the worktree. A test that fails is a
    finding; it goes back to the implementer.
 6. **Verify** (Haiku). Run `make check` in the worktree independently, and report the tail. This
