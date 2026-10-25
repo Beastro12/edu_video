@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from conftest import fake_ffmpeg, ff, photo_cue_problems
+from conftest import fake_ffmpeg, ff, medium_cue_problems, photo_cue_problems
 
 import assembly
 import config
@@ -679,23 +679,52 @@ def test_an_unknown_visual_style_in_the_environment_fails_at_import_with_the_cho
     assert all(name in refused.stderr for name in config.STYLES), refused.stderr
 
 
-def test_the_photographic_cue_list_has_the_required_words_and_matches_whole_words_in_any_case():
-    """FLAT_PHOTO_CUES (P3-5): the words test_topics keeps out of still and ai_video descriptions."""
-    assert {"blur", "blurred", "soft focus", "out of focus", "depth of field", "shallow depth", "bokeh",
-            "mist", "haze", "fog", "dew", "photograph", "photographic", "cinematic",
-            "lens"} <= set(config.FLAT_PHOTO_CUES)
-    assert all(cue and cue == cue.lower().strip() for cue in config.FLAT_PHOTO_CUES)
-    assert len(set(config.FLAT_PHOTO_CUES)) == len(config.FLAT_PHOTO_CUES)
+def _a_cue_list_matches_whole_words_in_any_case_in_stills_and_clips_only(cues, problems):
+    assert all(cue and cue == cue.lower().strip() for cue in cues)
+    assert len(set(cues)) == len(cues)
 
     def caught(text, visual_type="still"):
-        return photo_cue_problems([(1, 1, {"visual_type": visual_type, "visual_description": text})])
+        return problems([(1, 1, {"visual_type": visual_type, "visual_description": text})])
 
-    for cue in config.FLAT_PHOTO_CUES:
+    for cue in cues:
         for text in (f"A calm {cue} here.", f"A calm {cue.upper()}.", f"{cue.title()}, then dark.",
                      f"(a {cue.replace(' ', chr(10))})", f"a {cue.replace(' ', '-')}-like shape"):
             assert caught(text), f"{cue!r} not caught in {text!r}"
             assert caught(text, "ai_video"), f"{cue!r} not caught in an ai_video description {text!r}"
             assert not caught(text, "manim"), "a manim description is exempt"
-    assert not caught("A mistake, a dewar, a blurb, a hazel tree, a sharpener, a photographer, lensing, a smist."
-                      " One continuous slow camera move; a glow; soft gradients; a thin pale band.")
+    return caught
 
+
+def test_the_photographic_cue_list_has_the_required_words_and_matches_whole_words_in_any_case():
+    """FLAT_PHOTO_CUES (P3-5): the words test_topics keeps out of still and ai_video descriptions."""
+    required = {"blur", "blurred", "soft focus", "out of focus", "depth of field", "shallow depth", "bokeh",
+                "mist", "haze", "fog", "dew", "photograph", "photographic", "cinematic", "lens"}
+    # Whole-word matching misses every inflection, so each is listed (a reviewer's list of misses).
+    inflections = {"focused", "unfocused", "defocused", "blurring", "blurs", "mists", "misted", "dewdrop",
+                   "dewdrops", "photography", "photographed", "reflect", "reflecting", "sharper",
+                   "sharpness", "foggy", "foggier", "hazy", "hazier", "misty"}
+    strong = {"footage", "photorealistic", "hyperrealistic", "film grain", "grainy", "exposure",
+              "long exposure", "aperture", "macro", "telephoto", "volumetric", "god rays"}
+    assert required | inflections | strong <= set(config.FLAT_PHOTO_CUES)
+    caught = _a_cue_list_matches_whole_words_in_any_case_in_stills_and_clips_only(
+        config.FLAT_PHOTO_CUES, photo_cue_problems)
+    for word in sorted(inflections | strong):
+        assert caught(f"A quiet scene, {word}, in the dark."), word
+    assert not caught("A mistake, a dewar, a blurb, a hazel tree, a sharpener, a photographer, lensing, a smist,"
+                      " a macrophage, an unexposed edge. One continuous slow camera move; a glow; soft"
+                      " gradients; a thin pale band; a flat calm sea.")
+
+
+def test_the_style_medium_list_has_the_required_words_and_matches_whole_words_in_any_case():
+    """STYLE_MEDIUM_CUES (P3-5): the medium belongs to the style suffix (D25), not to a description."""
+    required = {"vector", "illustration", "illustrated", "drawn as", "flat shapes", "flat colour", "flat color",
+                "cartoon", "painting", "painterly", "watercolour", "watercolor", "oil painting",
+                "brushstroke", "brushstrokes"}
+    assert required <= set(config.STYLE_MEDIUM_CUES)
+    assert not set(config.STYLE_MEDIUM_CUES) & set(config.FLAT_PHOTO_CUES), "one word, one list"
+    caught = _a_cue_list_matches_whole_words_in_any_case_in_stills_and_clips_only(
+        config.STYLE_MEDIUM_CUES, medium_cue_problems)
+    assert "medium words belong to the style suffix (D25)" in caught("A vector disc.")[0]
+    assert not caught("Flat ground under a flat calm sea; a vectorless dark, a paintbrush-free night, drawn"
+                      " in pale lines, a drawn curtain, an oil lamp, a flat disc on a flat table.")
+    assert "an ai_video" in caught("A vector disc.", "ai_video")[0] and "a still" in caught("A vector disc.")[0]

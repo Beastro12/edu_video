@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import PHOTO_CUE_TYPES, photo_cue_problems
+from conftest import PHOTO_CUE_TYPES, medium_cue_problems, photo_cue_problems
 
 import metadata
 from agents.script_agent import SCENE
@@ -81,23 +81,35 @@ def test_ai_video_scenes_are_short_and_at_most_one_per_chapter(topic):
 
 def test_still_and_ai_video_descriptions_use_no_photographic_cue(topic):
     """Under --style flat the description comes before the flat suffix (D25), so blur, mist, depth of
-    field and the like can pull the picture toward a photograph. Say it in flat shapes, gradients and
+    field and the like can pull the picture toward a photograph. Say it with shapes, gradients and
     glows instead (config.FLAT_PHOTO_CUES lists the words). Changing a description re-keys its picture
     (D9), so do it before the picture is bought."""
     problems = photo_cue_problems(scenes_of(topic))
     assert not problems, "; ".join(problems)
 
 
-def test_the_photographic_cue_check_sees_a_cue_in_a_still_or_a_clip_but_not_in_a_diagram(topic):
+def test_still_and_ai_video_descriptions_name_no_medium(topic):
+    """The medium (vector, painting, cartoon...) belongs to the style suffix (D25), so one reviewed
+    script serves every style and `calm` stays the default. config.STYLE_MEDIUM_CUES lists the words."""
+    problems = medium_cue_problems(scenes_of(topic))
+    assert not problems, "; ".join(problems)
+
+
+@pytest.mark.parametrize("check, text", [
+    (photo_cue_problems, "A pale disc on a dark ground. A thin Mist, soft-focus edges."),
+    (medium_cue_problems, "A pale disc on a dark ground. A Flat Vector illustration."),
+], ids=["photographic", "medium"])
+def test_the_cue_checks_see_a_cue_in_a_still_or_a_clip_but_not_in_a_diagram(topic, check, text):
     scenes = scenes_of(topic)
     dirty = copy.deepcopy(scenes)
     for _, _, scene in dirty:  # whatever the folder says now, each scene gets one clean sentence and two cues
-        scene["visual_description"] = "A pale disc on a dark ground. A thin Mist, soft-focus edges."
-    found = photo_cue_problems(dirty)
+        scene["visual_description"] = text
+    found = check(dirty)
     wanted = [(n, i) for n, i, s in scenes if s["visual_type"] in PHOTO_CUE_TYPES]
     assert len(found) == 2 * len(wanted), found
     assert all(any(f"chapter {n} scene {i}:" in f for f in found) for n, i in wanted)
     assert not any("manim" in f for f in found)
+    assert all(("style suffix (D25)" in f) == (check is medium_cue_problems) for f in found), found
 
 
 def test_the_brief_exists_and_has_sources_for_the_description(topic):

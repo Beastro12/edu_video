@@ -128,22 +128,39 @@ STYLES = {
         "manim_background": "#162044",  # luma 32.5/255 against calm's 19.3: above QA_BLACK_PIX_TH too
     },
 }
-# Words that pull an image model toward a photograph or a painting. Under `flat` a still's or
-# clip's description comes BEFORE the suffix, so one of these can outweigh it (P3-5). The
-# test_topics check keeps them out of every `still` and `ai_video` description in topics/ (a
-# `manim` description is a diagram, so it is exempt). Matched whole-word and case-insensitive,
-# a space in a phrase also matching a hyphen or a line break, so "blur" does not catch "blurred"
-# and each inflection is listed. Camera-motion words ("slow camera move") are not cues: Veo is
-# prompted with them. A description edit re-keys its picture (D9): do the edit before buying it.
+# Two lists for the words of a still's or clip's description (P3-5). Under `flat` the description
+# comes BEFORE the style suffix (D25), so a word of the wrong kind can outweigh the suffix. The
+# test_topics checks keep both lists out of every `still` and `ai_video` description in topics/ (a
+# `manim` description is a diagram, so it is exempt). Both are matched whole-word and
+# case-insensitive, a space in a phrase also matching a hyphen or a line break, so "blur" does not
+# catch "blurred" and each inflection is listed. A description edit re-keys its picture (D9): do the
+# edit before the picture is bought.
+#
+# FLAT_PHOTO_CUES: words that pull the picture toward a photograph, in any style. Camera-motion
+# words ("slow camera move") are not cues: Veo is prompted with them.
 FLAT_PHOTO_CUES = (
     # optics and focus
-    "blur", "blurred", "blurry", "soft focus", "out of focus", "focus", "depth of field",
-    "shallow depth", "bokeh", "lens", "lenses", "sharp", "sharply", "diffuse",
+    "blur", "blurred", "blurry", "blurring", "blurs", "soft focus", "out of focus", "focus", "focused",
+    "unfocused", "defocused", "focusing", "depth of field", "shallow depth", "bokeh", "lens", "lenses",
+    "sharp", "sharply", "sharper", "sharpness", "diffuse",
     # air and surface texture
-    "mist", "misty", "haze", "hazy", "fog", "foggy", "dew", "dewy",
+    "mist", "mists", "misty", "misted", "misting", "haze", "hazy", "hazier", "fog", "foggy", "foggier",
+    "dew", "dewy", "dewdrop", "dewdrops",
     # light on water, and the camera's own words
-    "moonlight", "moonlit", "reflected", "reflection", "reflections",
-    "photograph", "photographic", "photo", "photos", "photorealistic", "cinematic",
+    "moonlight", "moonlit", "reflect", "reflects", "reflecting", "reflected", "reflection", "reflections",
+    "photograph", "photographs", "photographed", "photography", "photographic", "photo", "photos",
+    "photorealistic", "hyperrealistic", "cinematic", "footage", "film grain", "grainy", "exposure",
+    "long exposure", "aperture", "macro", "telephoto", "volumetric", "god ray", "god rays",
+)
+# STYLE_MEDIUM_CUES: words that name the medium (vector, painting, cartoon). The medium belongs to
+# the style suffix; a description names the subject, composition, light and colour only, so one
+# reviewed script serves every style and `calm` stays the default (D25). Ordinary uses of "flat"
+# ("flat ground", "a flat calm sea") are fine.
+STYLE_MEDIUM_CUES = (
+    "vector", "illustration", "illustrations", "illustrated", "drawn as", "flat shape", "flat shapes",
+    "flat colour", "flat colours", "flat color", "flat colors", "cartoon", "cartoons", "painting",
+    "paintings", "painterly", "watercolour", "watercolours", "watercolor", "watercolors", "oil painting",
+    "oil paintings", "brushstroke", "brushstrokes",
 )
 # Not named STYLE in the environment: a stray one in a shell would stop every import.
 STYLE = os.getenv("VISUAL_STYLE", "calm")

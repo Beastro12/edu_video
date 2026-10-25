@@ -27,7 +27,7 @@
     "concept": "Nobody designed it",
     "narration": "The researchers report that nobody designed the J-space. Like a stream finding its own channel through sand, it emerged during training. They also report that it is already present before the model is trained to be an assistant, and that afterwards it begins to hold what they call the assistant's own reactions.",
     "visual_type": "still",
-    "visual_description": "A shallow stream finding its own thin, winding channel through pale sand under a dim moon, seen from above. The channel branches once. Deep blue-black ground, the stream a smooth ribbon of flat silver-blue, pale sand in flat curved shapes, wide empty margins. No text."
+    "visual_description": "A shallow stream finding its own thin, winding channel through pale sand under a dim moon, seen from above. The channel branches once. Deep blue-black ground, the stream a smooth ribbon of silver-blue, pale sand, wide empty margins. No text."
   },
   {
     "concept": "Content beyond the text",
@@ -57,7 +57,7 @@
     "concept": "Spider, ant, and the number of legs",
     "narration": "The researchers also followed multi-step reasoning. For the number of legs on the animal that spins webs, spider appeared in the J-space partway through, and the answer was eight. With spider swapped for ant, the answer became six. When the model wrote a rhyming couplet, the planned rhyme word sat in the J-space at the start of the line.",
     "visual_type": "still",
-    "visual_description": "A simple web of thin pale lines strung between two dry grass stems at dusk, a few round silver dots on it, empty and still. Below it, a small pale stone on dark ground. Silver-blue and charcoal, a faint cool glow around the web, wide dark negative space. No creatures, no text."
+    "visual_description": "A simple web of thin pale lines strung between two dry grass stems at dusk, a few tiny round silver water droplets on it, empty and still. Below it, a small pale stone on dark ground. Silver-blue and charcoal, a faint cool glow around the web, wide dark negative space. No creatures, no text."
   },
   {
     "concept": "France becomes China",
@@ -69,7 +69,7 @@
     "concept": "Heard widely",
     "narration": "A workspace is not only a place where things are held. It also has to be heard widely. The researchers report that far more parts of the network read from and write to J-space patterns than do so with ordinary patterns.",
     "visual_type": "still",
-    "visual_description": "A river basin seen from high above at night, in simple flat shapes: many thin streams gather from all sides into one broad river, which then fans out again into a wide branching delta. Deep navy land, silver water in smooth flat ribbons, no lights or buildings, wide margins. No text."
+    "visual_description": "A river basin seen from high above at night: many thin streams gather from all sides into one broad river, which then fans out again into a wide branching delta. Deep navy land, silver water in smooth ribbons, no lights or buildings, wide margins. No text."
   },
   {
     "concept": "A broadcasting hub",
