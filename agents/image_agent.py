@@ -50,7 +50,10 @@ def render_still(scene: dict, out_dir: Path, failures: Failures | None = None) -
 def _buy(scene: dict, out: Path) -> Path:
     from google.genai import types
 
-    resp = google_client.make().models.generate_content(
+    # Keep the Client in a variable: a temporary one is collected once `.models` is read, and its
+    # __del__ closes the HTTP client it owns, so the request would fail unsent (P0-8).
+    client = google_client.make()
+    resp = client.models.generate_content(
         model=config.IMAGE_MODEL,
         contents=scene["visual_description"] + style(),
         config=types.GenerateContentConfig(
