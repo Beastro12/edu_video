@@ -1,7 +1,7 @@
 """Retries for transient API errors: jittered exponential backoff, at most MAX_RETRIES.
 The Anthropic and Google SDKs run their own retry loops, configured from the same values
 (agents/llm.py, agents/google_client.py); this helper covers plain `requests` calls
-(ElevenLabs)."""
+(ElevenLabs), the Veo download, and the Veo start's 429 (P0-9)."""
 import random
 import time
 from collections.abc import Callable
@@ -49,14 +49,16 @@ def is_transient(e: BaseException) -> bool:
         isinstance(e, httpx.TimeoutException | httpx.ConnectError)
 
 
-def call(fn: Callable[[], T], what: str) -> T:
-    """Run fn(); on a transient failure wait and try again, up to MAX_RETRIES times.
-    Any other exception propagates at once."""
+def call(fn: Callable[[], T], what: str,
+         transient: Callable[[BaseException], bool] = is_transient) -> T:
+    """Run fn(); on a failure `transient` accepts (default: is_transient) wait and try again, up to
+    MAX_RETRIES times. Any other exception propagates at once. A caller with a narrower idea of
+    "safe to repeat" passes its own predicate: the Veo start retries a 429 and nothing else."""
     for retry in range(config.MAX_RETRIES + 1):
         try:
             return fn()
         except Exception as e:
-            if not is_transient(e) or retry == config.MAX_RETRIES:
+            if not transient(e) or retry == config.MAX_RETRIES:
                 raise
             wait = min(max(getattr(e, "retry_after_s", None) or backoff_s(retry), 0), config.RETRY_MAX_S)
             log(f"    {what}: {str(e)[:120]}; retry {retry + 1}/{config.MAX_RETRIES} in {wait:.1f}s")

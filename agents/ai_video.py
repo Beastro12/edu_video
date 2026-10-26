@@ -66,25 +66,77 @@ def _start(scene: dict, out: Path, timeout_s: int) -> Path:
             return _buy(scene, out, cost, timeout_s)
 
 
-def _buy(scene: dict, out: Path, cost: float, timeout_s: int) -> Path:
+class StartAbandoned(RuntimeError):
+    """A Ctrl-C (or a run that is stopping) came while the start waited out a 429. The refusal means no
+    job exists, and nothing was sent after it, so no new job is started and nothing is recorded."""
+
+
+def _provably_not_started() -> tuple[type[BaseException], ...]:
+    """The errors that prove a start POST made no job:
+    - errors.ClientError: a 4xx, Google refused (a 429 is retried; see _buy);
+    - httpx ConnectError, ProxyError and PoolTimeout (and httpx2's twins): raised before any byte of the
+      request is written (httpcore 1.0.9, _backends/sync.py:150-153 and :202-205, _sync/http_proxy.py:297 and
+      :315-316).
+    ConnectTimeout is deliberately NOT here, although it is in fact pre-send as well: a false "may have
+    started" record costs budget headroom and one daily clip, never money, while a missed one can cost
+    a clip nobody counted (orchestrator decision, P0-9)."""
     import httpx
+    from google.genai import errors
+
+    kinds: list[type[BaseException]] = [errors.ClientError, httpx.ConnectError, httpx.ProxyError, httpx.PoolTimeout]
+    try:  # the SDK accepts either library's client
+        import httpx2
+        kinds += [httpx2.ConnectError, httpx2.ProxyError, httpx2.PoolTimeout]
+    except ImportError:
+        pass
+    return tuple(kinds)
+
+
+def _buy(scene: dict, out: Path, cost: float, timeout_s: int) -> Path:
     from google.genai import errors, types
 
     client = google_client.make()
+    never_started = _provably_not_started()
+    posts, unknown = 0, False  # `unknown`: a start POST is in flight, or failed in a way that proves nothing
+
+    def post():
+        nonlocal posts, unknown
+        if posts and (ledger.interrupted.is_set() or ledger.stopping.is_set()):
+            # Checked after the backoff, before the POST: a Ctrl-C then must not start a new (paid) job.
+            raise StartAbandoned("interrupted while waiting to ask Veo again; no new job was started")
+        posts += 1
+        unknown = True
+        try:
+            op = client.models.generate_videos(
+                model=config.VEO_MODEL,
+                source=types.GenerateVideosSource(prompt=scene["visual_description"] + style()),
+                # No generate_audio: the Gemini API refuses it (the SDK raises); the audio is discarded.
+                config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO, resolution=config.VEO_RESOLUTION,
+                                                  http_options=google_client.start_job_options()),
+            )
+        except never_started as e:
+            unknown = False
+            if isinstance(e, errors.ClientError) and e.code == 429:  # retries.call waits Retry-After if given
+                e.retry_after_s = retries.retry_after_s(getattr(getattr(e, "response", None), "headers", None) or {})
+            raise
+        unknown = False
+        return op
+
+    def refused(e: BaseException) -> bool:
+        return isinstance(e, errors.ClientError) and e.code == 429
+
     try:
-        op = client.models.generate_videos(
-            model=config.VEO_MODEL,
-            source=types.GenerateVideosSource(prompt=scene["visual_description"] + style()),
-            # No generate_audio: the Gemini API refuses it (the SDK raises); the audio is discarded.
-            config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO, resolution=config.VEO_RESOLUTION,
-                                              http_options=google_client.start_job_options()),
-        )
-    except (errors.ServerError, httpx.TimeoutException) as e:
-        # Google may have accepted the job before failing to answer: count it (D10, D11),
-        # so neither the budget nor the daily cap can be walked around this way.
-        ledger.record("google", config.VEO_MODEL,
-                      {"seconds": config.VEO_CLIP_S, "note": f"start failed ({type(e).__name__}); may have started"},
-                      cost)
+        # The SDK makes one attempt (google_client.start_job_options); the only retry is ours, and only for a
+        # 429: Google refused the job, so asking again cannot bill twice. A timeout or a 5xx may have come after
+        # Google accepted it (D11).
+        op = retries.call(post, "Veo start", transient=refused)
+    except BaseException as e:  # BaseException: a Ctrl-C while the POST is in flight may also have started the job
+        if unknown:
+            # Google may have accepted the job before the answer failed: count it (D10, D11), so neither
+            # the budget nor the daily cap can be walked around this way.
+            ledger.record("google", config.VEO_MODEL,
+                          {"seconds": config.VEO_CLIP_S, "note": f"start failed ({type(e).__name__}); may have started"},
+                          cost)
         raise
     # From here the job is running on Google's side and is likely billed even if we lose it.
     start = time.time()

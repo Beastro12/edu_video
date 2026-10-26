@@ -17,10 +17,12 @@ def make(httpx_client=None):
 
 
 def start_job_options():
-    """For a POST that starts a paid job (Veo): retry only a 429, which means the job was
-    refused. A 5xx may arrive after Google accepted it, and a retry would pay twice (D11)."""
+    """For the POST that starts a paid job (Veo): the SDK makes exactly one attempt. Its retry
+    predicate (google-genai 2.25.0, _api_client.py:575) retries a transport timeout or connect error
+    WHATEVER `http_status_codes` says, and a timeout can arrive after Google accepted the job: a retry
+    would start and bill a second one (D11). The one retry that is safe, a 429 (the job was refused),
+    is made by ai_video through retries.call. `retry_options` must be given: an HttpOptions without
+    it falls back to the client's own loop, which retries 5xx."""
     from google.genai import types
 
-    return types.HttpOptions(retry_options=types.HttpRetryOptions(
-        attempts=config.MAX_RETRIES + 1, initial_delay=config.RETRY_BASE_S, max_delay=config.RETRY_MAX_S,
-        jitter=config.RETRY_JITTER_S, http_status_codes=[429]))
+    return types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=1))
