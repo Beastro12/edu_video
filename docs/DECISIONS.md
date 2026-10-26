@@ -595,3 +595,55 @@ fallback; two deliberate exceptions to D10 and D16 (P2-2; 2026-10-14).**
   - A hand-made replacement survives only while those inputs stay the same; changing any of them
     redraws over it.
 - **Not verified live:** whether the model honours the composition note and draws no text.
+
+**D30 — Keep the genai Client alive for the whole call; fake the transport, not only the factory
+(P0-8; 2026-10-25).**
+- **The bug.** With google-genai 2.25.0, a `genai.Client` used inline
+  (`google_client.make().models.generate_content(...)`) is collected as soon as `.models` is
+  read.
+  - Its `__del__` (client.py:663) calls `close()`, which closes the SDK's own httpx client
+    (_api_client.py:2499).
+  - The request then fails before it is sent: "Cannot send a request, as the client has been
+    closed".
+  - `image_agent._buy` had this form since P0-6. On a real run, every still would have fallen
+    back to Manim (D7) and the thumbnail to a frame. No money is lost, but every picture is, as
+    in D13.
+- **The rule.**
+  - Always `client = google_client.make()`, then `client.models...`.
+  - `tests/test_genai_lifetime.py` enforces it with an AST scan that resolves the factory by its
+    import, over `agents/`, `scripts/` and the root modules, with a self-test.
+  - Known limit: an attribute read on a Client held only by a function's local variable.
+- **Why no test caught it.** Every test replaced `make()`, or gave the SDK an httpx client of its
+  own, which `close()` leaves alone.
+- **The rule for tests:** for at least one path per provider, fake the transport below the SDK
+  (`httpx.HTTPTransport.handle_request`), not only the factory, under a socket guard. P3-10's
+  contract fixtures and P3-12's fake-provider run generalise this.
+- **Not chosen:** pinning the Client on its API client. That would rely on a private SDK
+  attribute.
+
+**D31 — `scripts/preflight.py`: find the problem before the money (P3-6; 2026-10-25).**
+- **Free probes:**
+  - hosts;
+  - the Claude model;
+  - ElevenLabs models, voice and subscription;
+  - Google `models.get` for the image and Veo models;
+  - FFmpeg filters and libx264, parsed from stdout, because `ffmpeg -h filter=X` exits 0 for an
+    unknown filter;
+  - `manim --version`;
+  - free disk (at least 5 GB).
+- **Paid probes.** Without flags, exactly one paid call: a 16-token forced-tool Claude call
+  through `llm._create` and the ledger (about €0.0003).
+  - `--image` (about €0.06) and `--tts-sample` (about €0.013, cached by text) are the only other
+    paid probes. The prices in `--help` come from the ledger's own functions.
+  - Nothing retries. A budget refusal is a FAIL, not a crash.
+- **What it writes:** only the ledger and `build/preflight/`.
+- **Results:**
+  - a model 404 skips the paid Claude call;
+  - any ElevenLabs tier starting with "free", or none named, is a WARN;
+  - a 401 that says the key lacks a permission gets its own text ("TTS may still work");
+  - a pace outside 100–160 wpm is a WARN (D21).
+- **Redact, then cut.** Error text is `redact(text)[:N]`, never the reverse. A key that straddles
+  a cut is no longer whole, so `redact()` misses it and its first characters print.
+  - The same fix was made at voice.py:55 and :61.
+  - The remaining sites are P1-16.
+- **It needs D30.** `--image` goes through `image_agent._buy`, so P3-6 lands with or after P0-8.

@@ -29,6 +29,14 @@ copies in the session scratchpad and run probes there, with providers faked. Nev
    copy: rerun, changed input, flag omitted, crash mid-write, deleted artifact, hand edit. Record
    what each run printed, called, bought and wrote. To settle byte-identity, load the base's
    modules beside the new ones. Keep your probe scripts as files and name them in your report.
+   - **Per provider the diff touches,** run one probe through the real SDK (or `requests`) building
+     its OWN HTTP client, faked below it (`httpx.HTTPTransport.handle_request`,
+     `requests.adapters.HTTPAdapter.send`), under a socket tripwire that blocks `connect` and
+     `getaddrinfo`. A probe only through an injected client or a faked factory misses the SDK's
+     own behaviour: a P0-6 bug survived that way until 2026-10-25 (AGENT_LEDGER A6).
+   - **Explain every unexpected probe result before moving on.** A surprise is a finding until
+     shown otherwise.
+   - Use targeted tests. The orchestrator runs the full suite; don't queue one behind the lock.
 5. On a re-review, start from the implementer's revision map, and check each finding against it.
 
 ## Design mode (a spec, before any code)

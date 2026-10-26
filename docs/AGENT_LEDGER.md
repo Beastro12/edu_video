@@ -210,6 +210,49 @@ context. The check it saves time on is the one that fails.
 entry whose subject the spec touches (style, record, cache key, Veo, brief, seed) and pastes the
 quoted lines into the spec. It is cheap, mechanical, and aimed at exactly this error class.
 
+### A6. Success streaks: reviewer a43d9 (4 in a row), the design-checker role (3 in a row), and the adversary's first trial (2026-10-25)
+
+**The record:**
+- **a43d9:**
+  - P3-6 review: found C1, a genai Client lifetime bug that had been in image_agent.py since P0-6, past every earlier review and about 520 tests;
+  - P0-8 design check; P0-8 review; P3-6 re-review.
+- **Design-checker role:** accdd, a07d3 and a43d9, all successes.
+- **Adversary ad515 (Haiku, first trial):** from the spec and diff alone, 2 Criticals in P3-7 that 77 implementer tests and 21 mutations had missed.
+
+**Why: the task, the instructions, or a method of its own?** All three. The decisive part was a method the agent chose. From the interview (facts the agent stated, with the files to show them):
+- **Method.**
+  - It removed one mock at a time and ran each mutation under its own socket tripwire (`probes/p3-6/nettrip.py`), which reviewer.md does not ask for.
+  - One run printed "0 sockets reached" where a real SDK with no mock should have reached one. It stopped to explain that result instead of moving on, and the explanation was the bug.
+- **Instructions.**
+  - reviewer.md's "probe, don't only read… flag omitted" and the prompt's item (a), "can a test reach the network if a single mock is missing?", pointed it at the right place.
+- **The task.**
+  - The rule that every provider is faked forced it to build fakes at the transport level. That is the only level where the SDK's own object lifetime runs.
+- **Why the others missed it** (the agent's inference, which fits the record): every real-SDK test injected `httpx_client=mock`, exactly the setup in which the SDK leaves its client open. Reviewers probed retries, money and keys, never object lifetime.
+- **The design checkers in common:** all three prototyped against the code instead of only reading the spec.
+  - accdd measured the master fix in advance;
+  - a07d3 found that `ffmpeg -h` exits 0 for a missing filter;
+  - a43d9 ran the regression test on the base before any code existed.
+  This is A3's finding (a84d) again: probes beat reading.
+- **The adversary in common:** it started from the spec's invariants and tried sequences across two runs or two processes. That is A1's class, which implementers keep missing.
+
+**Wasted effort (the agent's own account):**
+- A reviewer's flock'd full suite waited 23 minutes behind other suites and was then lost in a restart. A targeted run was always enough.
+- Two checklist items overlapped.
+
+**Ideas, adopted or queued:**
+1. **reviewer.md** (adopted):
+   - for each provider, one probe through the real SDK building its own HTTP client, faked below it, under a socket tripwire;
+   - "explain every unexpected probe result before moving on";
+   - reviewers run targeted tests; the orchestrator runs the full suite.
+2. **The adversary leaves trial status:** it is standard for every task that persists state. Measured: 2 Criticals on its first run, at Haiku cost.
+3. **P1-15 widened:** the autouse tripwire blocks `getaddrinfo` as well as `connect`. The P0-8 review found a DNS lookup that slips past a connect-only guard.
+4. **P3-12 (new):** a fake-provider full run in `make check`.
+   - One short film goes through the real SDKs and the real `requests` stack, with every provider faked at the transport, under the tripwire.
+   - It catches lifetime bugs, SDK-upgrade breaks, and any path that unit tests fake away.
+   - It comes after P3-10, whose recorded responses it can serve.
+
+**Replace?** No. The instance ends with its task. What lasts is the method, now written into reviewer.md and the fixtures plan.
+
 ## Actions taken (2026-10-16)
 
 | From | Change | Where |
@@ -238,6 +281,9 @@ Each will be tried on the first task it fits, and logged here.
 | A5 | Specs quote the DECISIONS lines they rely on, including what must stay shared | WORKFLOW.md (spec template) |
 | A5, process | One full test suite at a time (`flock`) | WORKFLOW.md, tests.md, implementer.md |
 | A5 (trial) | Haiku spec linter before the design check: quotes the DECISIONS entries a spec touches | first used on P2-5's re-spec; measured here |
+| A6 | Reviewers: one real-SDK probe per provider (own HTTP client, faked below it, under a tripwire); explain every unexpected probe result; targeted tests only | reviewer.md |
+| A6 | Adversary leaves trial status: standard for every task that persists state | WORKFLOW.md, adversary.md |
+| A6 | P1-15 widened to `getaddrinfo`; P3-12 fake-provider full run queued | BACKLOG.md |
 
 ## Live log (from 2026-10-16)
 Rows are appended per round; see docs/WORKFLOW.md for the format.
@@ -280,3 +326,18 @@ dropped constraints. Those are the reasons the design check and the plan review 
 | 2026-10-25 | ad515 | Haiku | adversary (trial) | P3-7 | 1 | success | 3 sequences, 2 FAIL, both real and both Critical, reproduced by the orchestrator: an unfinished review log copied mid-pilot makes the film pay for a second review; on a disk without hard links the copy fallback can replace a film file. First trial run: it caught what 77 implementer tests and 21 mutations missed |
 | 2026-10-25 | acf40 | Sonnet | implementer | P3-7 | 1 (found after r2) | needs fix | the two adversary Criticals (above) are in round 1's copy code; both on paths that combine two runs or two processes, again A1's cross-run-state class |
 | 2026-10-25 | acf40 | Sonnet | implementer | P3-7 | 2 (spec change) | success | the style record (a)–(e); the adversary's sequences found nothing in it |
+| 2026-10-25 | main | Opus | tests verifier (direct) | P1-14, P3-4 | 1 | success | flock'd suites: 2ab8998 alone 523 passed; 84a1642 553 passed; both match the claims |
+| 2026-10-25 | — | — | (environment) | all | — | — | 4th session-limit stop (reset 22:50 UTC) with the 4-agent cap in force; container restarted again. The cap did not prevent the stop: the window's budget, not concurrency, bounds throughput. What concurrency changes is how much in-flight work a stop interrupts. Lever that matters: tokens per accepted task (fewer rounds, verification without agents, resuming the same reviewer) |
+| 2026-10-25 | a1297 | Sonnet | implementer | P0-8 | 1 | pending review | real-SDK tests fail on base with the SDK's own error; import-resolving AST guard with a 15-case self-test; a "fix" of `models = make().models` killed |
+| 2026-10-25 | a1297 | Sonnet | implementer | P3-6 | 2 (fix) | pending re-review | C1 + W1–W4 + 2 suggestions; 14 mutations; reported the same cut-before-redact leak still in pipeline.py and retries.py |
+| 2026-10-25 | acf40 | Sonnet | implementer | P3-7 | 3 (fix) | pending review | both adversary Criticals fixed as decided; found and closed the same check-then-replace hole in its own style-record write, unasked; adversary tests adopted |
+| 2026-10-25 | adb7c | Sonnet | implementer | P2-8, P2-9 | 1 | pending review | constant-gain master with a keyed reading file; sample-exact cut added to keep D12 (3 existing tests caught the 60–110 ms short audio); 2.0 dB AAC margin measured over 16 films and labelled empirical; reported a pre-existing test-order leak (test_qa sets assembly.W/H) |
+| 2026-10-25 | a43d9 | Opus | reviewer | P0-8 | 1 | success | no Critical; W1: two breaking forms (relative import, factory alias) slip the AST guard, not in code (follow-up); DNS-before-connect gap in the test socket guards (to P1-15) |
+| 2026-10-25 | a43d9 | Opus | reviewer | P3-6 | 2 | success | C1, W1–W4 closed, re-probed (secrets, money, shapes, ffmpeg); merge-order Warning: P3-6's --image needs P0-8; confirmed the 4 remaining cut-before-redact sites, and 3 look-alikes safe. Trigger: 4 successes in a row → interview, A6 |
+| 2026-10-25 | a1297 | Sonnet | implementer | P0-8 | 1 | success | no Critical (W1 is a guard-coverage follow-up) |
+| 2026-10-25 | a1297 | Sonnet | implementer | P3-6 | 2 (fix) | success | re-review: all closed, no Critical |
+| 2026-10-26 | main | Opus | tests verifier (direct) | P0-8+P3-6 on auto/dev; P3-7 r3; P2-8; P2-9 | 1 | success | 647 / 621 / 580 / 593 passed; each matches its implementer's claim |
+| 2026-10-26 | a08ee | Opus | reviewer | P1-14, P3-4 | 1 | success | 2 Criticals in P1-14, both reproduced by the orchestrator: C1, a Ctrl-C inside `Thread.start()` during `submit` leaves an unregistered worker, so paid calls run after the flags clear (CPython 3.11 thread.py:199-200, threading.py:969); C2 (pre-existing), a Ctrl-C during the shutdown wait loses a started Veo job's ledger entry. 500-run real-signal statistics on head and base |
+| 2026-10-26 | a437a | Sonnet | implementer | P1-14 | 1 | needs fix | C1 above; its tests raised before `super().submit`, so the path was never reached |
+| 2026-10-26 | a437a | Sonnet | implementer | P3-4 | 1 | success | no Critical; W3: a stale record prints a rejection on every rerun |
+| 2026-10-26 | ab947 | Opus | design checker | P3-9, P3-10 | 1 | success | GO-with-changes for both, with prototypes and SDK probes. 3 spec Criticals in P3-10 (httpx_client= loses redirects and hides D30; a hook that swallows a mid-read timeout; the voice ID in file names). Found a pre-existing Critical: genai retries the Veo start POST after a timeout despite D11. Design-checker role: 4 in a row |

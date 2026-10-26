@@ -74,7 +74,7 @@ Work top to bottom within a priority.
   Accept: `VEO_MAX_PER_DAY` in config (default 2) counts today's (UTC) Veo entries in the
   ledger; past it, Veo is skipped with a log line and the scene falls back to a still
   (not a run stop). `--estimate` counts only the Veo clips still allowed today. Mocked test.
-- [ ] P0-8 — A temporary google-genai Client closes its own HTTP client: every still fails
+- [x] P0-8 — A temporary google-genai Client closes its own HTTP client: every still fails
   Found in P3-6's review (2026-10-25), reproduced by the orchestrator with the real SDK and the
   transport faked.
   - `image_agent.py:53` calls `google_client.make().models.generate_content(...)` inline. The
@@ -246,7 +246,9 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   - 11 descriptions carried cues, not 12. The reviewer searched for a 12th too.
   - A second list, `STYLE_MEDIUM_CUES`, keeps medium words out of descriptions.
   - The fact table is unchanged, because no narration changed.
-- [ ] P3-6 — `scripts/preflight.py`: check every provider before money is spent (N1)
+- [x] P3-6 — `scripts/preflight.py`: check every provider before money is spent (N1)
+  Done 2026-10-25 (D31). It must land with or after P0-8, because `--image` goes through
+  `image_agent._buy`.
   Accept:
   - Free checks:
     - host reachability for api.anthropic.com, api.elevenlabs.io and
@@ -298,6 +300,13 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   - a test proves no key string appears in any saved file.
   `make smoke` with `RECORD_LIVE=1` then pays once for real fixtures.
 
+- [ ] P3-12 — A fake-provider full run in `make check` (AGENT_LEDGER A6)
+  One short film goes through the real SDKs and the real `requests` stack, every provider faked
+  at the transport level, under P1-15's tripwire. It catches SDK lifetime bugs (P0-8),
+  SDK-upgrade breaks, and any path that unit tests fake away. It comes after P3-10, whose
+  recorded responses it can serve.
+  Accept: a film made end to end offline, with no socket opened, and the run report naming every
+  provider request it made.
 - [ ] P3-11 — Feed the description word lists into the writer and critic (P3-5 review S5)
   The cue checks only cover hand-made `topics/` folders. A script the pipeline writes (G4) goes
   to `build/<slug>/` and is never checked.
@@ -308,8 +317,27 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   - `--estimate` lists such scenes before anything is bought.
 - [ ] P1-15 — A socket-level backstop for offline tests (P3-6 review)
   The conftest guard blocks known SDK entry points; a new path could still open a socket.
-  Accept: an autouse fixture refuses `socket.connect` to any non-loopback address in offline
-  tests, with a self-test; live tests (`-m live`) are exempt.
+  Accept:
+  - an autouse fixture refuses `socket.connect` to any non-loopback address in offline tests,
+    and `socket.getaddrinfo` for any non-local name. The P0-8 review found a DNS lookup that a
+    connect-only guard lets through.
+  - It has a self-test. Live tests (`-m live`) are exempt.
+  - The per-test socket guards in test_genai_lifetime.py and test_preflight.py then use it.
+- [ ] P1-16 — Redact before cutting, everywhere (P3-6 review)
+  pipeline.py:294, :301 and :305, and retries.py:62, cut `str(e)` before `log()` redacts it. A key
+  that straddles the cut is no longer whole, so its first characters print.
+  Accept:
+  - `redact(text)[:N]` at each site;
+  - a test puts a long key across each cut and finds no 8-character run of it in the output;
+  - an AST check flags a slice of `str(...)` or `.text` that is not wrapped in `redact`.
+- [ ] P1-17 — Test-order leak: test_qa's `healthy` fixture sets `assembly.W`/`H` directly (P2-8)
+  `test_assembly.py::test_scene_format_is_normalised` fails when test_qa.py runs first in the
+  same process. Accept: the fixture uses monkeypatch, and a test runs the pair in both orders.
+- [ ] P1-18 — Widen the genai AST guard (P0-8 review W1)
+  The guard misses forms that do break: `from . import google_client`, an alias of the factory
+  (`f = google_client.make`), `getattr(make(), "models")`, `google.genai.client.Client`. None
+  is in the code today. Accept: each is added to the self-test's flagged list, and the scanner
+  catches it.
 
 ## P2 — scale and polish
 

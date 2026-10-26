@@ -999,3 +999,67 @@ DIVERGED:
 NEXT:
 - P0-8 before any still is bought: every still would otherwise fall back to Manim.
 - P3-11: put the word lists in front of the writer and critic, for scripts the pipeline writes.
+
+## 2026-10-25 P0-8 A temporary genai Client closed its own HTTP client: every still would fail
+CHANGED:
+- `agents/image_agent.py`: `_buy` keeps `client = google_client.make()` for the whole request.
+- `tests/test_genai_lifetime.py`, 4 tests:
+  - the real SDK with its own httpx client, transport faked and a socket guard, for `_buy` and for
+    the `reviewed_still` path;
+  - an import-resolving AST guard with a self-test (9 forms flagged, 6 not);
+  - a scan of agents/, scripts/ and the root modules.
+- DECISIONS D30.
+
+CHECKED:
+- Found by reviewer a43d9 in P3-6's review. Reproduced independently by the orchestrator
+  (scratchpad/orch/genai_lifetime.py):
+  - inline: "Cannot send a request, as the client has been closed", 0 requests at the transport;
+  - client kept: OK, 1 request.
+- Design check a43d9 (GO-with-changes, prototyped on the base). Implementer a1297.
+- On the base f2d9b23, the new tests fail: 2 with the SDK's own error, and the scan names
+  image_agent.py:53.
+- Review a43d9: no Critical. W1: two forms slip the guard, neither in the code (P1-18).
+- Full suite: 527 passed on the worktree (orchestrator's run), and 647 passed on auto/dev with P3-6.
+
+ASSUMED — none.
+DIVERGED — none.
+NEXT — P1-18 widens the guard; P3-12 runs a whole film through the real SDKs with the transport faked.
+
+## 2026-10-25 P3-6 `scripts/preflight.py`: check every provider before money is spent
+CHANGED:
+- `scripts/preflight.py` (new): the D31 probes, one PASS/WARN/SKIP/FAIL line each, exit 0 only
+  without a FAIL. `--image` and `--tts-sample`.
+- `agents/llm.py`: `_create(..., client=None)`.
+- `agents/voice.py`:
+  - `SAMPLE_LINE`;
+  - redact-then-cut at :55 and :61.
+- `config.py`: three `PREFLIGHT_*` settings.
+- `tests/conftest.py`: a `Models.retrieve` guard.
+- `tests/test_preflight.py`.
+- README: one line in step 2.
+
+CHECKED:
+- Implementer a1297, two rounds. Reviewer a43d9, two rounds.
+- Round 1 had 1 Critical:
+  - the same inline-Client bug in preflight's Google check, which found P0-8;
+  - and 4 Warnings: a key prefix printed when error text was cut before redacting; the
+    free-tier match; the missing-permission shape; a guard test that could go live.
+- Round 2: all closed and re-probed:
+  - no key prefix of 8 or more characters is printed;
+  - one paid call without flags;
+  - every paid request makes 1 attempt;
+  - `MAX_RETRIES` is restored after Ctrl-C;
+  - nothing is written outside `build/`.
+- Full suites:
+  - b8fca88 with P0-8 applied: 641 passed (implementer);
+  - the Haiku verifier on round 1: 598 passed;
+  - on auto/dev after merging P3-5, P0-8 and P3-6: 647 passed, 7 deselected (orchestrator's
+    flock'd run).
+
+ASSUMED:
+- ElevenLabs error-body shapes are read from their docs, not verified live. The code gives a
+  readable FAIL on any other shape (probed). P3-10 records the real ones.
+
+DIVERGED — none.
+
+NEXT — the first live step is `python scripts/preflight.py`, then `--image --tts-sample` (NEEDS_PIETRO).

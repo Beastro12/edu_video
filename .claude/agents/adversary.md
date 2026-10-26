@@ -1,6 +1,6 @@
 ---
 name: adversary
-description: Trial step. From a task's spec and diff only, writes three tests expected to break an invariant across reruns, crashes or edits. Use after the implementer, before review.
+description: Standard for tasks that persist state. From a task's spec and diff only, writes three tests expected to break an invariant across reruns, crashes or edits. Use after the implementer, before review.
 tools: Read, Grep, Glob, Bash, Write
 model: haiku
 ---

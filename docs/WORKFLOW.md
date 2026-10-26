@@ -47,8 +47,10 @@ file.
    - Scratch files go in the agent's own folder, `<scratchpad>/<task>-<id>/`, never the
      scratchpad root. Added on 2026-10-25: two agents' `mutate.py` collided, and one ran the
      other's script in its own worktree (caught and cleaned by the agent; nothing committed).
-5. **Adversary** (Haiku, trial). Its tests are added in the worktree. A test that fails is a
-   finding; it goes back to the implementer.
+5. **Adversary** (Haiku), for every task that persists state; standard since 2026-10-25 (A6: two
+   Criticals on its first run). It works in its own detached worktree. Its tests go into the
+   implementer's worktree with the fix. A test that fails is a finding, and it goes back to the
+   implementer.
 6. **Verify** (Haiku). Run `make check` in the worktree independently, and report the tail. This
    checks the implementer's claim.
 7. **Review** (Opus), on a fresh context with the spec, the diff and a revision map. The
