@@ -423,3 +423,9 @@ dropped constraints. Those are the reasons the design check and the plan review 
 | 2026-10-26 | ab947 | Opus | reviewer | P0-9 | 1 | success | no Critical; W1 (stopping during a 429 wait recorded as a lasting failure, against D19), W2 (pre-existing: a press between start and poll loses the record), S1–S3; merge with P1-14 r2 checked in a clone (one textual conflict, 87 passed) |
 | 2026-10-26 | a1297 | Sonnet | implementer | P0-9 | 1 | success | review found no Critical |
 | 2026-10-26 | ab947 | Opus | (analysis) | — | — | — | trigger: 3 successes in a row → A6 addendum (no interview: cost); reviewer.md design mode gains the "probe the wrong variants" rule |
+| 2026-10-26 | a1297 | Sonnet | implementer | P0-9 | 2 (fix) | success (orchestrator-reviewed) | W1, W2, S1 closed; deviated from my W2 wording with a correct reason (my layout put the line after the start handler had been left); a dead line found by its own mutation R5 and removed |
+| 2026-10-26 | main | Opus | orchestrator (spec) | P0-9 fix | 1 | needs fix | my W2 instruction was internally inconsistent; the implementer kept its intent and fixed the layout |
+| 2026-10-26 | acf40 | Sonnet | implementer | P3-7 | 4 (fix) | pending re-review | C1 per-file check on the bytes read; W1–W3 and S1–S7; 17 mutations; reported one unreproduced A1 failure honestly instead of calling it a flake |
+| 2026-10-26 | a9d94 | Opus | reviewer | P2-8, P2-9 | 1 | success | no Critical; 74 keys byte-identical to base; sync ±1 sample; limiter 0 delay (latency=0 control +239.8 samples); W1: the margin comment's -2.1 not reproduced (no-music path -1.7); W2: speech double-limited by up to ~4 dB (unverified on ElevenLabs); W3 comment; 7 suggestions |
+| 2026-10-26 | adb7c | Sonnet | implementer | P2-8, P2-9 | 1 | success | review found no Critical |
+| 2026-10-26 | main | Opus | tests verifier (direct) | P0-9 on auto/dev | 1 | success | 687 passed after the merge |

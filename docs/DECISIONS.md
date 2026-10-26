@@ -81,6 +81,30 @@ the real Anthropic and Google SDKs through mock HTTP transports and counts reque
 checks that one call is recorded once however many attempts it took. Residual risk: a
 Claude, ElevenLabs or image POST that times out after the provider did the work is retried
 and may be billed twice; the ledger records it once.
+- **Amendment (P0-9, 2026-10-26): the Veo start is one attempt; only a 429 is retried, by our
+  own code.**
+  - **Measured on google-genai 2.25.0.** The SDK's retry predicate (`_api_client.py:575-578`)
+    retries a transport timeout or a connect error whatever `http_status_codes` says. So the old
+    `HttpRetryOptions(attempts=5, http_status_codes=[429])` sent the start POST again after a
+    ReadTimeout. That can start and bill a second job (about €2.94) while the ledger counts one.
+  - **`HttpOptions()` without `retry_options` is no fix:** it falls back to the client's own
+    loop, which retries 5xx.
+  - **Now:**
+    - `start_job_options()` gives `attempts=1`.
+    - `ai_video` retries only a 429, through `retries.call(..., transient=<429 only>)`. It
+      honours `Retry-After`, and starts nothing once the run is stopping (`StartAbandoned`, which
+      is not recorded as a failure, D19).
+  - **Recording.**
+    - A start that fails after the request may have left is recorded "may have started",
+      whatever the error type, including a Ctrl-C with the POST in flight and a press before the
+      poll begins. Then it is re-raised (D10).
+    - Not recorded, because they are provably pre-send or refused: ConnectError, ProxyError and
+      PoolTimeout (httpcore 1.0.9 raises them before any request byte is written), a 4xx, and
+      our own argument errors.
+    - ConnectTimeout is recorded anyway, on purpose: a false record costs budget headroom and
+      one daily clip, never money.
+  - **Polling and the download keep their retries;** they are reads.
+  - **A test pins the SDK behaviour,** so an upgrade that changes the predicate is noticed.
 
 **D12 — Sample-exact scene timing; test audio as decoded samples.** Each scene is a whole
 number of video frames (`scene_frames`: lead-in + narration + tail, rounded up) and its audio

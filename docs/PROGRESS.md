@@ -1063,3 +1063,39 @@ ASSUMED:
 DIVERGED — none.
 
 NEXT — the first live step is `python scripts/preflight.py`, then `--image --tts-sample` (NEEDS_PIETRO).
+
+## 2026-10-26 P0-9 The Veo start POST was retried after a timeout (D11 broken)
+CHANGED:
+- `agents/google_client.py`: `start_job_options()` gives `attempts=1`.
+- `retries.py`: `call(..., transient=is_transient)`.
+- `agents/ai_video.py`:
+  - the start retries only a 429, honours Retry-After, and raises `StartAbandoned` once the run is
+    stopping (not a recorded failure);
+  - every start failure that may have left is recorded "may have started", including a Ctrl-C
+    with the POST in flight and a press before the poll;
+  - the request objects are built before the "maybe sent" window.
+- `tests/test_veo_start.py`, 40 tests: the real SDK with its own client, the transport faked,
+  sockets blocked, real SIGINT.
+- D11 amendment.
+
+CHECKED:
+- Found by design checker ab947 (P3-10's design check). The orchestrator reproduced it: a
+  ReadTimeout then a 200 gave 2 start POSTs.
+- Design check (GO-with-changes): two fixes that looked right still started a second job
+  (probed).
+- Implementer a1297, two rounds:
+  - round 1: 19 of 31 new tests fail on the base, 13 mutations;
+  - round 2: W1, W2 and S1, with 7 new tests failing on round 1, 6 mutations.
+- Review ab947 on round 1: no Critical; W1 and W2 then fixed. Round 2 was reviewed by the
+  orchestrator: the diff was read, and it matches the report.
+- Full suites: round 1 678 passed (orchestrator's run); round 2 687 passed (implementer); auto/dev
+  after the merge: 687 passed, 7 deselected (orchestrator's flock'd run).
+
+ASSUMED:
+- `stopping` is checked as well as `interrupted` before a 429 retry. A retry is a new paid call.
+
+DIVERGED:
+- In round 2 the implementer changed my W2 layout. Mine was inconsistent: the line sat after the
+  handler that had to cover it. Its version keeps the specified behaviour, and a test pins it.
+
+NEXT — P1-14 r2 changes the poll's `except` to BaseException, and that merge comes next.

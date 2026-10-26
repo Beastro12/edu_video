@@ -87,7 +87,7 @@ Work top to bottom within a priority.
   - a real-SDK regression test, with the transport faked, fails on the base and passes fixed;
   - an import-resolving AST guard flags any attribute read on a temporary Client, with a
     self-test.
-- [ ] P0-9 — The Veo start POST is retried after a timeout, against D11 (found 2026-10-26)
+- [x] P0-9 — The Veo start POST is retried after a timeout, against D11 (found 2026-10-26)
   google-genai 2.25.0 retries transport timeouts and connect errors whatever
   `HttpRetryOptions.http_status_codes` says (`_api_client.py:575-578`). So
   `start_job_options()`'s "429 only" doesn't hold. A start that times out after Google
