@@ -7,6 +7,7 @@ again after a ReadTimeout, and Google had maybe accepted the first: two jobs, on
 Every test here drives the REAL SDK with its OWN httpx client (D30), faked below it at
 `httpx.HTTPTransport.handle_request`, under a socket guard. POSTs are counted by the
 `:predictLongRunning` path."""
+import json
 import signal
 import socket
 import threading
@@ -23,8 +24,10 @@ import ledger
 import pipeline
 import retries
 from agents import ai_video, google_client
+from failures import FailedEarlier, Failures
 
 REAL_SLEEP = time.sleep
+REAL_TIME = time.time
 SCENE = {"id": 3, "concept": "stars", "narration": "n", "visual_type": "ai_video", "visual_description": "a dark sky"}
 OPERATION = {"name": "models/veo/operations/op1", "done": True, "response": {"generateVideoResponse": {
     "generatedSamples": [{"video": {"uri": "https://generativelanguage.googleapis.com/v1beta/files/abc:download?alt=media"}}]}}}
@@ -268,6 +271,102 @@ def test_a_real_ctrl_c_in_a_parallel_run_stops_a_worker_waiting_out_a_429(veo, m
     assert veo.posts == 1, "no new job after the press"
     assert notes() == []
     assert not ledger.interrupted.is_set(), "in_parallel clears it on the way out"
+
+
+# --- P0-9 fix round -------------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("flag", ["stopping", "interrupted"])
+def test_a_stopped_run_is_not_recorded_as_a_lasting_veo_failure(veo, monkeypatch, tmp_path, flag):
+    """W1: Google refused (429) and the run stopped during the backoff. Nothing about the prompt failed (D19):
+    no entry in failures.json, so the next run asks Veo again and gets its clip."""
+    path = tmp_path / "failures.json"
+    veo.starts = [429, 200]
+    monkeypatch.setattr(time, "sleep", lambda s: getattr(ledger, flag).set())
+    with pytest.raises(ai_video.StartAbandoned, match="the run is stopping"):
+        ai_video.render_scene(SCENE, veo.out_dir, failures=Failures(path))
+    assert not path.exists() or json.loads(path.read_text()) == {}
+    assert veo.posts == 1 and notes() == []
+    ledger.stopping.clear()
+    ledger.interrupted.clear()
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    veo.starts = [200]
+    out = ai_video.render_scene(SCENE, veo.out_dir, failures=Failures(path))  # the next run: no FailedEarlier
+    assert out.read_bytes() == b"mp4bytes" and veo.posts == 2 and notes() == ["clip"]
+
+
+def test_a_real_lasting_failure_is_still_recorded_and_skipped_next_time(veo, tmp_path):
+    """The other side of W1: a 400 (a refused prompt) is about the request, so it is remembered."""
+    path = tmp_path / "failures.json"
+    veo.starts = [400, 200]
+    with pytest.raises(genai_errors.ClientError):
+        ai_video.render_scene(SCENE, veo.out_dir, failures=Failures(path))
+    with pytest.raises(FailedEarlier):
+        ai_video.render_scene(SCENE, veo.out_dir, failures=Failures(path))
+    assert veo.posts == 1
+
+
+@pytest.fixture
+def fake_clock(monkeypatch):
+    """ai_video's own `time` (not the module everyone shares): `.on_first_call` runs at the first
+    time.time() the module makes, which in _buy is the first thing after the start POST answers."""
+    clock = SimpleNamespace(calls=0, on_first_call=None, sleep=lambda s: None)
+
+    def now():
+        clock.calls += 1
+        if clock.calls == 1 and clock.on_first_call:
+            clock.on_first_call()
+        return REAL_TIME()
+
+    clock.time = now
+    monkeypatch.setattr(ai_video, "time", clock)
+    return clock
+
+
+def test_a_real_press_right_after_the_start_was_answered_is_recorded_once(veo, fake_clock):
+    """W2: the POST answered 200 (the job exists), then Ctrl-C before the poll began. On b63bc9f this gap
+    recorded nothing and the paid job was lost to the ledger."""
+    veo.starts = [200]
+    fake_clock.on_first_call = lambda: signal.raise_signal(signal.SIGINT)
+    with pytest.raises(KeyboardInterrupt):
+        render(veo)
+    assert veo.posts == 1 and veo.gets == 0
+    assert notes() == ["start failed (KeyboardInterrupt); may have started"]
+
+
+def test_an_error_in_that_gap_is_recorded_once_not_twice(veo, fake_clock):
+    veo.starts = [200]
+
+    def boom():
+        raise RuntimeError("clock broke")
+    fake_clock.on_first_call = boom
+    with pytest.raises(RuntimeError, match="clock broke"):
+        render(veo)
+    assert notes() == ["start failed (RuntimeError); may have started"]
+
+
+def test_a_failing_poll_is_recorded_once_as_lost_track_and_not_as_a_failed_start(veo):
+    """`unknown` is cleared when the poll begins: the poll's own handler records, the start's does not."""
+    veo.starts = [200]
+    veo.polls = [503] * 10
+    with pytest.raises(genai_errors.ServerError):
+        render(veo)
+    assert notes() == ["lost track of job (ServerError); assumed billed"]
+
+
+@pytest.mark.parametrize("build", ["start_job_options", "GenerateVideosConfig", "GenerateVideosSource"])
+def test_an_error_in_our_own_arguments_sent_nothing_and_is_not_a_possible_job(veo, monkeypatch, build):
+    """S1: only an error inside the SDK call counts as maybe sent."""
+    def invalid(*a, **kw):
+        raise ValueError("invalid request argument")
+
+    if build == "start_job_options":
+        monkeypatch.setattr(google_client, "start_job_options", invalid)
+    else:
+        monkeypatch.setattr(types, build, invalid)
+    veo.starts = [200]
+    with pytest.raises(ValueError, match="invalid request argument"):
+        render(veo)
+    assert veo.posts == 0 and notes() == []
 
 
 # --- the reads keep their retries -------------------------------------------------------------------------------------

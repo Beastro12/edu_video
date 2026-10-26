@@ -33,6 +33,12 @@ class DailyCapReached(RuntimeError):
     generation, but nothing is recorded as failed: tomorrow it can have its clip (P1-7)."""
 
 
+class StartAbandoned(RuntimeError):
+    """The run is stopping (Ctrl-C, or an earlier scene failed) while the start waited out a 429. Google
+    refused, so no job exists, and nothing was sent after it. Like DailyCapReached, nothing about the prompt
+    failed: not recorded as a failure (D19), and the scene falls back as after a failed generation."""
+
+
 def render_scene(scene: dict, out_dir: Path, timeout_s: int = 600, failures: Failures | None = None) -> Path:
     """A failed generation is recorded in `failures` (P1-7) and not attempted again unless
     it retries failures."""
@@ -44,8 +50,8 @@ def render_scene(scene: dict, out_dir: Path, timeout_s: int = 600, failures: Fai
             failures.check(out.stem)
         try:
             made = _start(scene, out, timeout_s)
-        except (ledger.BudgetExceeded, DailyCapReached):
-            raise  # not a failed generation: nothing was asked of Veo
+        except (ledger.BudgetExceeded, DailyCapReached, StartAbandoned):
+            raise  # not a failed generation: nothing was asked of Veo (or Google refused and we stopped)
         except Exception as e:
             if failures:
                 failures.record(out.stem, "veo", scene.get("id"), e)
@@ -64,11 +70,6 @@ def _start(scene: dict, out: Path, timeout_s: int) -> Path:
         cost = ledger.video_eur(config.VEO_CLIP_S)
         with ledger.reserve("google", cost):
             return _buy(scene, out, cost, timeout_s)
-
-
-class StartAbandoned(RuntimeError):
-    """A Ctrl-C (or a run that is stopping) came while the start waited out a 429. The refusal means no
-    job exists, and nothing was sent after it, so no new job is started and nothing is recorded."""
 
 
 def _provably_not_started() -> tuple[type[BaseException], ...]:
@@ -103,24 +104,22 @@ def _buy(scene: dict, out: Path, cost: float, timeout_s: int) -> Path:
         nonlocal posts, unknown
         if posts and (ledger.interrupted.is_set() or ledger.stopping.is_set()):
             # Checked after the backoff, before the POST: a Ctrl-C then must not start a new (paid) job.
-            raise StartAbandoned("interrupted while waiting to ask Veo again; no new job was started")
+            raise StartAbandoned("the run is stopping (Ctrl-C or an earlier failure); no new job was started")
+        # Built before `unknown` is set: an error in our own arguments sent nothing, so it is not a possible job.
+        source = types.GenerateVideosSource(prompt=scene["visual_description"] + style())
+        # No generate_audio: the Gemini API refuses it (the SDK raises); the audio is discarded.
+        gen_config = types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO, resolution=config.VEO_RESOLUTION,
+                                                http_options=google_client.start_job_options())
         posts += 1
         unknown = True
         try:
-            op = client.models.generate_videos(
-                model=config.VEO_MODEL,
-                source=types.GenerateVideosSource(prompt=scene["visual_description"] + style()),
-                # No generate_audio: the Gemini API refuses it (the SDK raises); the audio is discarded.
-                config=types.GenerateVideosConfig(aspect_ratio=config.ASPECT_RATIO, resolution=config.VEO_RESOLUTION,
-                                                  http_options=google_client.start_job_options()),
-            )
+            op = client.models.generate_videos(model=config.VEO_MODEL, source=source, config=gen_config)
         except never_started as e:
             unknown = False
             if isinstance(e, errors.ClientError) and e.code == 429:  # retries.call waits Retry-After if given
                 e.retry_after_s = retries.retry_after_s(getattr(getattr(e, "response", None), "headers", None) or {})
             raise
-        unknown = False
-        return op
+        return op  # `unknown` stays set until the start's handler below is left: a press before then counts
 
     def refused(e: BaseException) -> bool:
         return isinstance(e, errors.ClientError) and e.code == 429
@@ -130,6 +129,7 @@ def _buy(scene: dict, out: Path, cost: float, timeout_s: int) -> Path:
         # 429: Google refused the job, so asking again cannot bill twice. A timeout or a 5xx may have come after
         # Google accepted it (D11).
         op = retries.call(post, "Veo start", transient=refused)
+        start = time.time()  # inside this try: a press anywhere from the POST to here still counts the job
     except BaseException as e:  # BaseException: a Ctrl-C while the POST is in flight may also have started the job
         if unknown:
             # Google may have accepted the job before the answer failed: count it (D10, D11), so neither
@@ -139,7 +139,6 @@ def _buy(scene: dict, out: Path, cost: float, timeout_s: int) -> Path:
                           cost)
         raise
     # From here the job is running on Google's side and is likely billed even if we lose it.
-    start = time.time()
     try:
         while not op.done:
             if time.time() - start > timeout_s:
