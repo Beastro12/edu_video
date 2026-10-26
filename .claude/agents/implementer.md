@@ -53,3 +53,13 @@ CLAUDE.md's hard rules. docs/WORKFLOW.md says where your step sits.
 Scratch files: only in your own folder, `<scratchpad>/<task>-<first 5 chars of your agent id, or your role>/`.
 Never write to the scratchpad root: generic names (mutate.py, probe.py) collided between agents
 on 2026-10-25, and one agent ran another's script in its own worktree.
+
+Reach past the fakes (AGENT_LEDGER A7). If your change touches a provider call, a signal or
+interrupt path, or a file two processes can touch at once, your tests must include:
+- one test through the real SDK (or `requests`) with its own HTTP client, faked at the transport
+  (`httpx.HTTPTransport.handle_request`, `requests.adapters.HTTPAdapter.send`), under a socket
+  guard (D30);
+- a real-signal test (`signal.raise_signal(SIGINT)`) at each blocking point your change adds or
+  wraps;
+- one test where a second process (or thread) acts on the same build while yours runs.
+If one can't be written, say why under ASSUMED.

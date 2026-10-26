@@ -87,6 +87,16 @@ Work top to bottom within a priority.
   - a real-SDK regression test, with the transport faked, fails on the base and passes fixed;
   - an import-resolving AST guard flags any attribute read on a temporary Client, with a
     self-test.
+- [ ] P0-9 — The Veo start POST is retried after a timeout, against D11 (found 2026-10-26)
+  google-genai 2.25.0 retries transport timeouts and connect errors whatever
+  `HttpRetryOptions.http_status_codes` says (`_api_client.py:575-578`). So
+  `start_job_options()`'s "429 only" doesn't hold. A start that times out after Google
+  accepted it is sent again and billed twice (about €2.94). The SDK swallowed the first
+  timeout, so the ledger records one job: the budget and the daily cap undercount.
+  Reproduced offline: a ReadTimeout and then a 200 gave 2 POSTs.
+  Accept: one SDK attempt on the start; our code retries a 429 only; a timeout or 5xx makes
+  exactly 1 POST and 1 "may have started" entry. Real-SDK tests with the transport faked
+  (D30).
 
 ## P1 — quality
 
@@ -307,6 +317,12 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   recorded responses it can serve.
   Accept: a film made end to end offline, with no socket opened, and the run report naming every
   provider request it made.
+- [ ] P1-19 — A probe kit: the reviewers' harnesses as reusable files (AGENT_LEDGER A7)
+  Reviewers rebuilt the same harnesses for every task. They are a socket tripwire (connect and
+  getaddrinfo), a real-signal driver (SIGINT at random points, statistics), a slowed-write
+  SIGKILL harness with a concurrent-writer race, and transport-level fakes per provider.
+  Accept: `tests/probes/` holds them (not collected by pytest), each with a docstring and one
+  example run; implementer.md and reviewer.md point to it.
 - [ ] P3-11 — Feed the description word lists into the writer and critic (P3-5 review S5)
   The cue checks only cover hand-made `topics/` folders. A script the pipeline writes (G4) goes
   to `build/<slug>/` and is never checked.

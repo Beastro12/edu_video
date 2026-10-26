@@ -253,6 +253,56 @@ quoted lines into the spec. It is cheap, mechanical, and aimed at exactly this e
 
 **Replace?** No. The instance ends with its task. What lasts is the method, now written into reviewer.md and the fixtures plan.
 
+### A7. Role-level needs-fix streak: Sonnet implementers, 2026-10-25/26 (P3-6 r1, P3-7 r1, then P1-14 r1, P3-7 r3)
+
+**The record:**
+- **The four Criticals:**
+  - P3-6: an inline genai Client closes its own HTTP client;
+  - P3-7 r1: an unfinished review log copied mid-pilot, and a check-then-replace fallback;
+  - P1-14: a Ctrl-C inside `Thread.start()` orphans a worker;
+  - P3-7 r3: a pilot still running slips an unfinished log past a check that runs before the walk.
+- **Successes in the same span:** P3-5, P0-8, P3-4 and P3-7 r2.
+
+**Why: one class of bug.** Every Critical sits where the implementer's own tests cannot reach:
+- **(a) inside a library's internals:** the SDK's object lifetime, CPython's thread start;
+- **(b) between two processes or threads at once:** a pilot running while `copy` runs; a press
+  landing mid-call.
+
+The implementers' tests were thorough within their reach: 70–90 tests each, 9–21 mutations
+killed. That reach is fakes at the factory, sequences run one at a time, and a signal raised at a
+point of the test's own choosing. Every Critical was found by an agent that stepped outside it:
+- the real SDK with the transport faked (a43d9);
+- 500 real signals at random times (a08ee);
+- SIGKILLs and slowed writes against a concurrent run (a4b92);
+- invariant-first sequences across two runs (adversary ad515).
+
+**Is it the instructions?**
+- In part. implementer.md asks for state across runs (A1), but not for the two things that found
+  these: real internals and real concurrency.
+- The test fixtures make the narrow path the easy one. conftest fakes `make()` and blocks
+  `requests` wholesale.
+
+**More efficient:**
+1. **implementer.md:** for any change that touches a provider call, a signal or interrupt path, or
+   a file that two processes share, the report must include:
+   - one real-SDK test with the transport faked (D30);
+   - a real-signal test at each blocking point the change introduces or wraps;
+   - one two-process test (a second process acting on the same build).
+   An implementer who can't write one names the reason under ASSUMED.
+2. **A probe kit (P1-19):** the reviewers' harnesses, kept as reusable files.
+   - They are the socket tripwire, the real-signal driver, the slowed-write SIGKILL harness, and
+     the transport fakes per provider.
+   - The idea is a84d's, not yet adopted until now. Each reviewer rebuilt these from scratch,
+     which was the biggest reviewer cost.
+3. **Specs** (orchestrator): for each blocking call or shared file a task touches, the state table
+   gets a "while another process or thread…" row.
+
+**Replace?** No.
+- The model wasn't the limit. These paths need a different harness, not a different reasoner.
+  The same Sonnet instances closed every finding in one round once shown the probe.
+- Opus reviewers with probes stay the step that finds this class. The adversary (Haiku) found two
+  of the six, at a fraction of the cost.
+
 ## Actions taken (2026-10-16)
 
 | From | Change | Where |
@@ -284,6 +334,9 @@ Each will be tried on the first task it fits, and logged here.
 | A6 | Reviewers: one real-SDK probe per provider (own HTTP client, faked below it, under a tripwire); explain every unexpected probe result; targeted tests only | reviewer.md |
 | A6 | Adversary leaves trial status: standard for every task that persists state | WORKFLOW.md, adversary.md |
 | A6 | P1-15 widened to `getaddrinfo`; P3-12 fake-provider full run queued | BACKLOG.md |
+| A7 | Implementers: a real-SDK test, real-signal tests at blocking points, and a two-process test, whenever the change touches those | implementer.md |
+| A7 | Probe kit (the reviewers' harnesses kept as files) | BACKLOG P1-19 |
+| A7 | State tables gain a "while another process or thread…" row per blocking call or shared file | WORKFLOW.md spec template |
 
 ## Live log (from 2026-10-16)
 Rows are appended per round; see docs/WORKFLOW.md for the format.
@@ -341,3 +394,6 @@ dropped constraints. Those are the reasons the design check and the plan review 
 | 2026-10-26 | a437a | Sonnet | implementer | P1-14 | 1 | needs fix | C1 above; its tests raised before `super().submit`, so the path was never reached |
 | 2026-10-26 | a437a | Sonnet | implementer | P3-4 | 1 | success | no Critical; W3: a stale record prints a rejection on every rerun |
 | 2026-10-26 | ab947 | Opus | design checker | P3-9, P3-10 | 1 | success | GO-with-changes for both, with prototypes and SDK probes. 3 spec Criticals in P3-10 (httpx_client= loses redirects and hides D30; a hook that swallows a mid-read timeout; the voice ID in file names). Found a pre-existing Critical: genai retries the Veo start POST after a timeout despite D11. Design-checker role: 4 in a row |
+| 2026-10-26 | a4b92 | Opus | reviewer | P3-7 | 1 (of r3) | success | C1 confirmed by the orchestrator (probe A1): the unfinished-review check runs before the walk, so a pilot still running can slip an unfinished log in; 3 Warnings (Veo pilot rerun command, dead-end refusal, messages), 7 Suggestions; 41+13 SIGKILLs and 30 style races with 0 violations |
+| 2026-10-26 | acf40 | Sonnet | implementer | P3-7 | 3 (fix) | needs fix | C1 above: the check and the use were separated, a TOCTOU of the same cross-process class as round 1's |
+| 2026-10-26 | a2650 | Haiku | adversary | P2-8, P2-9 | 1 | success | 3 sequences: changed narration and a crash between writes both pass (the rerun equals a clean build); a foreign reading is never applied; 1 finding: the spec's "an unchanged film runs no FFmpeg" contradicts the design check's "a deleted reading is read again"; the invariant is amended (with its reading kept) |

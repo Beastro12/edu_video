@@ -73,7 +73,9 @@ file.
   - flag omitted;
   - a crash after each write, then a rerun;
   - an artifact deleted, then a rerun;
-  - a hand edit, then a rerun.
+  - a hand edit, then a rerun;
+  - for each blocking call or shared file: the same step while another process or thread acts
+    on the build (A7).
 - **DECISIONS touched,** with the lines the spec relies on quoted, including what must stay
   shared (e.g. D25's "what every style shares"). The design checker adds any that were missed.
 - **Fast test subset.**
