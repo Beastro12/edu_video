@@ -340,7 +340,8 @@ the remaining P1/P2 tasks; then P1-11, P2-3, P2-7, P2-6, P2-2, P2-4 in that orde
   - It has a self-test. Live tests (`-m live`) are exempt.
   - The per-test socket guards in test_genai_lifetime.py and test_preflight.py then use it.
 - [ ] P1-16 — Redact before cutting, everywhere (P3-6 review)
-  pipeline.py:294, :301 and :305, and retries.py:62, cut `str(e)` before `log()` redacts it. A key
+  pipeline.py:294, :301 and :305, and retries.py:62 (:64 after P0-9, which also serves the Veo
+  start), cut `str(e)` before `log()` redacts it. A key
   that straddles the cut is no longer whole, so its first characters print.
   Accept:
   - `redact(text)[:N]` at each site;

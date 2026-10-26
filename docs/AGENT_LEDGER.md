@@ -253,6 +253,24 @@ quoted lines into the spec. It is cheap, mechanical, and aimed at exactly this e
 
 **Replace?** No. The instance ends with its task. What lasts is the method, now written into reviewer.md and the fixtures plan.
 
+**A6 addendum (2026-10-26): ab947, 3 successes in a row** (the P3-9/P3-10 design check, the P0-9
+design check, the P0-9 review).
+- **The same causes as A6**, from its reports; there was no interview, because resuming a
+  ~400k-token context costs more than it would add (the orchestrator's choice):
+  - it prototyped before judging: it applied the P3-9 spec to two scratch trees and measured
+    which pinned tests break;
+  - it probed real SDK behaviour with the transport faked: redirects, `close()`, the retry
+    predicate.
+- **New in its method: proof from library source.**
+  - It settled "is ConnectError ever raised after bytes were sent?" by reading httpcore's
+    connect and proxy paths, with file:line references.
+  - It did not leave the question as a risk.
+  - That turned a judgment call into an orchestrator decision with evidence.
+- **Its probe table of wrong fixes changed the spec before any code** (`HttpOptions()` without
+  retry options, an unchanged `retries.call`). Both looked right and would have billed twice.
+- **Adopted:** reviewer.md's design mode gains "for each fix the spec proposes, probe the
+  plausible wrong variants too, and table what each one does".
+
 ### A7. Role-level needs-fix streak: Sonnet implementers, 2026-10-25/26 (P3-6 r1, P3-7 r1, then P1-14 r1, P3-7 r3)
 
 **The record:**
@@ -401,3 +419,7 @@ dropped constraints. Those are the reasons the design check and the plan review 
 | 2026-10-26 | main | Opus | orchestrator (spec) | P1-14 r2 | 1 | needs fix | my r2 design had the SIGINT handler set the ledger Events: a press while the main thread is inside that Event's set/clear deadlocks (probed); also no end-order rule, so a press could be swallowed. Caught by the design check before any code, as A5 intended |
 | 2026-10-26 | a08ee | Opus | design checker | P1-14 r2 | 1 | success | GO-with-changes; deadlock and latency probed; install rule (asyncio.Runner's); end order; precedence; 8 table rows; the SIGALRM forwarder trap in its own probes |
 | 2026-10-26 | — | — | (environment) | all | — | — | 5th session-limit stop (reset 11:20 UTC), container restarted; 4 agents resumed at 12:21 |
+| 2026-10-26 | a1297 | Sonnet | implementer | P0-9 | 1 | pending review | 31 real-SDK tests (19 fail on base), real SIGINT through in_parallel; 13 mutations killed; went past the spec conservatively (BaseException with the record gated on 'may be on the wire'; stopping checked too), each flagged under ASSUMED |
+| 2026-10-26 | ab947 | Opus | reviewer | P0-9 | 1 | success | no Critical; W1 (stopping during a 429 wait recorded as a lasting failure, against D19), W2 (pre-existing: a press between start and poll loses the record), S1–S3; merge with P1-14 r2 checked in a clone (one textual conflict, 87 passed) |
+| 2026-10-26 | a1297 | Sonnet | implementer | P0-9 | 1 | success | review found no Critical |
+| 2026-10-26 | ab947 | Opus | (analysis) | — | — | — | trigger: 3 successes in a row → A6 addendum (no interview: cost); reviewer.md design mode gains the "probe the wrong variants" rule |

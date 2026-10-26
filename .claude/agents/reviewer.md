@@ -47,6 +47,9 @@ For each spec, report:
 - **Missing invariants and multi-run scenarios,** phrased as tests.
 - **Ambiguities,** with a proposed decision. Mark judgment calls "orchestrator decides".
 - **Feasibility traps** you checked in the code: shadowed names, stubs that will break, timing.
+- **Wrong variants:** for each fix the spec proposes, probe the plausible wrong variants too
+  (e.g. the option left out, the old helper reused), and table what each does. A fix that only
+  looks right is the common failure (AGENT_LEDGER A6 addendum).
 - **Verdict:** GO, GO-with-changes (with the exact spec edits) or STOP (why).
 
 ## Severity
