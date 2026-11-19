@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT))
 import config  # noqa: E402
 import pipeline  # noqa: E402
 from agents import image_agent  # noqa: E402
-from utils import atomic_output, brief_key, kept_brief, load_json, save_json, slugify  # noqa: E402
+from utils import atomic_output, brief_key, kept_brief, load_json, slugify  # noqa: E402
 
 TOPICS = ROOT / "topics"  # the reviewed scripts; module-level so a test can point it elsewhere
 PARTIAL = ".partial-"     # the name of a file being made (utils.atomic_output uses it too)
@@ -219,7 +219,9 @@ def make(out_arg: str, src_arg: str, chapters_arg: str, topic: str | None, film_
         name = f"chapter_{n:02d}.json"
         with atomic_output(out / name) as tmp:
             tmp.write_bytes((src / name).read_bytes())
-    save_json(out / "outline.json", {**outline, "chapters": [c for c in outline["chapters"] if c["number"] in chosen]})
+    kept_outline = {**outline, "chapters": [c for c in outline["chapters"] if c["number"] in chosen]}
+    with atomic_output(out / "outline.json") as tmp:
+        tmp.write_text(json.dumps(kept_outline, indent=2, ensure_ascii=False), encoding="utf-8")  # as save_json
     with atomic_output(out / config.BRIEF_FILE) as tmp:
         tmp.write_bytes(brief_bytes)
     kept = (out / config.BRIEF_FILE).read_text(encoding="utf-8-sig")
@@ -256,7 +258,7 @@ def pilot_style(pilot: Path) -> str:
         return name
     why = ("is missing, a folder, a broken link or not UTF-8 text" if text is None
            else "is empty" if not name else f"says {name!r}, which is not a style ({', '.join(sorted(config.STYLES))})")
-    raise Refusal(f"{path} {why}: the pilot's pictures can't be matched to a style. Rerun the pilot once with its "
+    raise Refusal(f"{path} {why}, so the pilot's pictures can't be matched to a style; rerun the pilot once with its "
                   f"--style (it buys nothing already made), or write the style name into {path}")
 
 
@@ -468,8 +470,10 @@ def copy_log(src: Path, dst: Path, shown: str, visuals: Path, mine: set[str] | N
         accepted = json.loads(data).get("accepted")
         if accepted is not None:
             picture = dst.parent / accepted
-            if not copy_file(visuals / accepted, picture, f"visuals/{accepted}", result) or not is_plain(picture):
-                why = f"its picture {accepted} could not be put in the film"
+            if not os.path.lexists(picture):  # not made by the walk (it finished after the folder was listed)
+                copy_file(visuals / accepted, picture, f"visuals/{accepted}", result)
+            if not is_plain(picture):
+                why = f"its picture {accepted} is not in the film as a plain file"
     if why:
         result.incomplete.append((shown, why))
         return
@@ -498,9 +502,9 @@ def copy(pilot_arg: str, film_arg: str, src_arg: str | None) -> int:
     manifest = read_json(pilot / "manifest.json")
     if isinstance(manifest, dict) and isinstance(manifest.get("style"), str) and manifest["style"] != style:
         raise Refusal(f"{pilot / 'manifest.json'} says the pilot was finished in {manifest['style']}, but "
-                      f"{pilot / config.STYLE_FILE} says {style}. Rerun the pilot once with --style "
-                      f"{manifest['style']} (it buys nothing already made), or write that name into "
-                      f"{pilot / config.STYLE_FILE}, or finish the pilot in {style} (rerun with --style {style})")
+                      f"{pilot / config.STYLE_FILE} says {style}; rerun the pilot once with its --style (it buys nothing "
+                      f"already made), or write the style name into {pilot / config.STYLE_FILE}, or finish the pilot "
+                      f"in {style} (rerun with --style {style})")
 
     film_style = film / config.STYLE_FILE
     if os.path.lexists(film_style):
