@@ -414,6 +414,7 @@ def walk_folder(src: Path, dst: Path, rel: str, visuals: Path, mine: set[str] | 
         try:
             mode = os.lstat(path).st_mode
         except FileNotFoundError:
+            result.skipped.append((shown, "gone from the pilot after the folder was listed"))
             continue
         if PARTIAL in name:
             result.skipped.append((shown, "a file still being made (.partial-)"))

@@ -61,6 +61,43 @@ def make_source(root: Path, name="demo", chapters=(1, 2), brief=BRIEF) -> Path:
     return src
 
 
+class Pause:
+    """A provider hook that stops the run inside a request, once, for the first item `when` accepts, until
+    the test lets it go: the run's own thread waits here while the test acts on the same build."""
+
+    def __init__(self, when=lambda item: True):
+        self.when, self.reached, self.go = when, threading.Event(), threading.Event()
+
+    def __call__(self, item):
+        if self.when(item) and not self.reached.is_set():
+            self.reached.set()
+            assert self.go.wait(60), "the test never let the run go on"
+
+    def wait_reached(self):
+        assert self.reached.wait(60), "the run never got there"
+
+
+class Running:
+    """pipeline.main() on its own thread; join() re-raises what stopped it."""
+
+    def __init__(self):
+        self.error = None
+        self.thread = threading.Thread(target=self._main, daemon=True)
+        self.thread.start()
+
+    def _main(self):
+        try:
+            pipeline.main()
+        except BaseException as e:  # noqa: BLE001 - handed to join()
+            self.error = e
+
+    def join(self):
+        self.thread.join(60)
+        assert not self.thread.is_alive(), "the run did not finish"
+        if self.error is not None:
+            raise self.error
+
+
 class World:
     def __init__(self, monkeypatch, tmp_path, media):
         self.mp, self.tmp, self.media = monkeypatch, tmp_path, media
@@ -165,6 +202,12 @@ class World:
         self.mp.setattr(config, "STYLE", default)
         self.mp.setattr(sys, "argv", ["pipeline.py", *argv])
         pipeline.main()
+
+    def start(self, *argv) -> "Running":
+        """A run in a second thread: `run`'s setup is done here, in the test's own thread."""
+        self.mp.setattr(config, "STYLE", "calm")
+        self.mp.setattr(sys, "argv", ["pipeline.py", *argv])
+        return Running()
 
     def pilot_argv(self, out: Path, topic="pilot demo", *flags):
         return (topic, "--brief", str(out / "brief.md"), "--style", "flat", "--no-ai-video", *flags)
