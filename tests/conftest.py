@@ -162,26 +162,34 @@ def real_google(monkeypatch):
 SPEECH_S = [4.0, 5.5, 3.0, 6.0, 4.5, 5.0]  # six scenes: long enough to see ducking past the fades
 
 
-def build_film(work, media, visuals=None, narrations=None, chapters=None, **overrides):
+def build_film(work, media, visuals=None, narrations=None, chapters=None, voices=None, music=True, **overrides):
     """A small film in the pipeline's build-folder layout, made with the real assembly code
     (use with the `small` fixture). Sine tones stand in for the voice, as long as their text
     at WORDS_PER_MIN. `overrides` patch config for the build only (to inject a fault);
-    `visuals` swaps a scene's picture; `narrations` / `chapters` set the script."""
+    `visuals` swaps a scene's picture; `narrations` / `chapters` set the script.
+    `voices` are audio files used as the narrations instead of the tones, one per scene (their
+    script text is as long as they are); `music=False` mixes no bed (no music_bed.wav)."""
     import assembly
     import config
     from agents.music import build_bed
-    from utils import save_json, video_duration
+    from utils import duration, save_json, video_duration
     saved = {k: getattr(config, k) for k in overrides}
     for k, v in overrides.items():
         setattr(config, k, v)
     try:
         work.mkdir(parents=True, exist_ok=True)
         scenes, manifest, clips = [], [], []
-        texts = narrations or [" ".join(["calm"] * round(secs * config.WORDS_PER_MIN / 60)) for secs in SPEECH_S]
+        if voices:
+            texts = [" ".join(["calm"] * round(duration(v) * config.WORDS_PER_MIN / 60)) for v in voices]
+        else:
+            texts = narrations or [" ".join(["calm"] * round(secs * config.WORDS_PER_MIN / 60)) for secs in SPEECH_S]
         for i, text in enumerate(texts, start=1):
-            secs = round(len(text.split()) * 60 / config.WORDS_PER_MIN, 2)
             narration = work / f"n{i}.mp3"
-            ff("-f", "lavfi", "-i", f"sine=f={200 + 30 * i}:d={secs}:sample_rate=44100", str(narration))
+            if voices:
+                shutil.copyfile(voices[i - 1], narration)
+            else:
+                secs = round(len(text.split()) * 60 / config.WORDS_PER_MIN, 2)
+                ff("-f", "lavfi", "-i", f"sine=f={200 + 30 * i}:d={secs}:sample_rate=44100", str(narration))
             visual, kind = (visuals or {}).get(i, (media / "manim.mp4", "manim"))
             clip = assembly.build_scene_clip(visual, narration, work / "clips", kind, i,
                                              assembly.scene_tail(i - 1, len(texts)))
@@ -193,7 +201,8 @@ def build_film(work, media, visuals=None, narrations=None, chapters=None, **over
         save_json(work / "script.json", {"title": "QA test", "scenes": scenes})
         save_json(work / "manifest.json", {"title": "QA test", "scenes": manifest})
         narrated = assembly.crossfade_concat(clips, work / "narrated.mp4")
-        bed = build_bed([media / "music.wav"], video_duration(narrated), work / "music_bed.wav", "s")
+        bed = (build_bed([media / "music.wav"], video_duration(narrated), work / "music_bed.wav", "s")
+               if music else None)
         return assembly.add_music(narrated, bed, work / "qa-test.mp4")
     finally:
         for k, v in saved.items():
