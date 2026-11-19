@@ -63,3 +63,7 @@ interrupt path, or a file two processes can touch at once, your tests must inclu
   wraps;
 - one test where a second process (or thread) acts on the same build while yours runs.
 If one can't be written, say why under ASSUMED.
+
+Durability (AGENT_LEDGER A8): after EVERY commit, push your branch: `git push -u origin <your
+wip/ branch>`. The container can be replaced at any time; work that exists only on its disk is
+lost.

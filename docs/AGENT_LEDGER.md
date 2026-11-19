@@ -321,6 +321,40 @@ point of the test's own choosing. Every Critical was found by an agent that step
 - Opus reviewers with probes stay the step that finds this class. The adversary (Haiku) found two
   of the six, at a fraction of the cost.
 
+### A8. The loss: a container replacement deleted every unpushed piece of work (2026-11-06)
+
+**What was lost:**
+- P2-8/P2-9: accepted, merged locally, never pushed.
+- P3-7: four rounds.
+- P1-14/P3-4: round 1, and round 2 in progress.
+- P3-10: in progress.
+- Every spec, probe, review harness and worktree in the scratchpad.
+- Roughly 25 agent rounds of work.
+
+**Safe:** auto/dev to a1d7b6b on GitHub, holding P3-5, P0-8, P3-6 and P0-9, and all docs to that
+point.
+
+**Why it happened.**
+- The workflow pushed only at acceptance.
+- Specs and worktrees lived in the session scratchpad and a local clone. Both are on the
+  container's disk.
+- Six earlier container restarts had kept the disk, which made it look durable. This one
+  replaced it.
+- The environment notes said so ("the container is reclaimed… anything worth keeping needs to
+  be committed and pushed"), and the workflow didn't follow them. This is the orchestrator's
+  failure.
+
+**Fix:**
+- Specs go in `docs/specs/` and are pushed.
+- Every worktree branch is pushed as `wip/<task>` after every commit.
+- The orchestrator pushes auto/dev after every merge, before the acceptance suite, and reverts if
+  the suite fails.
+
+**Recovery.**
+- Five specs were rebuilt from the orchestrator's transcript.
+- Redo specs for P2-8/P2-9, P3-7 and P1-14/P3-4 were written from the accepted designs and the
+  reviews in that transcript, so the redo starts with every review finding already in it.
+
 ## Actions taken (2026-10-16)
 
 | From | Change | Where |
@@ -429,3 +463,4 @@ dropped constraints. Those are the reasons the design check and the plan review 
 | 2026-10-26 | a9d94 | Opus | reviewer | P2-8, P2-9 | 1 | success | no Critical; 74 keys byte-identical to base; sync ±1 sample; limiter 0 delay (latency=0 control +239.8 samples); W1: the margin comment's -2.1 not reproduced (no-music path -1.7); W2: speech double-limited by up to ~4 dB (unverified on ElevenLabs); W3 comment; 7 suggestions |
 | 2026-10-26 | adb7c | Sonnet | implementer | P2-8, P2-9 | 1 | success | review found no Critical |
 | 2026-10-26 | main | Opus | tests verifier (direct) | P0-9 on auto/dev | 1 | success | 687 passed after the merge |
+| 2026-11-19 | main | Opus | orchestrator (process) | all | — | needs fix | A8: unpushed work lost when the container was replaced; durability rules adopted; redo specs written |

@@ -26,7 +26,9 @@ file.
 
 ## One task, step by step
 
-1. **Spec** (orchestrator), from the template below, saved in the session scratchpad.
+1. **Spec** (orchestrator), from the template below, saved in `docs/specs/` and pushed. Since
+   2026-11-19 the scratchpad is no longer used for specs: a container replacement deleted it with
+   every spec, probe and worktree in it (AGENT_LEDGER A8).
 2. **Design check** (Opus). Verdict GO, GO-with-changes or STOP. The spec is edited until GO.
    - Every spec gets one, content-only specs included (A5: P3-5 skipped it and contradicted D25).
    - A fix the orchestrator writes in answer to a finding is written as a state table: for each
@@ -44,6 +46,9 @@ file.
      only one runs at a time. Added on 2026-10-17: four suites at once on 4 cores (load average 23)
      failed the wall-clock test in tests/test_parallel.py and took 20 min each.
    - Commit on the worktree branch, one commit per task.
+   - **Push the worktree branch as `wip/<task>` after every commit** (A8). Unpushed work does not
+     survive a container replacement. `wip/*` branches are deleted on GitHub only by the owner;
+     the orchestrator lists them in NEEDS_PIETRO when they are merged.
    - Scratch files go in the agent's own folder, `<scratchpad>/<task>-<id>/`, never the
      scratchpad root. Added on 2026-10-25: two agents' `mutate.py` collided, and one ran the
      other's script in its own worktree (caught and cleaned by the agent; nothing committed).
