@@ -87,8 +87,9 @@ def check_ducking(final: Path) -> dict:
        and bed; otherwise it was mixed some other way and nothing below would describe it.
     2. The same mix graph is rendered before the master twice: as is, and with the voice muted
        after it has keyed the sidechain. The second is the music exactly as it was mixed.
-    3. The master's gain per window is the film's level minus the pre-master mix; adding it to
-       the music gives the music as heard in the film, pumping of the final loudnorm included.
+    3. The master is one constant gain (P2-8), plus a limiter where a burst would pass the ceiling,
+       so its gain per window is the film's level minus the pre-master mix; adding it to the music
+       gives the music as heard in the film, the limiter's dips included.
     4. Compare it while the voice speaks (compressor settled) with real pauses (compressor
        released: QA_PAUSE_S of silence)."""
     work = final.parent
@@ -102,7 +103,7 @@ def check_ducking(final: Path) -> dict:
     total = video_duration(narrated)
     voice = levels_db([narrated])
     premaster = levels_db([narrated, bed], mix_graph(total, master=False) + ";[aout]anull[out]")
-    music = levels_db([narrated, bed], mix_graph(total, voice_gain=0, master=False) + ";[aout]anull[out]")
+    music = levels_db([narrated, bed], mix_graph(total, voice_scale=0, master=False) + ";[aout]anull[out]")
     heard = [m + (f - p) for m, f, p in zip(music, levels_db([final]), premaster, strict=False)]
     edge = int(config.MUSIC_FADE_S / WINDOW_S)  # the bed's own fade-in / fade-out
     settled, pause = round(config.QA_ATTACK_S / WINDOW_S), round(config.QA_PAUSE_S / WINDOW_S)

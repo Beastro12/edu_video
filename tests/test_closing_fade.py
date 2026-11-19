@@ -48,8 +48,8 @@ def narration(film, scene: int, tmp_path) -> tuple[float, float, list[float]]:
 def test_the_last_narration_keeps_its_level_while_the_music_fades(media, small, tmp_path):
     """The last narration is compared with the one before it over the same windows, and with its
     own first second. That second used to be ~1.7 dB louder in every narration, from each scene's
-    single-pass loudnorm (fixed in P2-6, which levels with one constant gain). The film's first
-    narration still has it, from the master loudnorm, so that one is not used."""
+    single-pass loudnorm (fixed in P2-6, which levels with one constant gain) and, for the film's
+    first narration, from the master's (fixed in P2-8: one constant gain; test_master_level)."""
     film = build_film(tmp_path / "film", media)
     windows = {}
     for scene in (EARLIER, LAST):

@@ -90,11 +90,16 @@ def clip_encoder(kind: str) -> list[str]:
     return ["-c:v", "libx264", "-preset", preset, "-crf", str(crf)]
 
 
-def _limiter() -> str:
-    """Peaks over the ceiling are limited in a LIMITER_RATE copy, where a sample peak is the true peak
-    (at 48 kHz the burst peaks overshot by ~1.1 dB between samples), LIMITER_MARGIN_DB under the ceiling
-    for rounding. `latency=1` hands every sample back where it came in (without it: 239 samples late, D12)."""
-    limit = 10 ** ((config.VOICE_TP_DBTP - config.LIMITER_MARGIN_DB) / 20)
+METER = "ebur128=peak=true"  # what every loudness reading here uses: integrated LUFS and the true peak
+
+
+def _limiter(ceiling_dbtp: float | None = None) -> str:
+    """Peaks over the ceiling (VOICE_TP_DBTP unless given) are limited in a LIMITER_RATE copy, where a
+    sample peak is the true peak (at 48 kHz the burst peaks overshot by ~1.1 dB between samples),
+    LIMITER_MARGIN_DB under the ceiling for rounding. `latency=1` hands every sample back where it came in
+    (without it: 239 samples late, D12). The ceiling is read when called, so the text follows a changed one."""
+    ceiling = config.VOICE_TP_DBTP if ceiling_dbtp is None else ceiling_dbtp
+    limit = 10 ** ((ceiling - config.LIMITER_MARGIN_DB) / 20)
     return (f"aresample={config.LIMITER_RATE},alimiter=limit={limit:.4f}:attack={config.LIMITER_ATTACK_MS:g}"
             f":release={config.LIMITER_RELEASE_MS:g}:level=0:latency=1,aresample={RATE}")
 
@@ -105,14 +110,45 @@ def _voice_stage(gain_db: float, limited: bool) -> str:
 
 def _read_level(narration: Path, graph: str) -> tuple[float, float]:
     """(integrated LUFS, true peak dBTP) of what `graph` makes of the narration."""
-    return ebur128_summary(run(["ffmpeg", "-nostats", "-i", str(narration), "-af", f"{graph},ebur128=peak=true",
+    return ebur128_summary(run(["ffmpeg", "-nostats", "-i", str(narration), "-af", f"{graph},{METER}",
                                 "-f", "null", "-"]).stderr)
 
 
-def _miss(reading: float) -> float:
-    """How far a reading is from VOICE_LUFS. Rounded: -18 - -18.1 is 0.10000000000000142 in floats,
+def _miss(reading: float, target: float) -> float:
+    """How far a reading is from the target. Rounded: -18 - -18.1 is 0.10000000000000142 in floats,
     which is not within a tolerance of 0.1."""
-    return round(abs(config.VOICE_LUFS - reading), 2)
+    return round(abs(target - reading), 2)
+
+
+def _level_decision(untouched, limited_reading, target: float, ceiling: float, label: str) -> dict:
+    """What one constant gain to `target` LUFS needs, for the voice (voice_gain) and the film (master_level):
+    a reading (`untouched()` -> (LUFS, true peak)), then the gain; a limiter only if that gain would pass
+    `ceiling` dBTP (a lower gain would miss the target), and then up to LEVEL_ROUNDS re-readings
+    (`limited_reading(gain)` -> LUFS of the limited result) that make up what the limiter takes, the gain
+    capped at LEVEL_MAX_BOOST_DB over the linear one. It can't oscillate: a limiter only takes level away,
+    so each correction approaches from below. Anything under SILENT_LUFS is left alone."""
+    loudness, peak = untouched()
+    gain, limited, result = 0.0, False, loudness
+    if loudness > SILENT_LUFS:
+        linear = gain = round(target - loudness, 2)
+        limited = peak + gain > ceiling
+        result = target
+        tried = []  # (miss in LU, gain, reading) of each limited result read
+        for _ in range(config.LEVEL_ROUNDS if limited else 0):
+            reading = limited_reading(gain)
+            tried.append((_miss(reading, target), gain, reading))
+            if tried[-1][0] <= LEVEL_TOL_LU:
+                break
+            gain = round(min(gain + target - reading, linear + config.LEVEL_MAX_BOOST_DB), 2)
+            if gain == tried[-1][1]:
+                break  # at the cap already: reading it again would change nothing
+        if tried:  # the best reading, not the last correction, which was never read
+            _, gain, result = min(tried)
+        if _miss(result, target) > config.LEVEL_MAX_ERR_LU:
+            log(f"    {label}: its loudness is in its peaks; limited to {ceiling} dBTP "
+                f"it reaches {result} LUFS, not {target}")
+    return {"measured_lufs": loudness, "true_peak_dbtp": peak, "gain_db": gain, "limited": limited,
+            "levelled_lufs": result}
 
 
 def voice_gain(narration: Path, lead: str, fit: str, cache_dir: Path) -> tuple[float, bool]:
@@ -121,8 +157,7 @@ def voice_gain(narration: Path, lead: str, fit: str, cache_dir: Path) -> tuple[f
     One constant gain, because loudnorm in dynamic mode plays the first second ~1.7 dB louder (P2-6).
     The reading is of the scene's own audio (`lead`, then `fit`: lead-in, tail), so it is the loudness
     a test or QA measures. If that gain would push the true peak over VOICE_TP_DBTP the peaks are limited
-    instead of the gain lowered (a lower gain misses VOICE_LUFS), and the loudness the limiter takes away
-    is made up by re-reading the limited result. Kept in `cache_dir` by the narration's content, so a
+    instead of the gain lowered (_level_decision). Kept in `cache_dir` by the narration's content, so a
     rerun or a rebuilt clip doesn't read it again."""
     key = content_key("voice level", file_hash(narration), lead, fit, _limiter(), config.VOICE_LUFS,
                       config.VOICE_TP_DBTP, config.LIMITER_ATTACK_MS, config.LIMITER_RELEASE_MS, config.LIMITER_RATE,
@@ -135,29 +170,11 @@ def voice_gain(narration: Path, lead: str, fit: str, cache_dir: Path) -> tuple[f
             return float(found["gain_db"]), bool(found["limited"])
         except (ValueError, KeyError, TypeError):
             pass  # unreadable: read it again
-    loudness, peak = _read_level(narration, f"{lead},{fit}")
-    gain, limited, result = 0.0, False, loudness
-    if loudness > SILENT_LUFS:
-        linear = gain = round(config.VOICE_LUFS - loudness, 2)
-        limited = peak + gain > config.VOICE_TP_DBTP
-        result = config.VOICE_LUFS
-        tried = []  # (miss in LU, gain, reading) of each limited result read
-        for _ in range(config.LEVEL_ROUNDS if limited else 0):
-            reading, _ = _read_level(narration, f"{lead},{_voice_stage(gain, True)},{fit}")
-            tried.append((_miss(reading), gain, reading))
-            if tried[-1][0] <= LEVEL_TOL_LU:
-                break
-            gain = round(min(gain + config.VOICE_LUFS - reading, linear + config.LEVEL_MAX_BOOST_DB), 2)
-            if gain == tried[-1][1]:
-                break  # at the cap already: reading it again would change nothing
-        if tried:  # the best reading, not the last correction, which was never read
-            _, gain, result = min(tried)
-        if _miss(result) > config.LEVEL_MAX_ERR_LU:
-            log(f"    {narration.name}: its loudness is in its peaks; limited to {config.VOICE_TP_DBTP} dBTP "
-                f"it reaches {result} LUFS, not {config.VOICE_LUFS}")
-    save_json(saved, {"measured_lufs": loudness, "true_peak_dbtp": peak, "gain_db": gain, "limited": limited,
-                      "levelled_lufs": result})
-    return gain, limited
+    found = _level_decision(lambda: _read_level(narration, f"{lead},{fit}"),
+                            lambda gain: _read_level(narration, f"{lead},{_voice_stage(gain, True)},{fit}")[0],
+                            config.VOICE_LUFS, config.VOICE_TP_DBTP, narration.name)
+    save_json(saved, found)
+    return found["gain_db"], found["limited"]
 
 
 def scene_audio_filter(narration: Path, cache_dir: Path, samples: int) -> str:
@@ -247,42 +264,142 @@ def duck_graph() -> str:
             ":attack=80:release=900[duck]")
 
 
-def master_chain() -> str:
-    return (f"loudnorm=I={config.TARGET_LUFS}:TP={config.MASTER_TP_DBTP}:LRA=11,"
-            f"aresample={RATE},{RESTAMP}")
+def _master_ceiling() -> float:
+    """The true peak the master's gain may reach before a limiter joins: MASTER_TP_DBTP. Used by the
+    limiter and by the decision whether the gain needs one."""
+    return config.MASTER_TP_DBTP
 
 
-def mix_graph(total: float, voice_gain: float = 1.0, master: bool = True) -> str:
+def _master_samples(total: float) -> int:
+    """The film's length in samples: whole video frames, 1600 samples each at 48 kHz / 30 fps."""
+    return round(total * FPS) * RATE // FPS
+
+
+def _master_cut(total: float) -> str:
+    """Re-stamp, then cut to the film's exact sample count. Required: without it `amix` followed by AAC
+    with the video copied ends 60-110 ms before the picture (D12)."""
+    n = _master_samples(total)
+    return f"{RESTAMP},apad=whole_len={n},atrim=end_sample={n}"
+
+
+def master_chain(total: float, gain_db: float | str = "<gain>", limited: bool = True) -> str:
+    """The master: one constant gain (a limiter only if that gain would pass the ceiling), cut to the
+    film's samples. The gain is read first (master_level): loudnorm in dynamic mode played the film's first
+    narration ~1.8 dB louder in its first second (P2-8). The default `<gain>` is a placeholder, for keys."""
+    gain = f"{gain_db:.2f}" if isinstance(gain_db, (int, float)) else gain_db
+    stage = f"volume={gain}dB" + (f",{_limiter(_master_ceiling())}" if limited else "")
+    return f"{stage},{_master_cut(total)}"
+
+
+def mix_graph(total: float, voice_scale: float = 1.0, master: bool | str = True) -> str:
     """Inputs [0:a] narration, [1:a] bed; output [aout]. qa.py renders this same graph with
-    voice_gain=0 (the voice still keys the sidechain, then is muted) to hear the music exactly
-    as mixed, and with master=False to see what went into the final loudnorm."""
+    voice_scale=0 (the voice still keys the sidechain, then is muted) to hear the music exactly
+    as mixed, and with master=False to see what went into the master. `master` is the master's chain
+    (a str), True for its placeholder form (what the keys use) or False for none."""
+    chain = master_chain(total) if master is True else master
     return (duck_graph() + ";"
-            f"[voice]volume={voice_gain}[v];"
+            f"[voice]volume={voice_scale}[v];"
             # only the music fades out: the last narration keeps its level to its last word (P1-8)
             f"[duck]afade=t=out:st={max(total - config.MUSIC_FADE_S, 0):.2f}:d={config.MUSIC_FADE_S}[bed];"
             "[v][bed]amix=inputs=2:duration=first:normalize=0"
-            f"{',' + master_chain() if master else ''}[aout]")
+            f"{',' + chain if chain else ''}[aout]")
 
 
-def _mix_args(narrated: Path, bed: Path | None) -> list[str]:
-    total = video_duration(narrated)
+def _film_graph(total: float, bed: Path | None, master: bool | str) -> str:
+    """The film's audio as one graph, [0:a] narration (and [1:a] bed) to [aout]: the mix and then its
+    master chain (see mix_graph for `master`)."""
+    chain = master_chain(total) if master is True else master
     if bed is None:
-        return ["-map", "0:v", "-map", "0:a", "-c:v", "copy", "-af", master_chain(),
-                *AUDIO_ENC, "-t", f"{total:.3f}"]
-    return ["-filter_complex", mix_graph(total), "-map", "0:v", "-map", "[aout]",
+        return f"[0:a]{chain or 'anull'}[aout]"
+    return mix_graph(total, master=chain)
+
+
+def _mix_args(narrated: Path, bed: Path | None, gain: tuple[float, bool] | None = None) -> list[str]:
+    """add_music's FFmpeg arguments. `gain` is master_level's answer; without it the master's gain is a
+    placeholder, which is what the film's key covers (the gain is not an input: it follows from them)."""
+    total = video_duration(narrated)
+    chain = master_chain(total) if gain is None else master_chain(total, *gain)
+    return ["-filter_complex", _film_graph(total, bed, chain), "-map", "0:v", "-map", "[aout]",
             "-c:v", "copy", *AUDIO_ENC, "-t", f"{total:.3f}"]
 
 
-def mix_key(narrated: Path, bed: Path | None) -> str:
-    """What add_music would stamp on a film mixed now from these inputs (qa.py compares)."""
-    return content_key("mix", file_hash(narrated), file_hash(bed) if bed else None, _mix_args(narrated, bed))
+def _hashes(narrated: Path, bed: Path | None) -> tuple[str, str | None]:
+    return file_hash(narrated), file_hash(bed) if bed else None
+
+
+def mix_key(narrated: Path, bed: Path | None, hashes: tuple[str, str | None] | None = None) -> str:
+    """What add_music would stamp on a film mixed now from these inputs (qa.py compares): the inputs, the
+    graph and every setting the master's gain depends on, but not the gain itself."""
+    narrated_hash, bed_hash = hashes or _hashes(narrated, bed)
+    return content_key("mix", narrated_hash, bed_hash, _mix_args(narrated, bed), _master_settings())
+
+
+def _master_settings() -> list:
+    """Every setting the master's gain depends on, besides the filter text."""
+    return [config.TARGET_LUFS, config.MASTER_TP_DBTP, config.LIMITER_ATTACK_MS,
+            config.LIMITER_RELEASE_MS, config.LIMITER_RATE, config.LIMITER_MARGIN_DB, config.LEVEL_ROUNDS,
+            config.LEVEL_MAX_BOOST_DB, config.LEVEL_MAX_ERR_LU, SILENT_LUFS, LEVEL_TOL_LU]
+
+
+def _read_film(narrated: Path, bed: Path | None, graph: str) -> tuple[float, float]:
+    """(integrated LUFS, true peak dBTP) of what `graph` makes of the narration (and bed)."""
+    inputs = ["-i", str(narrated)] + (["-i", str(bed)] if bed else [])
+    return ebur128_summary(run(["ffmpeg", "-nostats", *inputs, "-filter_complex", f"{graph};[aout]{METER}[out]",
+                                "-map", "[out]", "-f", "null", "-"]).stderr)
+
+
+def _kept_master_level(saved: Path, key: str) -> tuple[float, bool] | None:
+    """The reading kept in `saved`, if it is whole and is the one for `key`; anything else (missing,
+    truncated, not JSON, the wrong shape, no gain, NaN, another film's) is None: read it again."""
+    try:
+        found = load_json(saved)
+        gain, limited = found["gain_db"], found["limited"]
+        if (found["key"] != key or isinstance(gain, bool) or not isinstance(gain, (int, float))
+                or not math.isfinite(gain) or not isinstance(limited, bool)):
+            return None
+        return float(gain), limited
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def master_level(narrated: Path, bed: Path | None, hashes: tuple[str, str | None] | None = None
+                 ) -> tuple[float, bool]:
+    """(gain in dB, whether a limiter is needed) that brings the film to TARGET_LUFS, read from the mix
+    as it is before the master (the graph qa.py renders with master=False). The same decision as a
+    narration's (_level_decision), with the ceiling MASTER_TP_DBTP.
+
+    Kept in `master_level.json` in the build folder: one fixed file, holding the reading and its own key
+    (the inputs' content, the pre-master graph, the master's chain, the meter and every setting). A file
+    that is missing, damaged or another film's is ignored and the reading made again."""
+    narrated_hash, bed_hash = hashes or _hashes(narrated, bed)
+    total = video_duration(narrated)
+    key = content_key("master level", narrated_hash, bed_hash, mix_graph(total, master=False) if bed else None,
+                      master_chain(total), METER, _master_settings())
+    saved = narrated.parent / "master_level.json"
+    kept = _kept_master_level(saved, key)
+    if kept is not None:
+        return kept
+    found = _level_decision(
+        lambda: _read_film(narrated, bed, _film_graph(total, bed, False)),
+        lambda gain: _read_film(narrated, bed, _film_graph(total, bed, master_chain(total, gain, True)))[0],
+        config.TARGET_LUFS, _master_ceiling(), "the film's master")
+    save_json(saved, {"key": key, **found})
+    return found["gain_db"], found["limited"]
 
 
 def add_music(narrated: Path, bed: Path | None, out: Path) -> Path:
-    key = mix_key(narrated, bed)
+    """Mix the bed under the narration (if any) and master it with one constant gain.
+
+    The gain is read BEFORE the film's freshness is looked at (master_level), so a fresh film whose
+    reading is missing, damaged or another film's reads once, for free, and is never remuxed; and if that
+    reading's FFmpeg fails the call fails, with the film as it was. The film's stamp is written after
+    the reading is saved, so a crash in between leaves a rerun that mixes without reading."""
+    hashes = _hashes(narrated, bed)
+    gain = master_level(narrated, bed, hashes)
+    key = mix_key(narrated, bed, hashes)
     if is_fresh(out, key):
         return out
     inputs = ["-i", str(narrated)] + (["-i", str(bed)] if bed else [])
     with stamped_output(out, key) as tmp:
-        run(["ffmpeg", "-y", *inputs, *_mix_args(narrated, bed), str(tmp)])
+        run(["ffmpeg", "-y", *inputs, *_mix_args(narrated, bed, gain), str(tmp)])
     return out
