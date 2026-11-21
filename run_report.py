@@ -332,7 +332,8 @@ class Run:
         steps = []
         if isinstance(self.error, KeyboardInterrupt):
             steps.append(f"Stopped by Ctrl-C at {self.timeline.stopped_in or 'setup'}; rerun the same command "
-                         "to resume (nothing finished is bought again)")
+                         "to resume (nothing finished is bought again; a Veo job abandoned on Ctrl-C is counted as paid, "
+                         "and a rerun asks Veo again)")
         elif self.error is not None:
             steps.append(f"Stopped at {self._stop()}; see the error above (finished work stays cached)")
         elif self.outcome == "script only":

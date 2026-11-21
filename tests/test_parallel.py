@@ -413,6 +413,31 @@ def test_a_press_pending_when_the_handler_is_installed_raises_from_the_install(w
     watch.check()
 
 
+def test_the_handler_records_the_press_before_it_sets_the_flags(watch, monkeypatch):
+    """A job that sees `stopping` or `interrupted` set must be able to find the press already recorded (verdict's
+    precedence reads the record): swap the two lines in the handler and the first `set` sees no press."""
+    seen = []
+
+    class Spy(threading.Event):
+        def set(self):
+            run = signal.getsignal(signal.SIGINT)
+            seen.append(len(getattr(run, "presses", [])))
+            super().set()
+
+    monkeypatch.setattr(ledger, "stopping", Spy())
+
+    def job(i):
+        if i == 0:
+            watch.pressed_at = press_and_wait()
+        return i
+
+    with pytest.raises(KeyboardInterrupt):
+        pipeline.in_parallel(job, [0, 1])
+    assert seen and seen[0] >= 1, f"flags were set with {seen[:1]} presses recorded"
+    monkeypatch.undo()
+    watch.check()
+
+
 def test_a_press_inside_the_pool_constructor_submits_nothing(watch, monkeypatch):
     """Row 2."""
     submitted = []
@@ -468,6 +493,45 @@ def test_a_press_inside_thread_start_leaves_no_orphan_thread(watch, monkeypatch)
     assert fired and len(submits) == 1, "submitting stopped at the press"
     assert set(started) <= {0}, f"items started: {started}"
     assert all("run" in e for e in entries)
+    watch.check()
+
+
+def test_a_press_inside_the_second_thread_start_reaches_a_veo_job_already_polling(watch, monkeypatch):
+    """Row 3's acceptance line (BACKLOG: "a test that interrupts during submission sees `ledger.interrupted` set and
+    no further paid call started"; r2's C1: the Veo-like job's entry is present and attributed). From the
+    reviewer's p1_submit_interrupted.py: item 0 is a Veo-like job polling `interrupted`; the press comes right after
+    the 2nd `Thread.start()`. On a6e1177 the flags were cleared before item 0 could see them (it saw nothing) and
+    the second thread was an orphan."""
+    monkeypatch.setattr(config, "WORKERS", 4)
+    real_start, starts, saw, started = threading.Thread.start, [], [], []
+    polling = threading.Event()  # item 0 holds its reservation and is polling
+
+    def start(self):
+        real_start(self)
+        if self.name.startswith("ThreadPoolExecutor"):
+            starts.append(self.name)
+            if len(starts) == 2:
+                assert polling.wait(5), "item 0 never began"
+                signal.raise_signal(signal.SIGINT)
+                watch.pressed_at = time.monotonic()
+
+    def job(i):
+        started.append(i)
+        if i == 0:
+            try:
+                return veo_like(polling)
+            finally:
+                saw.append(ledger.interrupted.is_set())
+        return paid(i, seconds=0.2)
+
+    monkeypatch.setattr(threading.Thread, "start", start)
+    with ledger.attribute_to("film-x") as run_id:
+        with pytest.raises(KeyboardInterrupt):
+            pipeline.in_parallel(job, list(range(6)))
+        entries = ledger.entries(film="film-x", run=run_id, provider="google")
+    assert len(starts) == 2 and set(started) <= {0, 1}, f"no item beyond the two started threads: {started}"
+    assert saw == [True], "item 0, polling, saw ledger.interrupted set"
+    assert [e["units"]["note"] for e in entries] == ["lost track of job (RuntimeError); assumed billed"]
     watch.check()
 
 

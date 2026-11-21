@@ -648,6 +648,12 @@ def in_parallel(fn, items: list) -> list:
     caught here as a press (flags, cancel, wait, re-raise), with no guarantee about a thread that was
     being started.
 
+    Two limits, both small. A press in the few bytecodes after the handler is restored (the default is back)
+    surfaces as a bare KeyboardInterrupt, even where a failed job came first: everything is already cleaned up
+    by then, but the failure's note is lost. And "no reservation after the press" means after the handler has
+    run (it records the press, then sets the flags, in that order): a call that reserved in the instants
+    between the signal arriving and the handler running is not a late one.
+
     The sequential path (WORKERS <= 1, or one item) installs nothing: the main thread makes the calls,
     and a Ctrl-C in a Veo poll is recorded by the poll itself (agents/ai_video.py)."""
     if config.WORKERS <= 1 or len(items) <= 1:

@@ -513,7 +513,8 @@ def test_ctrl_c_is_a_stop_that_the_same_command_resumes(film, monkeypatch):
         film.run()
     steps = sections(film.report())["Next steps"]
     assert ("- Stopped by Ctrl-C at visuals; rerun the same command to resume "
-            "(nothing finished is bought again).") in steps
+            "(nothing finished is bought again; a Veo job abandoned on Ctrl-C is counted as paid, "
+            "and a rerun asks Veo again).") in steps
     assert "see the error" not in steps
 
 
