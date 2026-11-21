@@ -90,7 +90,16 @@ LIMITER_MARGIN_DB = 0.1      # its limit sits this far under VOICE_TP_DBTP, for 
 assert 0.1 <= LIMITER_ATTACK_MS <= 80 and 1 <= LIMITER_RELEASE_MS <= 8000, "outside what alimiter accepts"
 assert 0.0625 <= 10 ** ((VOICE_TP_DBTP - LIMITER_MARGIN_DB) / 20) <= 1, "the limiter's limit must lie between -24 and 0 dBFS"
 TARGET_LUFS = -16            # final master
-MASTER_TP_DBTP = -2.0        # true-peak ceiling of the master's gain (P2-8: one constant gain, read first; a limiter joins only past it)
+MASTER_TP_DBTP = -2.0        # the film's true-peak ceiling before the AAC margin below; QA allows -1.0 on the encoded film
+# The master is one constant gain, read first (P2-8), and a limiter joins only if that gain would pass
+# MASTER_TP_DBTP - MASTER_AAC_MARGIN_DB. The margin is there because the film's AAC encode adds to the true peak.
+# Measured (FFmpeg 6.1.1; tests/test_voice_level's two burst narrations, three scenes each, with and without music):
+# AAC adds 0.0-2.9 dB to a dense burst's true peak, erratically (the encoded peak of the same limit lands anywhere in
+# between). Worst encoded true peak of the four films, by margin: 2.0 -> -1.7 dBTP ('peakier' WITHOUT music, the worst
+# path; with music -2.9); 1.5 -> -1.0 ('peakier' with music); 1.0 -> -0.2; 0.0 -> +0.4. QA's limit is -1.0.
+MASTER_AAC_MARGIN_DB = 2.0
+assert 0.0625 <= 10 ** ((MASTER_TP_DBTP - MASTER_AAC_MARGIN_DB - LIMITER_MARGIN_DB) / 20) <= 1, \
+    "the master limiter's limit must lie between -24 and 0 dBFS"
 
 # --- Visual style (P3-2) ---------------------------------------------------------
 # Only the pictures change between presets; voice, pacing and music stay. Each prompt suffix

@@ -265,9 +265,10 @@ def duck_graph() -> str:
 
 
 def _master_ceiling() -> float:
-    """The true peak the master's gain may reach before a limiter joins: MASTER_TP_DBTP. Used by the
-    limiter and by the decision whether the gain needs one."""
-    return config.MASTER_TP_DBTP
+    """The true peak the master's gain may reach before the film's AAC encode adds up to 2.9 dB
+    (MASTER_AAC_MARGIN_DB): QA's limit is on the encoded film. Used by the limiter and by the decision
+    whether the gain needs one."""
+    return config.MASTER_TP_DBTP - config.MASTER_AAC_MARGIN_DB
 
 
 def _master_samples(total: float) -> int:
@@ -336,7 +337,7 @@ def mix_key(narrated: Path, bed: Path | None, hashes: tuple[str, str | None] | N
 
 def _master_settings() -> list:
     """Every setting the master's gain depends on, besides the filter text."""
-    return [config.TARGET_LUFS, config.MASTER_TP_DBTP, config.LIMITER_ATTACK_MS,
+    return [config.TARGET_LUFS, config.MASTER_TP_DBTP, config.MASTER_AAC_MARGIN_DB, config.LIMITER_ATTACK_MS,
             config.LIMITER_RELEASE_MS, config.LIMITER_RATE, config.LIMITER_MARGIN_DB, config.LEVEL_ROUNDS,
             config.LEVEL_MAX_BOOST_DB, config.LEVEL_MAX_ERR_LU, SILENT_LUFS, LEVEL_TOL_LU]
 
@@ -366,7 +367,7 @@ def master_level(narrated: Path, bed: Path | None, hashes: tuple[str, str | None
                  ) -> tuple[float, bool]:
     """(gain in dB, whether a limiter is needed) that brings the film to TARGET_LUFS, read from the mix
     as it is before the master (the graph qa.py renders with master=False). The same decision as a
-    narration's (_level_decision), with the ceiling MASTER_TP_DBTP.
+    narration's (_level_decision), with the ceiling MASTER_TP_DBTP less MASTER_AAC_MARGIN_DB.
 
     Kept in `master_level.json` in the build folder: one fixed file, holding the reading and its own key
     (the inputs' content, the pre-master graph, the master's chain, the meter and every setting). A file

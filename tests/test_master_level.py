@@ -1,13 +1,15 @@
-"""P2-8: the master is one constant gain, read first.
+"""P2-8 + P2-9: the master is one constant gain, read first, with a true-peak margin for the AAC encode.
 
 The master used to be a single-pass `loudnorm` (dynamic mode), which plays the film's first narration
 about +1.8 dB louder in its first second (the start-up P2-6 removed from each scene clip, found again
-in P1-8 / P2-7). Now `assembly.master_level` reads the pre-master mix (EBU R128 with true peak) and
-`master_chain` applies one `volume`, plus a limiter only if that gain would pass the ceiling. The reading
-is kept in the build folder's `master_level.json` with its own key.
+in P1-8 / P2-7), and which let dense bursts reach QA's -1.0 dBTP limit once AAC had added to them.
+Now `assembly.master_level` reads the pre-master mix (EBU R128 with true peak) and `master_chain`
+applies one `volume`, plus a limiter only if that gain would pass MASTER_TP_DBTP - MASTER_AAC_MARGIN_DB.
+The reading is kept in the build folder's `master_level.json` with its own key.
 
 The films are real FFmpeg films; sine tones stand in for the voice (one pitch far from the 220 Hz
-music, so a narrow band hears the voice alone). Everything is measured on decoded samples (D12)."""
+music, so a narrow band hears the voice alone), and `peaky` / `peakier` of test_voice_level are the
+dense bursts. Everything is measured on decoded samples (D12)."""
 import json
 import shutil
 import signal
@@ -18,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 from conftest import build_film, decoded_audio, fake_ffmpeg, ff, onset_s
+from test_voice_level import narration as burst_narration
 
 import assembly
 import config
@@ -153,6 +156,65 @@ def test_the_master_lands_on_the_target(tone_film):
     assert peak <= config.QA_MAX_TRUE_PEAK_DBTP
 
 
+# --- 3: dense bursts pass QA without a lower target ----------------------------------------------------
+
+BURSTS = ["peaky", "peakier"]
+
+
+@pytest.fixture(scope="module")
+def bursts(tmp_path_factory):
+    d = tmp_path_factory.mktemp("bursts")
+    return {kind: burst_narration(d, kind) for kind in BURSTS}
+
+
+def burst_film(media, tmp_path_factory, bursts, kind, music, **overrides):
+    """Three scenes of the burst narration (the pauses between them are what QA's ducking check compares)."""
+    return build_film(tmp_path_factory.mktemp(f"{kind}_{music}"), media, voices=[bursts[kind]] * 3, music=music,
+                      **overrides)
+
+
+@pytest.fixture(scope="module", params=[(k, m) for k in BURSTS for m in (True, False)],
+                ids=lambda p: f"{p[0]} {'with' if p[1] else 'no'} music")
+def burst_result(request, media, small_pictures, tmp_path_factory, bursts):
+    kind, music = request.param
+    film = burst_film(media, tmp_path_factory, bursts, kind, music)
+    return SimpleNamespace(film=film, report=qa.run_qa(film), reading=json.loads(
+        (film.parent / "master_level.json").read_text()))
+
+
+def test_a_burst_film_passes_qa_at_the_target(burst_result):
+    """P2-9: the burst films reach QA's -1.0 dBTP after AAC when the master is only limited to the ceiling
+    less MASTER_AAC_MARGIN_DB, and keep the loudness (TARGET_LUFS is not lowered)."""
+    assert config.TARGET_LUFS == -16
+    failed = {k: c for k, c in burst_result.report["checks"].items() if not c["passed"]}
+    assert not failed, json.dumps(failed, indent=1)
+    assert burst_result.reading["limited"], "the test narration is not a hard case: the master needed no limiter"
+
+
+def test_the_master_limiter_sits_the_aac_margin_under_the_ceiling(monkeypatch):
+    """The master's limiter limits at MASTER_TP_DBTP - MASTER_AAC_MARGIN_DB - LIMITER_MARGIN_DB (-4.1 dBFS:
+    0.6237), and the decision whether the gain needs it is made against that same ceiling."""
+    assert assembly._master_ceiling() == config.MASTER_TP_DBTP - config.MASTER_AAC_MARGIN_DB == -4.0
+    assert "alimiter=limit=0.6237:" in assembly.master_chain(30.0)
+    monkeypatch.setattr(config, "MASTER_AAC_MARGIN_DB", 1.0)
+    assert assembly._master_ceiling() == -3.0 and "alimiter=limit=0.6998:" in assembly.master_chain(30.0)
+
+
+requires_ffmpeg_61 = pytest.mark.skipif(
+    not subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True).stdout.startswith("ffmpeg version 6.1"),
+    reason="how far AAC overshoots a burst is this FFmpeg's (6.1.x); the margin was measured on it")
+
+
+@requires_ffmpeg_61
+@pytest.mark.parametrize("music", [True, False], ids=["with music", "no music"])
+def test_without_its_margin_the_burst_film_overshoots(media, small_pictures, tmp_path_factory, bursts, music):
+    """The margin is what keeps the burst film under QA's limit: with MASTER_AAC_MARGIN_DB = 0 the same film's
+    encoded true peak passes -1.0 dBTP and QA fails it on exactly that."""
+    film = burst_film(media, tmp_path_factory, bursts, "peakier", music, MASTER_AAC_MARGIN_DB=0.0)
+    checks = qa.run_qa(film)["checks"]
+    assert not checks["true_peak"]["passed"], f"true peak {checks['true_peak']['value']} dBTP"
+
+
 # --- 4, 5, 6: what is read again, and what is remixed ----------------------------------------------------
 
 def test_an_unchanged_film_makes_no_new_reading_and_no_remux(folder, calls):
@@ -186,7 +248,7 @@ def test_a_changed_cut_or_meter_is_read_again(folder, calls, monkeypatch, what, 
     assert len(calls.readings) == 1
 
 
-@pytest.mark.parametrize("name, other", [("TARGET_LUFS", -17), ("MASTER_TP_DBTP", -3.0),
+@pytest.mark.parametrize("name, other", [("TARGET_LUFS", -17), ("MASTER_TP_DBTP", -3.0), ("MASTER_AAC_MARGIN_DB", 1.5),
                                          ("LEVEL_ROUNDS", 2), ("LIMITER_RELEASE_MS", 40)])
 def test_a_changed_setting_is_read_again_and_remixed(folder, calls, monkeypatch, name, other):
     """A film mixed with other settings is not the film these settings make (qa.py checks the stamp for it)."""
@@ -222,7 +284,7 @@ def test_the_master_chain_is_one_gain_cut_to_the_films_samples():
     assert chain == "volume=1.23dB,asetpts=N/SR/TB,apad=whole_len=1440000,atrim=end_sample=1440000"
     assert "loudnorm" not in assembly.master_chain(30.0)
     limited = assembly.master_chain(30.0, 1.234, True)
-    assert "alimiter=limit=0.7852:" in limited and limited.endswith("aresample=48000," + chain.split(",", 1)[1])
+    assert "alimiter=limit=0.6237:" in limited and limited.endswith("aresample=48000," + chain.split(",", 1)[1])
 
 
 # --- 8: the kept reading ---------------------------------------------------------------------------------
@@ -348,6 +410,17 @@ def test_no_music_then_music_to_the_same_path_reads_and_remixes_each_time(folder
 def test_the_films_audio_ends_with_its_picture(tone_film):
     secs, _ = decoded_audio(tone_film)
     assert secs == pytest.approx(video_duration(tone_film), abs=AAC_FRAME)
+
+
+def test_the_master_adds_no_delay_and_no_shortfall_even_when_it_limits(media, small_pictures, tmp_path_factory, bursts):
+    """The limiter runs with `latency=1` and the chain is cut to the film's samples: its audio is the
+    narrated.mp4's, sample for sample in length, and starts where it did."""
+    film = burst_film(media, tmp_path_factory, bursts, "peakier", True)
+    assert json.loads((film.parent / "master_level.json").read_text())["limited"]
+    secs, levels = decoded_audio(film)
+    assert secs == pytest.approx(video_duration(film), abs=AAC_FRAME)
+    before = decoded_audio(film.parent / "narrated.mp4")
+    assert onset_s(levels, -45) == pytest.approx(onset_s(before[1], -45), abs=0.03)
 
 
 # --- 12: nothing paid, no clip and no level file re-keys -------------------------------------------------------
