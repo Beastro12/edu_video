@@ -145,6 +145,7 @@ and a `## Sources` heading with one entry per line (they go into the YouTube des
     `--brief` copies a deleted chapter (or the outline) back from it, with no Claude call, while
     the folder's `brief.key` still matches the build's brief. A moved folder, or a brief edited
     since, gets one line saying why, and the writer fills the gap as before.
+    `--brief build/<topic>/brief.md` (the kept copy) re-seeds from the record in the same way.
 
 A Veo clip or a still that fails for good (a safety filter, an invalid prompt, a Veo job
 that never finishes) is recorded in `build/<topic>/failures.json`, and later runs go straight to that

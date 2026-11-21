@@ -220,7 +220,11 @@ def _record_seed(work: Path, seed: Path) -> None:
     """Write the folder the build is seeded from (P3-4), an absolute path, atomically and only when it
     changes. Readers: `_recorded_seed`, on a rerun without --brief."""
     path, text = work / config.SEED_FILE, str(seed.resolve())
-    if not path.exists() or path.read_text(encoding="utf-8") != text:
+    try:
+        current = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):  # none, or one nobody can read (hand-edited): replaced
+        current = None
+    if current != text:
         _write_text(path, text)
 
 
@@ -255,27 +259,30 @@ def _recorded_seed(work: Path, brief: str) -> tuple[Path | None, list[Path]]:
         text = record.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         return reject(f"cannot read it ({type(e).__name__})")
-    folder = Path(text)
-    if not text or not folder.is_absolute():
-        return reject(f"{text!r} is not an absolute path")
-    if folder.resolve() == work.resolve():
-        return reject("it names the build folder itself, which is not a seed")
-    if not folder.exists():
-        return reject(f"{text!r} does not exist")
-    if not folder.is_dir():
-        return reject(f"{text!r} is not a folder")
-    try:
-        topic_brief = (folder / config.BRIEF_FILE).read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError) as e:
-        return reject(f"{folder / config.BRIEF_FILE} cannot be read ({type(e).__name__})")
-    try:
-        chapters = _load_seed(folder, topic_brief)  # its brief.key against its own brief.md, and the script
-    except ValueError as e:
-        return reject(str(e))
-    if brief_key(topic_brief) != brief_key(brief):
-        return reject(f"the {config.BRIEF_FILE} in {folder} is not the brief this script was written with "
-                      "(it was changed since)")
-    return folder, chapters
+    try:  # a record is hand-editable: whatever is wrong with it is one line, never a traceback
+        folder = Path(text)
+        if not text or not folder.is_absolute():
+            return reject(f"{text!r} is not an absolute path")
+        if folder.resolve() == work.resolve():
+            return reject("it names the build folder itself, which is not a seed")
+        if not folder.exists():
+            return reject(f"{text!r} does not exist")
+        if not folder.is_dir():
+            return reject(f"{text!r} is not a folder")
+        try:
+            topic_brief = (folder / config.BRIEF_FILE).read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError) as e:
+            return reject(f"{folder / config.BRIEF_FILE} cannot be read ({type(e).__name__})")
+        try:
+            chapters = _load_seed(folder, topic_brief)  # its brief.key against its own brief.md, and the script
+        except ValueError as e:
+            return reject(str(e))
+        if brief_key(topic_brief) != brief_key(brief):
+            return reject(f"the {config.BRIEF_FILE} in {folder} is not the brief this script was written with "
+                          "(it was changed since)")
+        return folder, chapters
+    except (OSError, ValueError) as e:  # a NUL byte, a name too long, a brief.key that is a folder, a key that isn't UTF-8
+        return reject(f"{text[:80]!r} cannot be used ({type(e).__name__})")
 
 
 def seed_script(seed: Path, chapter_files: list[Path], work: Path, brief: str, recorded: bool = False) -> None:

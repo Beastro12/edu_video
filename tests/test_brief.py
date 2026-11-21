@@ -774,6 +774,48 @@ def test_a_recorded_folder_whose_outline_is_no_longer_the_builds_is_rejected_in_
     assert [c[0] for c in calls] == ["chapter", "review"]
 
 
+@pytest.mark.parametrize("record", ["/tmp/a\x00b", "/" + "x" * 300, "/tmp/" + "y" * 300 + "/z"],
+                         ids=["nul byte", "name over 255", "component over 255"])
+def test_a_malformed_record_is_one_line_never_a_traceback(folder, monkeypatch, calls, build, capsys, record):
+    """The record is hand-editable: a NUL byte (ValueError from resolve) or a name too long (OSError ENAMETOOLONG)."""
+    seed_run(monkeypatch, folder)
+    (build / "seed").write_text(record, encoding="utf-8")
+    drop(build, "chapter_02.json", "script.json", "script.meta.json")
+    capsys.readouterr()
+
+    rerun(monkeypatch)
+
+    assert len(reject_lines(capsys.readouterr().out)) == 1
+    assert [c[0] for c in calls] == ["chapter", "review"]
+
+
+@pytest.mark.parametrize("damage", ["directory", "not utf-8"])
+def test_a_topic_brief_key_that_cannot_be_read_is_one_line(folder, monkeypatch, calls, build, capsys, damage):
+    seed_run(monkeypatch, folder)
+    key = folder / "brief.key"
+    key.unlink()
+    if damage == "directory":
+        key.mkdir()  # IsADirectoryError in _load_seed
+    else:
+        key.write_bytes(b"\xff\xfe\x00bad")
+    drop(build, "chapter_02.json", "script.json", "script.meta.json")
+    capsys.readouterr()
+
+    rerun(monkeypatch)
+
+    assert len(reject_lines(capsys.readouterr().out)) == 1
+    assert [c[0] for c in calls] == ["chapter", "review"]
+
+
+def test_a_record_that_is_not_utf8_is_replaced_by_the_next_seeding(folder, monkeypatch, calls, build):
+    seed_run(monkeypatch, folder)
+    (build / "seed").write_bytes(b"\xff\xfe not utf-8")
+
+    seed_run(monkeypatch, folder)
+
+    assert (build / "seed").read_text(encoding="utf-8") == str(folder.resolve())
+
+
 def test_estimate_without_brief_plans_from_the_record_and_writes_nothing(folder, monkeypatch, calls, build, capsys):
     """Scenario 4."""
     monkeypatch.setattr(config, "GOOGLE_API_KEY", None)
