@@ -223,6 +223,7 @@ STYLE_FILE = "style"            # which style the build's pictures are made in, 
 MAX_CRITIC_ROUNDS = 2
 MAX_MANIM_ATTEMPTS = 3
 WORKERS = 4                   # scenes whose narration / visual are generated at the same time
+PARALLEL_POLL_S = 0.2         # in_parallel looks for a Ctrl-C or a failure this often (P1-14): a press waits at most this
 MANIM_MAX_SHORTFALL = 0.25    # a render this much shorter than its scene gets one retiming request
 STILL_REVIEW_RETRIES = 2      # a still Claude rejects is regenerated with the critique this many times, then Manim
 STILL_REVIEW_MAX_TOKENS = 500 # the verdict is a short JSON

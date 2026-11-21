@@ -70,6 +70,10 @@ chapters and a readable `script.md` are in `topics/ai-global-workspace/`.
    - Look at the first stills as they land in `build/<topic>/visuals/`. If they don't look like
      the flat style you want, stop with Ctrl-C. That's safe: a rerun resumes and buys nothing
      twice.
+   - Ctrl-C waits for the calls in flight (they are paid for and are kept; a Veo job gives up
+     and is counted as paid), then stops. Press again and nothing changes: the wait is what
+     keeps the ledger right. `Ctrl-\` (SIGQUIT) kills at once; calls in flight are then not
+     recorded in the ledger, so the budget and the Veo daily cap undercount them.
    - Reruns can leave out `--brief` and `--style`; the build remembers both.
    - Drop `--no-ai-video` to allow Veo, at most 2 clips a day; `--estimate` shows the cost.
 5. **Read what came out.** All of it is in `build/<topic>/`:

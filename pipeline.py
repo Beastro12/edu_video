@@ -6,8 +6,11 @@
 """
 import argparse
 import shutil
+import signal
 import sys
-from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
+import threading
+import time
+from concurrent.futures import ALL_COMPLETED, FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from pathlib import Path
 
 import config
@@ -419,31 +422,182 @@ def print_estimate(topic: str, est: dict[str, float], worst: dict[str, float], s
     if not image_agent.available():
         print("  (no GOOGLE_API_KEY: stills and Veo scenes are counted as Manim)")
 
+class _Run:
+    """What `in_parallel`'s parallel path knows about one run (P1-14): when Ctrl-C was pressed, which jobs
+    failed and when, and whether the SIGINT handler may touch `ledger`'s Events.
+
+    The object is the SIGINT handler itself. It only records: a plain list append, and the two flags, and
+    never while `guard` is up. The guard exists because a handler runs on the main thread between two
+    bytecodes, possibly inside the main thread's own `Event.set()` / `.clear()` of those flags, which holds
+    the Event's (non-reentrant) lock: a handler calling `.set()` there would wait for itself forever. The
+    main thread raises the guard around every such call, so the handler then only records; when the guarded
+    section ends and a press was recorded, the main thread sets the flags itself. Handlers can also nest
+    (a second press while the first is in `.set()`), so the handler raises the guard around its own calls
+    too. It prints nothing (a print could re-enter the console's own lock)."""
+
+    def __init__(self):
+        self.presses: list[float] = []  # time.monotonic() of each press, in order
+        self.failures: list[tuple[float, BaseException]] = []  # (when, error) of each job that raised
+        self.guard = False
+        self.waiting = 0  # calls in flight when the main thread last looked
+
+    def __call__(self, signum, frame):
+        self.presses.append(time.monotonic())
+        self.set_flags()
+
+    def set_flags(self) -> None:
+        """Stop everything, even a Veo job in flight (it is recorded as billed). Does nothing while the
+        guard is up: the main thread then sets them when its guarded section ends."""
+        if self.guard:
+            return
+        self.guard = True
+        try:
+            ledger.stopping.set()
+            ledger.interrupted.set()
+        finally:
+            self.guard = False
+
+    def guarded(self, *calls) -> None:
+        """The main thread's own Event calls, with the handler barred from touching the Events; then
+        whatever a press recorded meanwhile is paid."""
+        self.guard = True
+        try:
+            for call in calls:
+                call()
+        finally:
+            self.guard = False
+        if self.presses:
+            self.set_flags()
+
+    def job(self, fn):
+        def run_one(x):
+            if self.presses:  # queued when the press came: not started (the run raises KeyboardInterrupt, so
+                return None   # nothing reads this result)
+            try:
+                return fn(x)
+            except BaseException as e:
+                self.failures.append((time.monotonic(), e))
+                raise
+        return run_one
+
+    def verdict(self, raised: KeyboardInterrupt | None = None) -> BaseException | None:
+        """What `in_parallel` raises: whichever came first, a press or a failed job (a job that fails
+        because of the press, say "the run is stopping", comes after it by construction). A press first
+        is a KeyboardInterrupt; a failure first is that failure, noted if a press followed. A press that
+        was recorded is never turned into a normal return."""
+        failure = min(self.failures, key=lambda f: f[0], default=None)
+        if self.presses and (failure is None or self.presses[0] <= failure[0]):
+            return raised or KeyboardInterrupt()
+        if failure is not None:
+            if self.presses:
+                failure[1].add_note(f"Ctrl-C pressed while waiting for {self.waiting} calls in flight")
+            return failure[1]
+        return None
+
+
+def _stop(run: _Run, futures: list, interrupt: bool) -> None:
+    """Cancel what is queued, then raise the flags (`interrupt`: a press, so a Veo job in flight gives up
+    too), and say what is being waited for. Cancelling first: a queued job must not start in the gap."""
+    for f in futures:
+        f.cancel()
+    run.guarded(ledger.stopping.set, *([ledger.interrupted.set] if interrupt else []))
+    n = sum(1 for f in futures if not f.done())
+    if interrupt:
+        print(f"• stopping: waiting for {n} calls in flight to finish (a Veo job gives up and is counted as paid)"
+              if n else "• stopping: no calls in flight")
+    elif n:
+        print(f"• stopping after a failure: waiting for {n} calls in flight to finish (Ctrl-C now makes a Veo "
+              "job give up and counts it as paid)")
+
+
+def _await(run: _Run, futures: list) -> None:
+    """Return when every future is done or cancelled. Looks every PARALLEL_POLL_S: the handler only records
+    a press, and a record-only handler doesn't end a timed wait early. The first press or failure stops the
+    run, once."""
+    stopped = False
+    while True:
+        pending = [f for f in futures if not f.done()]
+        if not run.presses:  # what a press that comes next interrupted
+            run.waiting = len(pending)
+        if not stopped and (run.presses or run.failures):
+            stopped = True
+            _stop(run, futures, interrupt=bool(run.presses))
+            continue
+        if not pending:
+            return
+        wait(pending, timeout=config.PARALLEL_POLL_S,
+             return_when=ALL_COMPLETED if stopped else FIRST_EXCEPTION)
+
+
 def in_parallel(fn, items: list) -> list:
     """fn over items on WORKERS threads, results in the items' order. The first failure (say
     BudgetExceeded) stops the run at once: calls not yet started are cancelled and, until the
-    calls in flight have finished, no new paid call may be reserved (ledger.stopping)."""
+    calls in flight have finished, no new paid call may be reserved (ledger.stopping).
+
+    Ctrl-C (P1-14, D17). An asynchronous KeyboardInterrupt raised inside concurrent.futures or
+    threading can leave a started worker no one joins, or end the wait without recording a paid Veo
+    job; no try/finally around those internals is safe. So the parallel path installs a SIGINT handler
+    (`_Run`) that only records the press, and everything else is the main thread's loop:
+    - it stops submitting at a press, cancels what is queued, raises both flags (a Veo job in flight
+      gives up and is recorded as billed) and waits for the futures in flight, then raises
+      KeyboardInterrupt;
+    - after a failed job it does the same with `stopping` only, and a press during that wait also
+      makes a Veo job give up. Whichever came first decides what is raised: a press first is a
+      KeyboardInterrupt (jobs failing because of it are not re-raised); a failure first is
+      re-raised, noted with the press;
+    - a second press is harmless. Ctrl-\\ (SIGQUIT) kills at once, and calls in flight are then not
+      recorded in the ledger;
+    - the end order is fixed: shut the pool down (the handler still installed, so a press there only
+      records), raise the guard for good, clear the flags, restore the handler, and only then raise.
+      A press is never swallowed: this never returns normally after one.
+
+    The handler is installed only on the main thread and only when SIGINT is still Python's default
+    (asyncio.Runner's rule): under nohup (SIG_IGN), a custom or a C handler, or off the main thread,
+    nothing is installed and Ctrl-C does what it did before: an exception inside the pool's machinery,
+    caught here as a press (flags, cancel, wait, re-raise), with no guarantee about a thread that was
+    being started.
+
+    The sequential path (WORKERS <= 1, or one item) installs nothing: the main thread makes the calls,
+    and a Ctrl-C in a Veo poll is recorded by the poll itself (agents/ai_video.py)."""
     if config.WORKERS <= 1 or len(items) <= 1:
         return [fn(x) for x in items]
-    pool = ThreadPoolExecutor(config.WORKERS)
-    futures = [pool.submit(fn, x) for x in items]
+    run = _Run()
+    installed = (threading.current_thread() is threading.main_thread()
+                 and signal.getsignal(signal.SIGINT) is signal.default_int_handler)
+    if installed:  # before the try: a press already pending raises from here, with nothing yet to undo
+        signal.signal(signal.SIGINT, run)
+    pool, futures, raised = None, [], None
     try:
-        done, _ = wait(futures, return_when=FIRST_EXCEPTION)
-        failed = next((f for f in futures if f in done and f.exception() is not None), None)
-        if failed is not None:
-            raise failed.exception()
-        return [f.result() for f in futures]
-    except KeyboardInterrupt:
-        ledger.interrupted.set()  # even a Veo job in flight gives up (it's recorded as billed)
-        ledger.stopping.set()
-        raise
-    except BaseException:  # jobs in flight finish and are cached; nothing new starts
-        ledger.stopping.set()
-        raise
+        try:
+            pool = ThreadPoolExecutor(config.WORKERS)
+            for x in items:
+                if run.presses:
+                    break
+                futures.append(pool.submit(run.job(fn), x))
+            _await(run, futures)
+        except KeyboardInterrupt as e:  # no handler (see above): an exception, wherever it landed
+            raised = e
+            run.presses.append(time.monotonic())
+            _await(run, futures)
+        except BaseException:  # our own error: like a failed job, the calls in flight finish, nothing new starts
+            _stop(run, futures, interrupt=False)
+            raise
     finally:
-        pool.shutdown(wait=True, cancel_futures=True)
-        ledger.stopping.clear()  # nothing is in flight any more: the next run starts clean
-        ledger.interrupted.clear()
+        try:
+            if pool is not None:
+                pool.shutdown(wait=True, cancel_futures=True)
+        finally:
+            run.guard = True  # for good: from here the handler only records
+            try:
+                ledger.stopping.clear()  # nothing is in flight any more: the next run starts clean
+                ledger.interrupted.clear()
+            finally:
+                if installed:
+                    signal.signal(signal.SIGINT, signal.default_int_handler)
+    error = run.verdict(raised)
+    if error is not None:
+        raise error
+    return [f.result() for f in futures]
 
 
 def generate_assets(script: dict, work: Path, allow_veo: bool, retry_failed: bool = False) -> list[dict]:

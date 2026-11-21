@@ -147,7 +147,8 @@ def _buy(scene: dict, out: Path, cost: float, timeout_s: int) -> Path:
                 raise RuntimeError("interrupted")
             time.sleep(10)
             op = client.operations.get(op)
-    except Exception as e:
+    except BaseException as e:  # BaseException (P1-14): a Ctrl-C in the poll, on the main thread of a run that
+        # makes its calls one at a time, loses track of a paid job as much as an error does
         ledger.record("google", config.VEO_MODEL,
                       {"seconds": config.VEO_CLIP_S, "note": f"lost track of job ({type(e).__name__}); assumed billed"},
                       cost)

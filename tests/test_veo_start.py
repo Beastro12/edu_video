@@ -273,6 +273,83 @@ def test_a_real_ctrl_c_in_a_parallel_run_stops_a_worker_waiting_out_a_429(veo, m
     assert not ledger.interrupted.is_set(), "in_parallel clears it on the way out"
 
 
+# --- P1-14: a Ctrl-C in the poll of a job that is running -----------------------------------------------------------
+
+def press_and_wait():
+    """A terminal's Ctrl-C reaches the main thread; return once the handler has set the flags."""
+    signal.pthread_kill(threading.main_thread().ident, signal.SIGINT)
+    deadline = time.monotonic() + 5
+    while not ledger.interrupted.is_set() and time.monotonic() < deadline:
+        REAL_SLEEP(0.002)
+    assert ledger.interrupted.is_set(), "the press never reached the handler"
+
+
+def test_a_real_sigint_in_the_poll_of_a_sequential_run_is_recorded_as_billed(veo, monkeypatch):
+    """W4. WORKERS=1 (or a phase of one item): the main thread polls, and Ctrl-C raises KeyboardInterrupt at
+    `time.sleep(10)`. The poll caught `Exception` only, so a started, paid job was lost to the ledger."""
+    veo.starts = [200]
+    monkeypatch.setattr(time, "sleep", lambda s: signal.raise_signal(signal.SIGINT))
+    with pytest.raises(KeyboardInterrupt):
+        render(veo)
+    assert veo.posts == 1 and veo.gets == 0
+    assert notes() == ["lost track of job (KeyboardInterrupt); assumed billed"]
+
+
+def test_a_real_ctrl_c_in_a_parallel_run_records_the_polling_job_with_its_run(veo, monkeypatch):
+    """Through the real SDK and in_parallel: the press reaches the handler, the poll sees `interrupted` at its next
+    turn and records the job as billed, attributed to its film and run; no second job is started."""
+    veo.starts = [200]
+    veo.polls = [PENDING] * 50
+    monkeypatch.setattr(config, "WORKERS", 2)
+    pressed = []
+
+    def sleep(seconds):
+        if not pressed:
+            pressed.append(1)
+            press_and_wait()
+
+    monkeypatch.setattr(time, "sleep", sleep)
+    with ledger.attribute_to("film-x") as run_id:
+        with pytest.raises(KeyboardInterrupt):
+            pipeline.in_parallel(lambda i: render(veo) if i == 0 else None, [0, 1])
+        rows = ledger.entries(film="film-x", run=run_id)
+    assert [r["units"]["note"] for r in rows] == ["lost track of job (RuntimeError); assumed billed"]
+    assert veo.posts == 1
+    assert not ledger.interrupted.is_set() and not ledger.stopping.is_set() and ledger._held == 0
+
+
+def test_a_ctrl_c_after_another_scene_failed_still_records_the_polling_job(veo, monkeypatch):
+    """C2 through the real SDK: scene 1 fails, the main thread waits for scene 0's Veo job (a budget stop lets it
+    finish), Ctrl-C comes then. The job must give up and be recorded; the failure that came first is re-raised."""
+    veo.starts = [200]
+    veo.polls = [PENDING] * 50
+    monkeypatch.setattr(config, "WORKERS", 2)
+    started = threading.Event()
+
+    def sleep(seconds):
+        started.set()
+        deadline = time.monotonic() + 5
+        while not ledger.stopping.is_set() and time.monotonic() < deadline:
+            REAL_SLEEP(0.002)
+        if not ledger.interrupted.is_set():
+            press_and_wait()
+
+    def work(i):
+        if i == 0:
+            return render(veo)
+        started.wait(5)
+        raise ledger.BudgetExceeded("over budget")
+
+    monkeypatch.setattr(time, "sleep", sleep)
+    with ledger.attribute_to("film-x") as run_id:
+        with pytest.raises(ledger.BudgetExceeded, match="over budget") as caught:
+            pipeline.in_parallel(work, [0, 1])
+        rows = ledger.entries(film="film-x", run=run_id)
+    assert [r["units"]["note"] for r in rows] == ["lost track of job (RuntimeError); assumed billed"]
+    assert any("Ctrl-C pressed while waiting" in n for n in caught.value.__notes__)
+    assert not ledger.interrupted.is_set() and not ledger.stopping.is_set() and ledger._held == 0
+
+
 # --- P0-9 fix round -------------------------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("flag", ["stopping", "interrupted"])
