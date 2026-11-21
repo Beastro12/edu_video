@@ -29,12 +29,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import config  # noqa: E402
 import pipeline  # noqa: E402
+import run_report  # noqa: E402
 from agents import image_agent  # noqa: E402
-from utils import atomic_output, brief_key, kept_brief, load_json, slugify  # noqa: E402
+from utils import brief_key, kept_brief, load_json, slugify  # noqa: E402
 
 TOPICS = ROOT / "topics"  # the reviewed scripts; module-level so a test can point it elsewhere
 PARTIAL = ".partial-"     # the name of a file being made (utils.atomic_output uses it too)
 LOG_KINDS = ("still", "ai_video")  # the scenes whose pictures have a review log
+SEED_RECORD = "seed"      # P3-4: build/<slug>/seed holds the seed folder a build was seeded from (absolute path)
 
 
 class Refusal(Exception):
@@ -212,21 +214,27 @@ def make(out_arg: str, src_arg: str, chapters_arg: str, topic: str | None, film_
         if src / f"chapter_{n:02d}.json" not in files:
             raise Refusal(f"chapter {n} is in the outline but {src / f'chapter_{n:02d}.json'} is missing")
 
+    problem = hard_link_problem(out)
+    if problem:
+        raise Refusal(f"this disk cannot make hard links ({problem}); make_pilot.py writes every file so that "
+                      "nothing is ever replaced, and has no fallback that could")
     out.mkdir(parents=True, exist_ok=True)
+
+    def write(name: str, data: bytes) -> None:
+        if not put_new(out / name, data=data):  # never replaces: the name was taken since we looked
+            raise Refusal(f"{out / name} appeared while it was being written; nothing of it was replaced. "
+                          "Pick another folder or empty this one")
+
     # The order matters: brief.key goes last, and the pipeline refuses a folder without it, so a stop
     # anywhere leaves a folder that cannot be mistaken for a finished seed.
     for n in chosen:
         name = f"chapter_{n:02d}.json"
-        with atomic_output(out / name) as tmp:
-            tmp.write_bytes((src / name).read_bytes())
+        write(name, (src / name).read_bytes())
     kept_outline = {**outline, "chapters": [c for c in outline["chapters"] if c["number"] in chosen]}
-    with atomic_output(out / "outline.json") as tmp:
-        tmp.write_text(json.dumps(kept_outline, indent=2, ensure_ascii=False), encoding="utf-8")  # as save_json
-    with atomic_output(out / config.BRIEF_FILE) as tmp:
-        tmp.write_bytes(brief_bytes)
+    write("outline.json", json.dumps(kept_outline, indent=2, ensure_ascii=False).encode("utf-8"))  # as save_json
+    write(config.BRIEF_FILE, brief_bytes)
     kept = (out / config.BRIEF_FILE).read_text(encoding="utf-8-sig")
-    with atomic_output(out / config.BRIEF_KEY_FILE) as tmp:
-        tmp.write_text(brief_key(kept), encoding="utf-8")
+    write(config.BRIEF_KEY_FILE, brief_key(kept).encode("utf-8"))
     try:
         made = pipeline._load_seed(out, kept)
     except ValueError as e:
@@ -315,31 +323,69 @@ def review_problem(data: bytes, visuals: Path) -> str | None:
     return None
 
 
-def unfinished(pilot: Path, scenes, mine: set[str] | None) -> list[str]:
-    """Why the pilot has not finished, or []. render_film writes manifest.json only after every
-    picture is made, so it must list every scene of script.json with its files in place; and no
-    review log the current script reads may be unfinished."""
-    problems = []
-    manifest = read_json(pilot / "manifest.json")
-    entries = manifest.get("scenes") if isinstance(manifest, dict) else None
-    if not is_plain(pilot / "manifest.json"):
-        problems.append("manifest.json is missing")
-    elif not isinstance(entries, list):
-        problems.append("manifest.json is not readable")
-    elif not isinstance(scenes, list):
-        problems.append("script.json is not readable, so manifest.json can't be checked against it")
-    else:
-        by_id = {e.get("id"): e for e in entries if isinstance(e, dict)}
-        wanted = [s.get("id") for s in scenes if isinstance(s, dict)]
-        absent = [i for i in wanted if i not in by_id]
-        if absent:
-            problems.append(f"manifest.json does not list scene {', '.join(map(str, absent))} of script.json")
-        for i in wanted:
-            for key in ("audio", "visual"):
-                name = by_id.get(i, {}).get(key)
-                if i in by_id and not (isinstance(name, str) and name and not os.path.isabs(name)
-                                       and is_plain(pilot / name) and inside(pilot / name, pilot)):
-                    problems.append(f"scene {i}: its {key} file {name!r} is not a plain file in the pilot")
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # it exists; it is another user's
+    except OSError:
+        return False
+    return True
+
+
+def pilot_state(pilot: Path) -> tuple[bool, int | None]:
+    """(is a run marked in progress, when run_report.md was last written): what a run of the pilot changes."""
+    try:
+        written = os.stat(pilot / run_report.FILE).st_mtime_ns
+    except OSError:
+        written = None
+    return os.path.lexists(pilot / config.RUNNING_FILE), written
+
+
+def rerun_clause(pilot_arg: str, pilot: Path, style: str) -> str:
+    """How to run the pilot again without it writing a new script. The pilot's own build holds its script
+    and the brief that script was stamped with, so a rerun needs no --brief. A build without them would
+    have the pipeline start a script from nothing (an outline call, Claude spend), so then the run
+    must be the one `make` printed, which seeds from the pilot's seed folder."""
+    if is_plain(pilot / "script.json") and kept_brief(pilot) is not None:
+        return f"python pipeline.py {q(pilot_arg)} --style {style} --no-ai-video"
+    recorded = read_text_file(pilot / SEED_RECORD)
+    seed = recorded.strip() if recorded and recorded.strip() else "<pilot seed folder>"
+    return (f"the pilot command that `make` printed (with --brief {seed}/{config.BRIEF_FILE}): python pipeline.py "
+            f"{q(pilot_arg)} --brief {q(seed + '/' + config.BRIEF_FILE)} --style {style} --no-ai-video")
+
+
+def finished_problem(pilot: Path, pilot_arg: str, style: str, scenes, mine: set[str] | None) -> str | None:
+    """Why the pilot is not finished (the message to refuse with), or None. The pipeline says it, nothing
+    is inferred from files a run happens to leave: a run in progress has its `running` marker (run_report),
+    a run that ended has written run_report.md with its outcome, and a script edited since is newer than
+    that report. Then no review log the current script reads may be unfinished or unreadable."""
+    rerun = rerun_clause(pilot_arg, pilot, style)
+    marker = pilot / config.RUNNING_FILE
+    if os.path.lexists(marker):
+        info = read_json(marker)
+        pid = info.get("pid") if isinstance(info, dict) else None
+        if isinstance(pid, int) and not isinstance(pid, bool) and pid > 0 and pid_alive(pid):
+            return (f"the pilot is running (pid {pid}); let it finish, then copy "
+                    f"(if no such run is going, delete {marker})")
+        gone = f"its process {pid} is gone" if isinstance(pid, int) else f"{marker.name} is unreadable"
+        return (f"the pilot's last run did not finish ({gone}; it was stopped before it could say so); "
+                f"rerun it: {rerun}")
+    outcome = run_report.last_outcome(pilot)
+    if outcome is None:
+        return f"the pilot's last run did not finish (there is no readable {run_report.FILE}); rerun it: {rerun}"
+    if outcome not in run_report.FINISHED:
+        return f"the pilot's last run did not finish ({outcome}); rerun it: {rerun}"
+    try:
+        script_ns = os.stat(pilot / "script.json").st_mtime_ns
+        report_ns = os.stat(pilot / run_report.FILE).st_mtime_ns
+    except OSError:
+        return f"the pilot's last run did not finish (script.json is missing); rerun it: {rerun}"
+    if report_ns < script_ns:
+        return f"the pilot's script changed after its last finished run; rerun it: {rerun}"
+    problems = [] if isinstance(scenes, list) else ["script.json is not readable"]
     for path in list_folder(pilot / "visuals"):
         if not (path.name.startswith("review_") and path.name.endswith(".json")) or PARTIAL in path.name:
             continue
@@ -353,7 +399,9 @@ def unfinished(pilot: Path, scenes, mine: set[str] | None) -> list[str]:
         why = parse_log(data)[1]  # its picture is the per-file check's, at the moment of the copy
         if why:
             problems.append(f"review log {path.name}: {why}")
-    return problems
+    if problems:
+        return ("the pilot's last run did not finish (" + "; ".join(problems) + f"); rerun it: {rerun}")
+    return None
 
 
 def find_source(src_arg: str | None, pilot: Path) -> Path:
@@ -391,7 +439,8 @@ def find_source(src_arg: str | None, pilot: Path) -> Path:
 class Walk:
     copied: list[str] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)
-    incomplete: list[tuple[str, str]] = field(default_factory=list)
+    incomplete: list[tuple[str, str, str]] = field(default_factory=list)  # (file, why, what to do)
+    rerun: str = ""  # how to run the pilot again, for the fixes that need it
 
 
 def is_review_log(name: str) -> bool:
@@ -423,6 +472,12 @@ def walk_folder(src: Path, dst: Path, rel: str, visuals: Path, mine: set[str] | 
         elif stat.S_ISDIR(mode):
             if shown == "visuals/manim_media":
                 result.skipped.append((shown, "Manim's scratch folder, not paid output"))
+            elif inside(path, TOPICS):
+                result.skipped.append((shown, "a folder inside topics/ is not followed"))
+            elif os.path.islink(dst / name) or inside(dst / name, TOPICS):
+                result.skipped.append((shown, f"{dst / name} is a link (or inside topics/) in the film: not written through"))
+            elif os.path.lexists(dst / name) and not (dst / name).is_dir():
+                result.skipped.append((shown, f"{dst / name} is not a folder in the film"))
             else:
                 walk_folder(path, dst / name, shown, visuals, mine, result)
         elif not stat.S_ISREG(mode):
@@ -466,6 +521,9 @@ def copy_log(src: Path, dst: Path, shown: str, visuals: Path, mine: set[str] | N
         result.skipped.append((shown, f"gone from the pilot while copying ({e})"))
         return
     why = review_problem(data, visuals)
+    fix = f"rerun the pilot (it decides that scene again): {result.rerun}"
+    if why and "not finished" in why:
+        fix = "the pilot is still working on this scene: let it finish, then copy again"
     if why is None:
         accepted = json.loads(data).get("accepted")
         if accepted is not None:
@@ -474,8 +532,10 @@ def copy_log(src: Path, dst: Path, shown: str, visuals: Path, mine: set[str] | N
                 copy_file(visuals / accepted, picture, f"visuals/{accepted}", result)
             if not is_plain(picture):
                 why = f"its picture {accepted} is not in the film as a plain file"
+                fix = (f"remove {picture}, then copy again" if os.path.lexists(picture)  # a folder or a link
+                       else f"rerun the pilot (its picture {accepted} is gone): {result.rerun}")
     if why:
-        result.incomplete.append((shown, why))
+        result.incomplete.append((shown, why, fix))
         return
     if put_new(dst, data=data):
         result.copied.append(shown)
@@ -525,11 +585,9 @@ def copy(pilot_arg: str, film_arg: str, src_arg: str | None) -> int:
     script = read_json(pilot / "script.json")
     scenes = script.get("scenes") if isinstance(script, dict) else None
     mine = current_logs(pilot / "visuals", scenes, style)
-    problems = unfinished(pilot, scenes, mine)
-    if problems:
-        raise Refusal(f"the pilot has not finished; let it finish (or rerun its command: python pipeline.py "
-                      f"{q(pilot_arg)} --style {style} --no-ai-video), then copy\n"
-                      + "\n".join(f"  - {p}" for p in problems))
+    problem = finished_problem(pilot, pilot_arg, style, scenes, mine)
+    if problem:
+        raise Refusal(problem)
     source = find_source(src_arg, pilot)
     made_with = kept_brief(pilot)
     if src_arg and made_with is not None and read_text_file(source / config.BRIEF_FILE) != made_with:
@@ -552,7 +610,8 @@ def copy(pilot_arg: str, film_arg: str, src_arg: str | None) -> int:
                           f"{style}, delete it and copy again (nothing else was written)")
         print(f"• style: {film_style} already says {style}")
 
-    result = Walk()
+    result = Walk(rerun=rerun_clause(pilot_arg, pilot, style))
+    state = pilot_state(pilot)
     walk(pilot, film, mine, result)
     for shown in result.copied:
         print(f"  copied  {shown}")
@@ -567,14 +626,21 @@ def copy(pilot_arg: str, film_arg: str, src_arg: str | None) -> int:
     if veo:
         print("VEO_NOTE: the pilot has Veo clips (ai_*.mp4 / scenes of kind ai). The film command below carries "
               "--no-ai-video, so it will not use them; they stay in the pilot's build and cost nothing more.")
+    if pilot_state(pilot) != state or state[0]:
+        print("NOT COMPLETE: the pilot ran while its files were being copied (a run was started, or finished). What "
+              "was carried is whole, but what that run makes may not be in the film.\n"
+              "  to fix: let the pilot finish, then run the same copy command again; it only adds what is missing.",
+              file=sys.stderr)
+        for shown, why, fix in result.incomplete:
+            print(f"  {shown}: {why}\n    to fix: {fix}", file=sys.stderr)
+        return 1
     if result.incomplete:
-        print("NOT COMPLETE: these review logs were not carried over, because the pilot's picture for each is not "
+        print("NOT COMPLETE: these review logs were not carried over, because the picture for each is not "
               "finished or not there (a log copied without its picture would make the film skip that scene):",
               file=sys.stderr)
-        for shown, why in result.incomplete:
-            print(f"  {shown}: {why}", file=sys.stderr)
-        print("Let the pilot finish, then run the same copy command again; it only adds what is missing.",
-              file=sys.stderr)
+        for shown, why, fix in result.incomplete:
+            print(f"  {shown}: {why}\n    to fix: {fix}", file=sys.stderr)
+        print("Then run the same copy command again; it only adds what is missing.", file=sys.stderr)
         return 1
     print("\nNow the film (the estimate first: add --estimate):")
     print(f"   python pipeline.py {q(film_arg)} --brief {q(source_label(source) + '/' + config.BRIEF_FILE)} "

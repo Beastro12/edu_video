@@ -15,14 +15,14 @@ import pytest
 from pilot_world import CHAPTERS, Pause, pilot_fixture, tree, world_fixture  # noqa: F401
 
 import config
+import ledger
+import pipeline
 from agents import image_agent
 from scripts import make_pilot
 from utils import load_json, save_json
 
 DEFAULT_WORKERS = config.WORKERS
 WORKERS = pytest.mark.parametrize("workers", [1, DEFAULT_WORKERS], ids=["WORKERS=1", "WORKERS=default"])
-GATE = ('the pilot has not finished; let it finish (or rerun its command: python pipeline.py "pilot demo" '
-        '--style flat --no-ai-video), then copy')
 
 
 def copy(*argv):
@@ -76,58 +76,30 @@ def test_review_problem_judges_the_bytes_it_is_given(visuals, data, expected):
     assert (problem is None) if expected is None else (expected in problem)
 
 
-# --- the pilot has not finished ----------------------------------------------------------------------------
+# --- no unfinished review log of the current script ---------------------------------------------------------
 
-def unlinked(path: Path):
-    path.unlink()
+RERUN = 'python pipeline.py "pilot demo" --style flat --no-ai-video'
 
-
-def replaced_by_link(path: Path):
-    target = path.with_name("target-" + path.name)
-    target.write_bytes(path.read_bytes())
-    path.unlink()
-    path.symlink_to(target)
-
-
-def replaced_by_folder(path: Path):
-    path.unlink()
-    path.mkdir()
-
-
-CASES = {
-    "no manifest": (lambda p: unlinked(p.work / "manifest.json"), "manifest.json is missing"),
-    "manifest is not JSON": (lambda p: (p.work / "manifest.json").write_text("{half"), "manifest.json is not readable"),
-    "manifest without scenes": (lambda p: p.set_manifest(scenes="x"), "manifest.json is not readable"),
-    "manifest lacks the last scene": (lambda p: p.set_manifest(scenes=p.entries[:-1]), "does not list scene 3"),
-    "an audio file is gone": (lambda p: unlinked(p.audio[2]), "scene 2: its audio file"),
-    "a picture is gone": (lambda p: unlinked(p.visual[1]), "scene 1: its visual file"),
-    "the manim render is gone": (lambda p: unlinked(p.visual[3]), "scene 3: its visual file"),
-    "a picture is a symlink": (lambda p: replaced_by_link(p.visual[1]), "scene 1: its visual file"),
-    "an audio file is a symlink": (lambda p: replaced_by_link(p.audio[1]), "scene 1: its audio file"),
-    "a picture is a folder": (lambda p: replaced_by_folder(p.visual[2]), "scene 2: its visual file"),
-    "a manifest path leaves the pilot": (lambda p: p.set_manifest(scenes=[{**e, "audio": "../x.mp3"} for e in p.entries]),
-                                         "its audio file '../x.mp3'"),
-    "a manifest path is absolute": (lambda p: p.set_manifest(scenes=[{**e, "visual": str(p.visual[e["id"]])}
-                                                                     for e in p.entries]), "its visual file"),
-    "script.json is gone": (lambda p: unlinked(p.work / "script.json"), "script.json is not readable"),
-    "script.json is not JSON": (lambda p: (p.work / "script.json").write_text("{half"), "script.json is not readable"),
+LOG_CASES = {
     "a current log is not finished": (lambda p: p.write_log(1, done=False), "it is not finished"),
     "a current log is half written": (lambda p: p.log[2].write_text('{"done": tr'), "it is not readable JSON"),
     "a current log has no done": (lambda p: p.log[1].write_text('{"accepted": null, "attempts": []}'),
                                   "it is not finished"),
     "a current log is a list": (lambda p: p.log[1].write_text("[]"), "it is not a JSON object"),
+    "a current log says done: yes": (lambda p: p.write_log(1, done="yes"), "it is not finished"),
 }
 
 
-@pytest.mark.parametrize("case", list(CASES))
-def test_copy_refuses_a_pilot_that_has_not_finished_and_writes_nothing(pilot, capsys, case):
-    change, reason = CASES[case]
+@pytest.mark.parametrize("case", list(LOG_CASES))
+def test_copy_refuses_a_pilot_with_an_unfinished_or_unreadable_log_of_its_script_and_writes_nothing(
+        pilot, capsys, case):
+    change, reason = LOG_CASES[case]
     change(pilot)
     before = tree(pilot.film.parent)
     assert copy() == 2
     err = capsys.readouterr().err
-    assert err.startswith("make_pilot.py: ") and GATE in err, "the message names the rerun, with --no-ai-video"
-    assert reason in err
+    assert err.startswith("make_pilot.py: the pilot's last run did not finish (") and reason in err
+    assert f"rerun it: {RERUN}" in err, "with --no-ai-video"
     assert tree(pilot.film.parent) == before and not pilot.film.exists(), "no film folder, no style record"
 
 
@@ -141,23 +113,22 @@ def test_the_rerun_command_always_carries_no_ai_video_even_for_a_veo_pilot(pilot
     pilot.log[2].write_text('{"done": false}')
     assert copy() == 2
     err = capsys.readouterr().err
-    assert 'rerun its command: python pipeline.py "pilot demo" --style flat --no-ai-video), then copy' in err
+    assert f"rerun it: {RERUN}" in err
     assert "--ai-video" not in err.replace("--no-ai-video", "")
 
 
-def test_the_message_says_which_logs_and_files_and_lists_every_reason(pilot, capsys):
+def test_the_message_says_which_logs_and_lists_every_reason(pilot, capsys):
     pilot.write_log(1, done=False)
     pilot.log[2].write_text("{")
-    pilot.audio[3].unlink()
     assert copy() == 2
     err = capsys.readouterr().err
     assert f"review log {pilot.log[1].name}: it is not finished" in err
     assert f"review log {pilot.log[2].name}: it is not readable JSON" in err
-    assert "scene 3: its audio file" in err
 
 
 def test_a_script_that_cannot_be_read_makes_every_log_count(pilot, capsys):
     (pilot.work / "script.json").write_text("{half")
+    pilot.report()  # the run finished after the script was written
     stray = pilot.work / "visuals" / "review_0000000000000000.json"
     stray.write_text('{"done": false}')  # a log no script of ours would name
     assert copy() == 2
@@ -345,7 +316,7 @@ def test_a_picture_that_goes_missing_after_its_folder_was_listed_keeps_its_log_o
     every_log_has_its_picture(pilot.film)
 
 
-# --- a pilot that is still running -------------------------------------------------------------------------------
+# --- a pilot that is running ---------------------------------------------------------------------------------
 
 def wait_for(condition, what, seconds=30):
     end = time.monotonic() + seconds
@@ -367,6 +338,10 @@ def film_buys_only_the_rest(world, pilot_paid):
         assert not set(film[kind]) & set(pilot_paid[kind]), f"the film bought again what the pilot bought ({kind})"
 
 
+def running_marker(pilot_dir: Path) -> dict:
+    return load_json(pilot_dir / "running")
+
+
 @WORKERS
 def test_A1_copy_during_the_pilots_narration_stage_is_refused_and_then_the_film_buys_nothing_twice(
         world, monkeypatch, capsys, workers):
@@ -378,17 +353,19 @@ def test_A1_copy_during_the_pilots_narration_stage_is_refused_and_then_the_film_
     running = world.start(*world.pilot_argv(out))
     stop.wait_reached()
     wait_for(lambda: len(list((pilot_dir / "audio").glob("*.mp3"))) == 2, "the first two narrations on disk")
-    # preconditions: paid narration is on disk, the style is recorded, and the pilot is before its pictures
+    # preconditions: paid narration is on disk, the style is recorded, the pilot is before its pictures, and
+    # the run has said it is running
     assert (pilot_dir / "style").read_text() == "flat"
     assert not (pilot_dir / "visuals").exists() and not (pilot_dir / "manifest.json").exists()
+    assert running_marker(pilot_dir)["pid"] == os.getpid()
 
     assert copy() == 2
-    err = capsys.readouterr().err
-    assert GATE in err and "manifest.json is missing" in err
+    assert f"the pilot is running (pid {os.getpid()}); let it finish, then copy" in capsys.readouterr().err
     assert not film.exists(), "nothing written: not the style record, not the two paid lines"
 
     stop.go.set()
     running.join()
+    assert not (pilot_dir / "running").exists(), "the run took its marker away when it ended"
     assert copy() == 0
     pilot_paid = world.paid()
     assert len(pilot_paid["tts"]) == 3
@@ -407,10 +384,10 @@ def test_A1_copy_during_the_pilots_picture_stage_is_refused_too(world, monkeypat
     wait_for(lambda: len(list((pilot_dir / "visuals").glob("review_*.json"))) >= 1, "scene 1's picture decided")
     # preconditions: audio and a decided picture on disk, a picture still being made, and no manifest
     assert len(list((pilot_dir / "audio").glob("*.mp3"))) == 3 and (pilot_dir / "visuals").is_dir()
-    assert not (pilot_dir / "manifest.json").exists()
+    assert not (pilot_dir / "manifest.json").exists() and (pilot_dir / "running").exists()
 
     assert copy() == 2
-    assert GATE in capsys.readouterr().err
+    assert "the pilot is running (pid" in capsys.readouterr().err
     assert not film.exists()
     stop.go.set()
     running.join()
@@ -420,20 +397,27 @@ def test_A1_copy_during_the_pilots_picture_stage_is_refused_too(world, monkeypat
 
 def delete_scene_one_log(world, pilot_dir):
     """A finished pilot whose first still has to be decided again: its log is gone, its picture is not.
-    The manifest of the first run stays, so a copy now would find a pilot that looks finished."""
+    The report of the first run stays, so a copy now finds a pilot that looks finished (it is: nothing runs)."""
     scene = load_json(pilot_dir / "script.json")["scenes"][0]
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(config, "STYLE", "flat")
         log = image_agent.review_path(scene, pilot_dir / "visuals")
     assert log.exists() and scene["concept"] == "first"
-    first_bytes = load_json(log)
+    first_picture = load_json(log)["accepted"]
     log.unlink()
-    return log, first_bytes["accepted"]
+    return log, first_picture
+
+
+def names(entries) -> list[str]:
+    return [p.name for p in entries]
 
 
 @WORKERS
 def test_A5_a_log_that_finishes_after_its_folder_was_listed_is_carried_with_its_picture(
         world, monkeypatch, capsys, workers):
+    """The gate saw no run; then the owner starts the pilot again, and its scene 1 is decided while the copy
+    walks: the listing has the log unfinished, the log finishes after it. The film still gets log and picture,
+    the copy says it was not alone, and the film buys nothing the pilot bought."""
     monkeypatch.setattr(config, "WORKERS", workers)
     out = world.make("1")
     world.run(*world.pilot_argv(out))
@@ -446,46 +430,56 @@ def test_A5_a_log_that_finishes_after_its_folder_was_listed_is_carried_with_its_
     review = Pause(lambda concept: concept == "first")
     second_attempt = Pause(lambda prompt: "Keep strictly" in prompt)
     world.hooks["review"], world.hooks["image"] = review, second_attempt
-    running = world.start(*world.pilot_argv(out))
-    review.wait_reached()
-    # preconditions: visuals/ and the first run's manifest are on disk, and scene 1 has no log yet
-    assert visuals.is_dir() and (pilot_dir / "manifest.json").exists() and not log.exists()
+    state = {}
 
     def after_the_gate(entries):
-        assert log.name not in [p.name for p in entries], "the gate listed visuals/ before the log existed"
+        assert not (pilot_dir / "running").exists(), "the gate listed visuals/ with no run marked"
+        state["running"] = world.start(*world.pilot_argv(out))  # the owner starts the pilot just now
+        review.wait_reached()
+        # preconditions: visuals/ and the finished report are on disk, the run is marked, scene 1 has no log
+        assert visuals.is_dir() and (pilot_dir / "run_report.md").exists() and (pilot_dir / "running").exists()
+        assert not log.exists() and log.name not in names(entries)
         review.go.set()  # the rejection is saved as an unfinished log; the pilot then asks for attempt 2
         second_attempt.wait_reached()
         wait_for(log.exists, "the unfinished log saved")
         assert load_json(log)["done"] is False and len(load_json(log)["attempts"]) == 1
 
-    state = {}
-
     def after_the_walk_listed(entries):
-        assert log.name in [p.name for p in entries], "listed while unfinished"
+        assert log.name in names(entries), "listed while unfinished"
         assert load_json(log)["done"] is False
         second_attempt.go.set()
         wait_for(lambda: load_json(log).get("done") is True, "the log finished after the listing")
         state["final"] = load_json(log)
-        assert state["final"]["accepted"] not in [p.name for p in entries], "its picture is new, not in the listing"
+        assert state["final"]["accepted"] not in names(entries), "its picture is new, not in the listing"
         assert state["final"]["accepted"] != first_picture and (visuals / state["final"]["accepted"]).is_file()
 
+    capsys.readouterr()
     with monkeypatch.context() as mp:
         listing_hooks(mp, visuals, {1: after_the_gate, 2: after_the_walk_listed})
-        assert copy() == 0, "the gate saw a finished-looking pilot; the per-file check did the rest"
-    out_text = capsys.readouterr().out
+        assert copy() == 1, "complete as far as it goes, but the pilot ran meanwhile: no film command"
+    captured = capsys.readouterr()
+    assert "the pilot ran while its files were being copied" in captured.err
+    assert "python pipeline.py" not in captured.out and "Now the film" not in captured.out
     picture = state["final"]["accepted"]
-    assert f"copied  visuals/{picture}" in out_text
+    assert f"copied  visuals/{picture}" in captured.out
     assert (film / "visuals" / picture).read_bytes() == (visuals / picture).read_bytes()
     assert (film / "visuals" / log.name).read_bytes() == log.read_bytes(), "the log as it finished, whole"
     every_log_has_its_picture(film)
 
-    running.join()
-    assert copy() == 0
-    film_buys_only_the_rest(world, {k: first_run[k] + world.paid()[k] for k in first_run})
+    state["running"].join()
+    pilot_total = {k: first_run[k] + world.paid()[k] for k in first_run}
+    # what the film would buy after that FIRST copy alone: the estimate prices chapter 2 only, scene 1 is decided
+    estimates = []
+    real_print = pipeline.print_estimate
+    monkeypatch.setattr(pipeline, "print_estimate", lambda topic, est, worst, style: (
+        estimates.append(est), real_print(topic, est, worst, style)))
+    world.run(*world.film_argv(), "--estimate")
+    assert estimates[0]["images"] == pytest.approx(2 * ledger.image_eur()), "two pictures: chapter 2's"
+    film_buys_only_the_rest(world, pilot_total)
 
 
 @WORKERS
-def test_A5_a_log_that_appears_after_its_folder_was_listed_is_not_carried_and_a_rerun_carries_it(
+def test_A5_a_log_that_appears_after_its_folder_was_listed_is_not_carried_and_the_copy_says_so(
         world, monkeypatch, capsys, workers):
     monkeypatch.setattr(config, "WORKERS", workers)
     out = world.make("1")
@@ -497,23 +491,29 @@ def test_A5_a_log_that_appears_after_its_folder_was_listed_is_not_carried_and_a_
     world.forget()
     review = Pause(lambda concept: concept == "first")
     world.hooks["review"] = review
-    running = world.start(*world.pilot_argv(out))
-    review.wait_reached()
-    assert visuals.is_dir() and not log.exists() and (pilot_dir / "manifest.json").exists()
+    state = {}
+
+    def after_the_gate(entries):
+        state["running"] = world.start(*world.pilot_argv(out))
+        review.wait_reached()
+        assert visuals.is_dir() and not log.exists() and (pilot_dir / "running").exists()
 
     def after_the_walk_listed(entries):
-        assert log.name not in [p.name for p in entries]
+        assert log.name not in names(entries)
         review.go.set()
         wait_for(lambda: log.exists() and load_json(log).get("done") is True, "the log finished after the listing")
 
+    capsys.readouterr()
     with monkeypatch.context() as mp:
-        listing_hooks(mp, visuals, {2: after_the_walk_listed})
-        assert copy() == 0
+        listing_hooks(mp, visuals, {1: after_the_gate, 2: after_the_walk_listed})
+        assert copy() == 1
+    captured = capsys.readouterr()
+    assert "the pilot ran while its files were being copied" in captured.err and "Now the film" not in captured.out
     assert not (film / "visuals" / log.name).exists(), "a log the walk never listed is not carried"
     every_log_has_its_picture(film)
 
-    running.join()
-    assert copy() == 0
+    state["running"].join()
+    assert copy() == 0, "the same copy again, with the pilot done: it adds what was missing"
     assert (film / "visuals" / log.name).read_bytes() == log.read_bytes()
     assert (film / "visuals" / picture).exists()
     # the first run's purchases plus the rerun's: the review of scene 1 was asked twice, the film asks for neither

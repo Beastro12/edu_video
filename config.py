@@ -220,6 +220,7 @@ assert 0 < THUMBNAIL_SUBTITLE_RATIO <= 1 and 0 <= THUMBNAIL_SUBTITLE_OPACITY <= 
 BRIEF_FILE = "brief.md"         # the research brief (--brief), kept in the build folder; metadata reads its Sources
 BRIEF_KEY_FILE = "brief.key"    # which brief the script stage was written with, so a change can't go unnoticed
 STYLE_FILE = "style"            # which style the build's pictures are made in, so a rerun can't quietly switch
+RUNNING_FILE = "running"        # written while a run is in progress (pid, start), removed when it ends; a build that still has it was stopped
 MAX_CRITIC_ROUNDS = 2
 MAX_MANIM_ATTEMPTS = 3
 WORKERS = 4                   # scenes whose narration / visual are generated at the same time

@@ -10,7 +10,6 @@ import shlex
 import signal
 import subprocess
 import sys
-from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -49,19 +48,47 @@ def test_make_writes_the_chapters_then_the_outline_then_the_brief_then_its_key_l
     src = make_source(tmp_path)
     monkeypatch.setattr(make_pilot, "TOPICS", tmp_path / "topics")
     order = []
-    real = make_pilot.atomic_output
+    real = make_pilot.put_new
 
-    @contextmanager
-    def spy(path):
-        with real(path) as tmp:
-            yield tmp
-        order.append(Path(path).name)
+    def spy(dest, source=None, data=None):
+        made = real(dest, source=source, data=data)
+        order.append((Path(dest).name, made))
+        return made
 
-    monkeypatch.setattr(make_pilot, "atomic_output", spy)
+    monkeypatch.setattr(make_pilot, "put_new", spy)
     out = tmp_path / "seed"
     assert run("make", str(out), "--from", str(src), "--chapters", "2,1") == 0
-    assert order == ["chapter_01.json", "chapter_02.json", "outline.json", "brief.md", "brief.key"]
-    assert sorted(p.name for p in out.iterdir()) == sorted(order), "no other file, no .partial- leftover"
+    assert order == [(n, True) for n in ["chapter_01.json", "chapter_02.json", "outline.json", "brief.md", "brief.key"]]
+    assert sorted(p.name for p in out.iterdir()) == sorted(n for n, _ in order), "no other file, no .partial- leftover"
+
+
+def test_make_never_replaces_a_file_that_appears_while_it_writes_and_says_so(tmp_path, monkeypatch, capsys):
+    src = make_source(tmp_path)
+    out = tmp_path / "seed"
+    real = os.link
+
+    def link(a, b, **kw):
+        if Path(b).name == "outline.json":
+            Path(b).write_text("someone else's")
+        return real(a, b, **kw)
+
+    monkeypatch.setattr(os, "link", link)
+    assert run("make", str(out), "--from", str(src), "--chapters", "1") == 2
+    assert "outline.json appeared while it was being written; nothing of it was replaced" in capsys.readouterr().err
+    assert (out / "outline.json").read_text() == "someone else's"
+    assert not (out / "brief.key").exists(), "and the key, which comes last, was not written"
+
+
+def test_make_refuses_a_disk_without_hard_links_before_writing(tmp_path, monkeypatch, capsys):
+    src = make_source(tmp_path)
+
+    def no_links(a, b, **kw):
+        raise OSError(1, "Operation not permitted")
+
+    monkeypatch.setattr(os, "link", no_links)
+    assert run("make", str(tmp_path / "seed"), "--from", str(src), "--chapters", "1") == 2
+    assert "cannot make hard links" in capsys.readouterr().err
+    assert not (tmp_path / "seed").exists()
 
 
 def test_make_keeps_the_chosen_chapters_in_outline_order_and_every_other_key(tmp_path):
@@ -190,42 +217,27 @@ def test_make_refuses_a_source_brief_the_pipeline_would_not_read(tmp_path, capsy
     assert "brief.md" in capsys.readouterr().err and not (tmp_path / "seed").exists()
 
 
-def test_a_stop_at_each_make_write_leaves_a_folder_the_pipeline_refuses_and_a_rerun_finishes(tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("where", ["before the file is made", "between the temporary file and its link"])
+def test_a_stop_at_each_make_write_leaves_a_folder_the_pipeline_refuses_and_a_rerun_finishes(
+        tmp_path, monkeypatch, capsys, where):
     src = make_source(tmp_path)
-    real = make_pilot.atomic_output
-    writes = []
-
-    @contextmanager
-    def counting(path):
-        with real(path) as tmp:
-            yield tmp
-        writes.append(Path(path).name)
-
-    monkeypatch.setattr(make_pilot, "atomic_output", counting)
+    writes = ["chapter_01.json", "chapter_02.json", "outline.json", "brief.md", "brief.key"]
     assert run("make", str(tmp_path / "reference"), "--from", str(src), "--chapters", "1,2") == 0
     expected = tree(tmp_path / "reference")
-    assert len(writes) == 5
 
     for stop_at in range(1, len(writes) + 1):
         out = tmp_path / f"seed{stop_at}"
-        seen = []
-
-        @contextmanager
-        def stopping(path, seen=seen, stop_at=stop_at):
-            with real(path) as tmp:
-                yield tmp
-                seen.append(path)
-                if len(seen) == stop_at:
-                    raise Crash  # after the file was written, before it was moved into place
-        monkeypatch.setattr(make_pilot, "atomic_output", stopping)
-        with pytest.raises(Crash):
-            run("make", str(out), "--from", str(src), "--chapters", "1,2")
+        with monkeypatch.context() as mp:
+            (stop_nth_put if where.startswith("before") else stop_nth_link_of)(mp, stop_at)
+            with pytest.raises(Crash):
+                run("make", str(out), "--from", str(src), "--chapters", "1,2")
         left = sorted(p.name for p in out.iterdir())
         assert not [n for n in left if ".partial-" in n], f"stop {stop_at}: no half file"
         assert left == sorted(writes[:stop_at - 1]), f"stop {stop_at}: exactly the writes before it"
+        for name in left:
+            assert (out / name).read_bytes() == expected[name], f"stop {stop_at}: {name} is whole"
         with pytest.raises(ValueError):  # brief.key is the last write, so the pipeline refuses every earlier state
             pipeline._load_seed(out, BRIEF)
-        monkeypatch.setattr(make_pilot, "atomic_output", counting)
         if left:
             assert run("make", str(out), "--from", str(src), "--chapters", "1,2") == 2, "a leftover folder is refused"
             assert "not empty" in capsys.readouterr().err
@@ -626,9 +638,28 @@ def test_a_symlinked_audio_or_visuals_folder_of_the_pilot_is_not_followed(pilot,
     real = tmp_path / "real-audio"
     (pilot.work / "audio").rename(real)
     (pilot.work / "audio").symlink_to(real)
-    assert run("copy", "pilot demo", "the film") == 2, "the manifest's audio files are not plain files then"
-    assert "has not finished" in capsys.readouterr().err
-    assert not pilot.film.exists()
+    assert run("copy", "pilot demo", "the film") == 0
+    assert "skipped audio: a symlinked folder is not followed" in capsys.readouterr().out
+    assert not (pilot.film / "audio").exists() and (pilot.film / "visuals").is_dir()
+
+
+def test_a_folder_inside_visuals_is_not_written_through_a_link_in_the_film(pilot, tmp_path, capsys):
+    (pilot.work / "visuals" / "sub").mkdir()
+    (pilot.work / "visuals" / "sub" / "deep.png").write_bytes(b"deep")
+    (pilot.work / "visuals" / "file").mkdir()
+    (pilot.work / "visuals" / "file" / "x.png").write_bytes(b"x")
+    topic = tmp_path / "topics" / "demo"
+    (pilot.film / "visuals").mkdir(parents=True)
+    (pilot.film / "visuals" / "sub").symlink_to(topic)  # a link in the film into a topic
+    (pilot.film / "visuals" / "file").write_text("a file where the folder goes")
+    before = tree(topic)
+    assert run("copy", "pilot demo", "the film") == 0
+    out = capsys.readouterr().out
+    assert "visuals/sub: " in out and "is a link (or inside topics/) in the film: not written through" in out
+    assert "visuals/file: " in out and "is not a folder in the film" in out
+    assert tree(topic) == before, "nothing went into topics/"
+    assert not (topic / "deep.png").exists()
+    assert (pilot.film / "visuals" / "file").read_text() == "a file where the folder goes"
 
 
 def test_a_veo_pilot_says_the_film_command_will_not_use_its_clips(pilot, capsys):
@@ -799,6 +830,10 @@ def stop_nth_link(monkeypatch, n, action):
         return real(src, dst, **kw)
 
     monkeypatch.setattr(os, "link", link)
+
+
+def stop_nth_link_of(monkeypatch, n):
+    stop_nth_link(monkeypatch, n, lambda: (_ for _ in ()).throw(Crash()))
 
 
 def stop_nth_put(monkeypatch, n):

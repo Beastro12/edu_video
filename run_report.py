@@ -7,7 +7,9 @@ Built only from files the run already wrote (ledger, manifest, failures.json, re
 QA report it was handed) and from timings kept in memory: no network, no paid call. Written in a
 `finally`, so a run that stops says where and why, and never lets a failure of its own hide the
 error that stopped the run. Free text goes through utils.redact."""
+import json
 import os
+import re
 import shlex
 import sys
 import time
@@ -23,7 +25,7 @@ import config
 import failures as failure_log
 import ledger
 from agents import ai_video, image_agent
-from utils import atomic_output, brief_key, load_json, log, redact
+from utils import atomic_output, brief_key, load_json, log, redact, save_json
 
 FILE = "run_report.md"
 PREVIOUS = "run_report.prev.md"  # the report this run replaced: one is kept
@@ -387,6 +389,39 @@ def _cell(text, limit: int = 200) -> str:
     return _line(text, limit).replace("|", "\\|")
 
 
+FINISHED = ("finished", "finished, QA failed")  # the Outcome lines of a run that went to the end
+_OUTCOME = re.compile(r"^- \*\*Outcome:\*\* (.*)$", re.M)
+
+
+def last_outcome(work: Path) -> str | None:
+    """The Outcome line of the build's run_report.md ("finished", "stopped at visuals: ...", "script
+    only"), or None if there is no readable report."""
+    try:
+        header = (work / FILE).read_text(encoding="utf-8").split("\n## ", 1)[0]
+    except (OSError, UnicodeDecodeError):
+        return None
+    found = _OUTCOME.search(header)
+    return found.group(1).strip() if found else None
+
+
+def _mark_running(work: Path, run_id: str) -> None:
+    """Say a run is in progress here: its pid, when it started, and which run. Written before anything
+    is made, atomically. A run that ends removes it; one that is killed leaves it, with a pid that is gone."""
+    save_json(work / config.RUNNING_FILE, {"pid": os.getpid(), "started": _now().isoformat(timespec="seconds"),
+                                           "run": run_id})
+
+
+def _clear_running(work: Path, run_id: str) -> None:
+    """Take the marker away, unless another run of this build has since written its own."""
+    path = work / config.RUNNING_FILE
+    try:
+        if json.loads(path.read_text(encoding="utf-8")).get("run") != run_id:
+            return
+    except (OSError, ValueError, AttributeError):
+        pass  # unreadable: it is ours or nobody's; fall through and remove it
+    path.unlink(missing_ok=True)
+
+
 @contextmanager
 def recording(work: Path, topic: str, brief_path: Path | None, brief: str | None,
               allow_veo: bool) -> Iterator[Run]:
@@ -394,14 +429,18 @@ def recording(work: Path, topic: str, brief_path: Path | None, brief: str | None
     the block ends, however it ends (an error, Ctrl-C, a normal return)."""
     global _current
     with ledger.attribute_to(work.name) as run_id:
-        run = _current = Run(work, run_id, topic, brief_path, brief, allow_veo)
+        _mark_running(work, run_id)  # P3-7: what scripts/make_pilot.py reads to know a pilot is still going
         try:
-            yield run
-        except BaseException as e:
-            run.error = e
-            raise
+            run = _current = Run(work, run_id, topic, brief_path, brief, allow_veo)
+            try:
+                yield run
+            except BaseException as e:
+                run.error = e
+                raise
+            finally:
+                _current = None
+                run.timeline.close(stopped=run.error is not None)
+                run.total_s = _clock() - run._t0
+                run.write()
         finally:
-            _current = None
-            run.timeline.close(stopped=run.error is not None)
-            run.total_s = _clock() - run._t0
-            run.write()
+            _clear_running(work, run_id)  # after the report: a copy that sees no marker finds the finished report

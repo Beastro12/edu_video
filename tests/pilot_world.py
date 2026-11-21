@@ -8,6 +8,7 @@ default style, and `hold` lets a test stop a run inside a provider call while it
 import base64
 import functools
 import json
+import os
 import socket
 import sys
 import threading
@@ -286,6 +287,7 @@ class FakePilot:
                             "still_review": str(self.log[s["id"]].relative_to(work)) if s["id"] in self.log else None})
         save_json(work / "manifest.json", {"title": "The demo film", "style": style, "scenes": entries})
         self.entries = entries
+        self.report()
         # what a run leaves that is never carried over
         (work / "failures.json").write_text("{}")
         (work / "narrated.mp4").write_bytes(b"narrated")
@@ -295,6 +297,23 @@ class FakePilot:
         (work / "metadata.json").write_text("{}")
         (work / "visuals" / "manim_media" / "videos" / "x" / "480p").mkdir(parents=True)
         (work / "visuals" / "manim_media" / "videos" / "x" / "480p" / "DocScene.mp4").write_bytes(b"scratch")
+
+    def report(self, outcome="finished"):
+        """run_report.md as a run leaves it, written now (so after script.json)."""
+        (self.work / "run_report.md").write_text(
+            f"# Run report: pilot demo\n\n- **Film:** The demo film\n- **Outcome:** {outcome}\n- **Style:** {self.style}\n"
+            "\n## Costs\n\n- **Outcome:** not this one\n", encoding="utf-8")
+
+    def mark_running(self, pid=None, text=None):
+        """The marker a run in progress leaves; by default of a process that is alive (this one)."""
+        (self.work / config.RUNNING_FILE).write_text(
+            text if text is not None else json.dumps({"pid": os.getpid() if pid is None else pid,
+                                                      "started": "2026-11-21T10:00:00+00:00", "run": "abc"}))
+
+    def touch_script(self):
+        """script.json edited after the last run's report."""
+        newer = (self.work / "run_report.md").stat().st_mtime_ns + 5_000_000
+        os.utime(self.work / "script.json", ns=(newer, newer))
 
     def write_log(self, scene_id, **changes):
         log = {"accepted": self.visual[scene_id].name, "done": True,
@@ -325,3 +344,11 @@ def pilot_fixture(monkeypatch, tmp_path):
     (fake.work / "brief.md").write_text(BRIEF)
     (fake.work / "brief.key").write_text(brief_key(BRIEF))
     return fake
+
+
+def dead_pid() -> int:
+    """The pid of a process that has ended (and not yet been reused, within the test)."""
+    import subprocess
+    child = subprocess.Popen(["true"])
+    child.wait()
+    return child.pid
