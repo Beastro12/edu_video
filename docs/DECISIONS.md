@@ -112,7 +112,10 @@ exactly that many samples (48 kHz / 30 fps = 1600 per frame): `adelay` → `loud
 `asetpts=N/SR/TB` → `apad`/`atrim` to the sample, video capped with `-frames:v`.
 `crossfade_concat` trims each clip's audio to its video length (dropping AAC's end padding)
 and counts offsets in whole frames (an offset printed as "2.067" for 2.0667 s started the
-fade a frame late). The final mix re-stamps after `loudnorm` too.
+fade a frame late). The final mix re-stamps after `loudnorm` too. *(Amended by D32, P2-8: the
+final mix has no `loudnorm`. Its master is one `volume` gain, plus a limiter when needed, then
+`asetpts=N/SR/TB`, `apad` and `atrim` to the film's exact sample count. Without the cut, `amix`
+followed by AAC with the video copied ends 60–110 ms early.)*
 Evidence (FFmpeg 6.1.1): `loudnorm`'s output timestamps are not continuous: after a short
 final frame the next timestamp jumps a whole 100 ms block (`ashowinfo`), and with `adelay`
 after it the lead-in silence had no timestamps at all. FFmpeg drops samples when cutting by
@@ -167,6 +170,22 @@ and −1.8 at −2.0, loudness unchanged (−16.6 / −16.7 LUFS). Limits: the c
 stamp (a film replaced after mixing, with other music under the speech, would not be seen,
 since the voice dominates both renders there), and it needs pauses of `QA_PAUSE_S` + 0.2 s
 between narrations (asserted in config). Real music is untested until the first live run.
+- **Amendment (P2-8, P2-9; 2026-11-21).**
+  - The master is one constant gain (D32).
+  - Its ceiling is `MASTER_TP_DBTP` (−2.0) less `MASTER_AAC_MARGIN_DB` (2.0): the limiter sits at
+    −4.1 dBFS, and the decision on whether the gain needs a limiter uses −4.0.
+  - **Why:** the AAC encode after the limiter raises the true peak again, by 0.0–2.9 dB on dense
+    bursts.
+  - **Margin sweep,** worst encoded true peak over four burst films:
+    - 2.0 → −1.7 dBTP (QA allows −1.0);
+    - 1.5 → −1.0;
+    - 1.0 → −0.2;
+    - 0 → +0.4.
+  - **Limits:** the margin is empirical, measured on FFmpeg 6.1.x; its test skips on other
+    versions.
+  - **Open:** speech is now limited twice. The voice may peak at −2 dBTP at −18 LUFS (D28), while
+    the master holds −4 at −16. Judge it on real ElevenLabs speech before changing
+    `VOICE_TP_DBTP`, because that change re-keys every clip.
 
 **D16 — Every still is reviewed by Claude (vision) before it is used.** Answers D3's risk
 ("the critic reads text, not images, so a still can show wrong physics"). The reviewer sees a
@@ -568,8 +587,7 @@ would pass the true-peak ceiling (P2-6; 2026-10-14; amends D12's audio chain).**
     build only.
 - **Not verified, and still open:**
   - Real ElevenLabs speech. The limiter's attack and release are FFmpeg's defaults.
-  - The film's first narration is still about +1.8 dB in its first second, from the master's
-    single-pass `loudnorm` (P2-8).
+  - Closed by D32 (P2-8): the first narration's first second went from +1.89 to 0.00 dB.
 
 **D29 — The thumbnail: one picture from the image model, the title drawn by us, a frame as the
 fallback; two deliberate exceptions to D10 and D16 (P2-2; 2026-10-14).**
@@ -671,3 +689,23 @@ fallback; two deliberate exceptions to D10 and D16 (P2-2; 2026-10-14).**
   - The same fix was made at voice.py:55 and :61.
   - The remaining sites are P1-16.
 - **It needs D30.** `--image` goes through `image_agent._buy`, so P3-6 lands with or after P0-8.
+
+**D32 — The master is one constant gain, read first (P2-8, P2-9; 2026-11-21).**
+- **Reading.** The pre-master mix is read with `METER` (`ebur128=peak=true`). That is the same
+  graph QA renders with `master=False`.
+- **Gain.** One `volume` gain brings it to `TARGET_LUFS`. A 192 kHz `alimiter` (`latency=1`) joins
+  only when the gain would pass the reduced ceiling (D15). It uses the capped make-up loop
+  `_level_decision`, shared with the voice (D28). Then the cut to the sample (D12).
+- **Caching.** `master_level.json` in the build root holds the reading and its own key: the
+  narrated and bed hashes, the pre-master graph, the master chain, the meter and the settings.
+  - A missing, damaged or foreign file is read again, once, for free, and never causes a remux.
+  - `mix_key` covers inputs and settings, but not the gain. A changed `TARGET_LUFS` or margin
+    remixes the film, for free.
+- **D9.** No paid cache key changes; clip and level-file names are pinned against the base.
+- **Evidence.**
+  - First second: +1.89 → 0.00 dB.
+  - The burst films pass QA with `TARGET_LUFS` unchanged.
+  - This is a redo of the accepted 2026-10-26 work, which was lost in a container replacement
+    (AGENT_LEDGER A8).
+- **Not chosen:** a lower `TARGET_LUFS`; two-pass `loudnorm` (D28).
+- **For P2-5:** keep `master_level.json`.

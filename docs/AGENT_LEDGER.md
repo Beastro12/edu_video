@@ -464,3 +464,6 @@ dropped constraints. Those are the reasons the design check and the plan review 
 | 2026-10-26 | adb7c | Sonnet | implementer | P2-8, P2-9 | 1 | success | review found no Critical |
 | 2026-10-26 | main | Opus | tests verifier (direct) | P0-9 on auto/dev | 1 | success | 687 passed after the merge |
 | 2026-11-19 | main | Opus | orchestrator (process) | all | — | needs fix | A8: unpushed work lost when the container was replaced; durability rules adopted; redo specs written |
+| 2026-11-21 | a5401 | Sonnet | implementer | P2-8, P2-9 (redo) | 1 | success (orchestrator-checked) | the accepted design re-implemented from the redo spec; 735 passed on auto/dev |
+| 2026-11-21 | acca4 | Sonnet | implementer | P3-7 (redo) | 1 | needs fix | review afd95: 3 Criticals; the 'finished' gate inferred from leftover files (an old manifest, the thumbnail stage) and a rerun command that writes a new script. Fix: the pipeline's own running marker plus the run-report outcome |
+| 2026-11-21 | afd95 | Opus | reviewer | P3-7 (redo) | 1 | success (process slip) | C1–C3 probed at both worker counts. Its mutation script ran in the implementer's worktree once (rsync missing), was caught by itself and reverted, and nothing was committed |

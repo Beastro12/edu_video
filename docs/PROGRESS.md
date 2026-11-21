@@ -1099,3 +1099,37 @@ DIVERGED:
   handler that had to cover it. Its version keeps the specified behaviour, and a test pins it.
 
 NEXT — P1-14 r2 changes the poll's `except` to BaseException, and that merge comes next.
+
+## 2026-11-21 P2-8 and P2-9 (redo) The master: one constant gain, and a true-peak margin
+CHANGED:
+- `assembly.py`:
+  - shared `_level_decision`;
+  - `master_chain` with a sample-exact cut;
+  - `master_level` and `master_level.json`;
+  - `mix_graph(voice_scale=)`.
+- `config.py`: `MASTER_AAC_MARGIN_DB`.
+- `qa.py`: the keyword.
+- `tests/conftest.py`: `build_film(voices=, music=)`.
+- `tests/test_master_level.py` (44 tests) and `tests/test_adversary_p2_8.py` (4 tests).
+- DECISIONS: D12, D15 and D28 amended, D32 new.
+
+CHECKED:
+- A redo of accepted work lost in A8. The spec was the accepted design with its review fixes.
+- On base, the first-narration test fails at +1.89 dB; after the fix, 0.00.
+- Mutations, all killed:
+  - loudnorm restored;
+  - the margin dropped;
+  - the key without the cut or the meter;
+  - no sample cut.
+- Clip and level names are pinned against the base.
+- auto/dev after the merge: 735 passed (orchestrator's run).
+- Not re-reviewed by Opus: it re-implements an accepted, reviewed design. The orchestrator
+  checked the diff's risk points (mix_key, D9 pins).
+
+ASSUMED — none.
+
+DIVERGED:
+- With music, the burst film reads −2.9 dBTP against the original −2.1; the test films differ.
+  The config comment states the redo's own numbers.
+
+NEXT — listen for double limiting on the first live film (D15).

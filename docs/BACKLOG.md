@@ -405,14 +405,14 @@ it); batch mode waits for one verified live film.
   ≤ `TAIL_S`, or a longer final tail), asserted in `config.py`; a test on a built film finds no
   darkening while the last narration sounds. If a fade under the last words is wanted
   instead, record that in DECISIONS and close this.
-- [ ] P2-8 — The master `loudnorm` plays the film's first narration louder
+- [x] P2-8 — The master `loudnorm` plays the film's first narration louder
   Found in P2-6 (implementer and reviewer): after per-scene levelling, scenes 2–6 of a built
   film are within 0.1 dB from their first second, but scene 1's first second is +1.8 dB: the
   final mix's single-pass `loudnorm` (dynamic mode) starting up.
   Accept: the finished film's first narration holds its level within 0.5 dB from its first
   second on; the master still lands at `TARGET_LUFS` ± 1 LU with QA passing; test on a built
   film.
-- [ ] P2-9 — True-peak margin on dense bursts
+- [x] P2-9 — True-peak margin on dense bursts
   Found in P2-6's review: on a film of dense percussive bursts the final true peak reaches
   -0.3 dBTP (QA's ceiling is -1.0) before and after P2-6: the master `loudnorm` plus AAC (D15).
   Real narration is far less peaky; not seen on speech-like tests.
