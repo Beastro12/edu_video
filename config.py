@@ -219,6 +219,7 @@ assert 0 < THUMBNAIL_SUBTITLE_RATIO <= 1 and 0 <= THUMBNAIL_SUBTITLE_OPACITY <= 
 # --- Pipeline ---------------------------------------------------------------
 BRIEF_FILE = "brief.md"         # the research brief (--brief), kept in the build folder; metadata reads its Sources
 BRIEF_KEY_FILE = "brief.key"    # which brief the script stage was written with, so a change can't go unnoticed
+SEED_FILE = "seed"              # the folder (absolute path) the build was seeded from, so a rerun without --brief can seed again (P3-4)
 STYLE_FILE = "style"            # which style the build's pictures are made in, so a rerun can't quietly switch
 MAX_CRITIC_ROUNDS = 2
 MAX_MANIM_ATTEMPTS = 3

@@ -90,6 +90,10 @@ def _stamp_brief(work: Path, brief: str | None) -> None:
     if conflict:
         raise RuntimeError(conflict)
     if not (work / config.BRIEF_KEY_FILE).exists() or _recorded_brief(work) != brief_key(brief):
+        # The seed record (P3-4) belongs to the brief it was recorded under: a first or changed stamp ends it,
+        # first, so a crash between the two leaves no record rather than one for another brief. Free: D9 is
+        # untouched (nothing paid is keyed by it).
+        (work / config.SEED_FILE).unlink(missing_ok=True)
         # before any generation, so a crash leaves a stamp that matches the files
         _write_text(work / config.BRIEF_KEY_FILE, brief_key(brief))
 
@@ -174,15 +178,24 @@ def _load_seed(seed: Path, brief: str) -> list[Path]:
     return files
 
 
-def _plan_seed(seed: Path, chapter_files: list[Path], work: Path) -> tuple[list[Path], str | None]:
+def _outline_matches(seed: Path, work: Path) -> bool:
+    """The build has no outline yet, or has the seed's: its chapters then belong to the seed. Reads only."""
+    outline = seed / "outline.json"
+    return not (work / outline.name).exists() or load_json(work / outline.name) == load_json(outline)
+
+
+def _plan_seed(seed: Path, chapter_files: list[Path], work: Path,
+               advice: bool = True) -> tuple[list[Path], str | None]:
     """What seeding would do to `work`, file by file (P3-3): the seed files it would copy (the
     outline first, then the chapters the build lacks), and a note when it leaves something because
     the build's copy differs. The build's outline must be the seed's, or none is: its chapters
-    belong to it. Reads only."""
+    belong to it. `advice` False (P3-4: a run without --brief, seeding from the record) leaves out
+    the "delete ..." hints. Reads only."""
     outline = seed / "outline.json"
-    if (work / outline.name).exists() and load_json(work / outline.name) != load_json(outline):
-        return [], (f"{outline.name} in {work} isn't the one in {seed}; not seeding (to start from the "
-                    "seed's, delete the build's outline.json, chapter_*.json and script.json)")
+    if not _outline_matches(seed, work):
+        return [], (f"{outline.name} in {work} isn't the one in {seed}; not seeding"
+                    + (" (to start from the seed's, delete the build's outline.json, chapter_*.json and "
+                       "script.json)" if advice else ""))
     copy = [] if (work / outline.name).exists() else [outline]
     differ = []
     for path in chapter_files:
@@ -190,23 +203,101 @@ def _plan_seed(seed: Path, chapter_files: list[Path], work: Path) -> tuple[list[
             copy.append(path)
         elif load_json(work / path.name) != load_json(path):
             differ.append(path.name)
-    note = (f"{', '.join(differ)}: not the same in {work} as in {seed}; keeping the build's (to take "
-            "the seed's, delete the build's copy and script.json)") if differ else None
+    note = (f"{', '.join(differ)}: not the same in {work} as in {seed}; keeping the build's"
+            + (" (to take the seed's, delete the build's copy and script.json)" if advice else "")) if differ else None
     return copy, note
 
 
-def seed_script(seed: Path, chapter_files: list[Path], work: Path, brief: str) -> None:
+def _shown_note(note: str | None, copy: list[Path], seed: Path, work: Path, recorded: bool) -> str | None:
+    """`note`, unless it is chatter: on a run that seeds from the record (P3-4) the build says something
+    only when it copies, or when it rejects the folder (an outline that isn't the build's)."""
+    if note and recorded and not copy and _outline_matches(seed, work):
+        return None
+    return note
+
+
+def _record_seed(work: Path, seed: Path) -> None:
+    """Write the folder the build is seeded from (P3-4), an absolute path, atomically and only when it
+    changes. Readers: `_recorded_seed`, on a rerun without --brief."""
+    path, text = work / config.SEED_FILE, str(seed.resolve())
+    if not path.exists() or path.read_text(encoding="utf-8") != text:
+        _write_text(path, text)
+
+
+def _seed_needed(work: Path) -> bool:
+    """The build lacks outline.json or a chapter file its outline lists (no outline.json counts as
+    lacking one); an outline that can't be read does too, and get_script reports it."""
+    try:
+        chapters = load_json(work / "outline.json")["chapters"]
+        return any(not (work / f"chapter_{ch['number']:02d}.json").exists() for ch in chapters)
+    except (OSError, ValueError, KeyError, TypeError):
+        return True
+
+
+def _recorded_seed(work: Path, brief: str) -> tuple[Path | None, list[Path]]:
+    """The folder recorded in `work` by an earlier seeding (P3-4), with the chapter files it holds, for a run
+    that has the build's own kept brief (a rerun without --brief, or --brief <work>/brief.md). Reads only.
+    - Nothing unless the build lacks outline.json or a chapter its outline lists: a build that is whole
+      is not checked, so a topic folder that moved or was re-reviewed since is none of its business.
+    - The folder is used only when it exists, has a brief.md, its brief.key matches that brief.md (reviewed
+      with this version) and it is the build's brief (brief_key equal to the build's stamp), and _load_seed
+      finds a valid script. Otherwise ONE line says why, and nothing is seeded (no error: the writer then
+      fills the gap, with the kept brief)."""
+    record = work / config.SEED_FILE
+    if not record.exists() or not _seed_needed(work):
+        return None, []
+
+    def reject(why: str) -> tuple[None, list]:
+        print(f"• script: not seeding from the folder recorded in {record}: {why}")
+        return None, []
+
+    try:
+        text = record.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        return reject(f"cannot read it ({type(e).__name__})")
+    folder = Path(text)
+    if not text or not folder.is_absolute():
+        return reject(f"{text!r} is not an absolute path")
+    if folder.resolve() == work.resolve():
+        return reject("it names the build folder itself, which is not a seed")
+    if not folder.exists():
+        return reject(f"{text!r} does not exist")
+    if not folder.is_dir():
+        return reject(f"{text!r} is not a folder")
+    try:
+        topic_brief = (folder / config.BRIEF_FILE).read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as e:
+        return reject(f"{folder / config.BRIEF_FILE} cannot be read ({type(e).__name__})")
+    try:
+        chapters = _load_seed(folder, topic_brief)  # its brief.key against its own brief.md, and the script
+    except ValueError as e:
+        return reject(str(e))
+    if brief_key(topic_brief) != brief_key(brief):
+        return reject(f"the {config.BRIEF_FILE} in {folder} is not the brief this script was written with "
+                      "(it was changed since)")
+    return folder, chapters
+
+
+def seed_script(seed: Path, chapter_files: list[Path], work: Path, brief: str, recorded: bool = False) -> None:
     """Start or complete the build's script from the reviewed one in the brief's folder (P3-3):
     its outline and chapters, each copied only where the build has no file of that name. The
     writer does the rest, with the brief. Stamps first, after the brief check, so a crash
-    mid-copy leaves a stamp that matches the files; a rerun finishes the job."""
+    mid-copy leaves a stamp that matches the files; a rerun finishes the job.
+
+    P3-4: then the folder is recorded in the build (unless its outline isn't the build's) and the brief is
+    kept, both before any copy, so a rerun WITHOUT --brief finds the kept brief and the folder and
+    completes the job; `recorded` is that rerun (it prints only what it copies or why it rejects)."""
     _stamp_brief(work, brief)
-    copy, note = _plan_seed(seed, chapter_files, work)
+    if _outline_matches(seed, work):
+        _record_seed(work, seed)
+    keep_brief(brief, work)
+    copy, note = _plan_seed(seed, chapter_files, work, advice=not recorded)
     for path in copy:
         with atomic_output(work / path.name) as tmp:
             shutil.copyfile(path, tmp)
     if copy:
         print(f"• script: seeded {', '.join(p.name for p in copy)} from {seed}")
+    note = _shown_note(note, copy, seed, work, recorded)
     if note:
         print(f"• script: {note}")
 
@@ -659,7 +750,8 @@ def render_film(script: dict, work: Path, allow_veo: bool, seed: str, retry_fail
 def keep_brief(brief: str, work: Path) -> None:
     """Copy the brief into the build folder, so metadata (and a later run report) find it from
     `work` alone. Called once get_script has accepted it: the copy is the brief the script was
-    written from."""
+    written from; and at seeding too (P3-4), right after the stamp, so a crash mid-copy leaves a
+    kept brief for the rerun without --brief."""
     dest = work / config.BRIEF_FILE
     if not dest.exists() or dest.read_text(encoding="utf-8") != brief:
         _write_text(dest, brief)
@@ -682,7 +774,9 @@ def main():
                          "(or none) is refused; a rerun may leave it out and uses the kept one. "
                          "An outline.json (and chapter_NN.json files) next to the brief is a "
                          "reviewed script: a run with --brief copies in whichever of its files "
-                         "the build lacks (a rerun without --brief doesn't)")
+                         "the build lacks. The build remembers that folder (build/<topic>/seed): a rerun "
+                         "without --brief copies in a deleted chapter from it again, while the folder's "
+                         "brief.key matches the build's brief")
     ap.add_argument("--style", choices=sorted(config.STYLES),
                     help="how the pictures look: calm = dark, soft, cinematic; flat = flat vector shapes in "
                          "rich colour on deep navy. Voice, pacing and music stay calm. Default: the style "
@@ -701,7 +795,7 @@ def main():
     if recorded not in (None, config.STYLE):
         print(f"• style: this build is recorded as {recorded}; this run makes its pictures in {config.STYLE} "
               f"instead (any already made in {recorded} are kept)")
-    brief, seed, seed_chapters = None, None, []
+    brief, seed, seed_chapters, recorded_seed = None, None, [], False
     if args.brief is not None:
         try:
             brief = args.brief.read_text(encoding="utf-8-sig")
@@ -715,10 +809,17 @@ def main():
                 seed_chapters = _load_seed(seed, brief)
             except ValueError as e:
                 ap.error(f"--brief: {e}")
+        elif args.brief.resolve() == (work / config.BRIEF_FILE).resolve() and kept_brief(work) is not None:
+            # the kept copy (what a refusal suggests): the folder it was seeded from, as on a rerun without it
+            seed, seed_chapters = _recorded_seed(work, brief)
+            recorded_seed = seed is not None
+        # (any other --brief is never mixed with the record: D23's refusal comes first)
     elif _script_started(work):
         brief = kept_brief(work)  # a rerun: the script goes on with the brief it was written with
         if brief is not None:
             print(f"• brief: using the one this script was written with ({work / config.BRIEF_FILE})")
+            seed, seed_chapters = _recorded_seed(work, brief)  # P3-4: a deleted chapter comes back from its folder
+            recorded_seed = seed is not None
 
     allow_veo = ai_video.available() and not args.no_ai_video
     if args.estimate:
@@ -726,9 +827,10 @@ def main():
         if conflict:
             print(f"this run would be refused: {conflict}")
         if seed is not None:
-            copy, note = _plan_seed(seed, seed_chapters, work)
+            copy, note = _plan_seed(seed, seed_chapters, work, advice=not recorded_seed)
             if copy:
                 print(f"• script: would seed {', '.join(p.name for p in copy)} from {seed}")
+            note = _shown_note(note, copy, seed, work, recorded_seed)
             if note:
                 print(f"• script: {note}")
         print_estimate(args.topic, estimate_cost(args.minutes, work, allow_veo, args.skip_critic,
@@ -743,7 +845,7 @@ def main():
         if _brief_conflict(work, brief) is None:  # a refused run changes nothing; get_script says why
             _record_style(work)  # first, like brief.key: a run that stops in the script stage keeps it
         if seed is not None:
-            seed_script(seed, seed_chapters, work, brief)
+            seed_script(seed, seed_chapters, work, brief, recorded=recorded_seed)
 
         script = run.script = get_script(args.topic, args.minutes, work, args.skip_critic, brief)
         if brief is not None:
