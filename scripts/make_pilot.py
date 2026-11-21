@@ -435,21 +435,20 @@ def walk_folder(src: Path, dst: Path, rel: str, visuals: Path, mine: set[str] | 
         copy_log(path, dst / path.name, f"{rel}/{path.name}", visuals, mine, result)
 
 
-def copy_file(src: Path, dst: Path, shown: str, result: Walk) -> bool:
-    """Copy one file unless the name is taken. True if the file is in the film now."""
+def copy_file(src: Path, dst: Path, shown: str, result: Walk) -> None:
+    """Copy one file unless the name is taken, and say which happened."""
     if os.path.lexists(dst):
         result.skipped.append((shown, "already in the film"))
-        return True
+        return
     try:
         made = put_new(dst, source=src)
     except SourceGone as e:
         result.skipped.append((shown, f"gone from the pilot while copying ({e})"))
-        return False
+        return
     if made:
         result.copied.append(shown)
     else:
         result.skipped.append((shown, "already in the film"))
-    return True
 
 
 def copy_log(src: Path, dst: Path, shown: str, visuals: Path, mine: set[str] | None, result: Walk) -> None:
