@@ -1,0 +1,171 @@
+<div id="wrap"><div id="stage" aria-live="polite">
+  <section class="slide dull" data-i="0"><div class="cover"><h1>Prime Numbers</h1><p>An Overview · Q3 Knowledge Share</p></div><div class="foot">Confidential · Internal use only</div></section>
+  <section class="slide dull" data-i="1"><div class="bar">Agenda</div><ul><li>Definition of prime numbers</li><li>History and background</li><li>Applications</li><li>The Riemann hypothesis</li><li>Q&amp;A</li></ul><div class="foot">2</div></section>
+  <section class="slide" data-i="2"><div class="break"><div class="a">This slide is bad.</div><div class="b">Here are the primes.</div></div></section>
+  <section class="slide real" data-i="3"><canvas></canvas><div class="cap"><h2>Count the primes and a staircase appears</h2><p>Amber: how many primes there are up to each number. Teal: the smooth curve Gauss predicted as a teenager. Close, but the staircase keeps wobbling around it.</p></div><div class="big"><b>25</b><span>primes up to 100</span></div></section>
+  <section class="slide real" data-i="4"><canvas></canvas><div class="cap"><h2>The wobble is a sum of waves</h2><p>Riemann's formula: each zero of the zeta function adds one wave. Add enough of them and the smooth curve bends into the primes' staircase (a weighted version, the Chebyshev ψ function).</p></div><div class="big"><b id="kval">0</b><span>waves added</span></div><div class="ctl"><label for="ksl">waves</label><input id="ksl" type="range" min="0" max="6" step="1" value="0"><span class="hint">drag</span></div></section>
+  <section class="slide real" data-i="5"><canvas></canvas><div class="cap"><h2>Pull a zero off the line</h2><p>Every zero ever checked sits on the line halfway across. Its left-right position sets how fast its wave grows. Drag the highlighted zero sideways: its mirror partner moves too, and the one on the right wins.</p></div><div class="big"><b id="sval">0.50</b><span>left-right position</span></div><div class="ctl"><span class="hint">drag the coral zero ↔</span></div></section>
+  <section class="slide real" data-i="6"><canvas></canvas><div class="cap"><h2>Fair coins wobble like this. So do the primes.</h2><p>Left: a million real coin flips, heads minus half, inside a square-root band. Right: the actual prime count minus the prediction, up to a million, inside the band the hypothesis promises.</p></div></section>
+  <section class="slide real" data-i="7"><canvas></canvas><div class="cap"><h2>And a clue nobody can explain</h2><p>Gaps between the first 2,000 zeros (bars) follow the statistics of energy levels in heavy atomic nuclei (teal), not the gaps of points scattered at random (grey).</p></div></section>
+  <section class="slide" data-i="8"><div class="end"><h2>The quiet line</h2><div class="row"><div><b>&gt; 10,000,000,000,000</b><span>zeros checked</span></div><div><b>0</b><span>found off the line</span></div><div><b>not yet</b><span>proved</span></div></div></div></section>
+</div></div>
+<div><div id="notes" hidden></div>
+<div id="bar"><button id="prev" aria-label="Previous slide">←</button><span id="pos">1 / 9</span><button id="next" aria-label="Next slide">→</button><button id="nbtn">Speaker notes</button><button id="fs">Full screen</button></div></div>
+<script>
+const D = __DATA__;
+const NOTES = [
+  "Hello. This is a talk about prime numbers. (Say it flatly. Let the slide be boring. Wait.)",
+  "Here is the agenda. We will start with a definition, then history and applications... (Read the bullets slowly, then press next and stop talking.)",
+  "Stop. Let the slide sit for a second. Then: the primes look random one by one, but they have a shape when you count them.",
+  "Count the primes up to each number and you get this staircase. Gauss guessed the smooth curve as a teenager. From far away they match. Up close the staircase wobbles. How big can the wobble get?",
+  "Riemann's answer: the wobble is a sum of waves, one per zero of the zeta function. Drag the slider. With 300 waves, the smooth curve has become the staircase. These are the real first 300 zeros.",
+  "Each zero has a height, how fast its wave wiggles, and a left-right position, how fast it grows. More than ten trillion are checked and all sit halfway across. Drag the coral zero. A zero off the line has a mirror partner further right, and that wave leaves the slide.",
+  "On the line, a wave grows like the square root, the same size as a fair coin's wobble. A million flips miss half by a few hundred. The primes up to a million miss the prediction by about 130, well inside the band the hypothesis promises.",
+  "The strange part: the gaps between zeros look like energy levels in heavy nuclei. Nobody knows why.",
+  "After more than 160 years: not proved, and no zero off the line. That's the quiet line."
+];
+const C = { ink: "#E9E6F2", dim: "#8E98C2", grid: "#26306A", amber: "#F2B05E", teal: "#4FC1B5", coral: "#EE7B6A", panel: "#1B2550" };
+const slides = [...document.querySelectorAll(".slide")];
+let cur = 0, anim = null, runs = 0;
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function setup(cv) {
+  const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+  cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, r.width, r.height);
+  return [g, r.width, r.height];
+}
+function box(W, H, l = .08, r = .05, t = .34, b = .12) { return { x0: W * l, x1: W * (1 - r), y0: H * (1 - b), y1: H * t }; }
+function sc(bx, xr, yr) {
+  return [x => bx.x0 + (x - xr[0]) / (xr[1] - xr[0]) * (bx.x1 - bx.x0), y => bx.y0 - (y - yr[0]) / (yr[1] - yr[0]) * (bx.y0 - bx.y1)];
+}
+function axes(g, bx, W, labels) {
+  g.strokeStyle = C.grid; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(bx.x0, bx.y1); g.lineTo(bx.x0, bx.y0); g.lineTo(bx.x1, bx.y0); g.stroke();
+  g.fillStyle = C.dim; g.font = `${Math.max(10, W * .012)}px "IBM Plex Mono", monospace`;
+  for (const [x, y, s, a] of labels || []) { g.textAlign = a || "left"; g.fillText(s, x, y); }
+}
+function line(g, xs, ys, X, Y, col, w = 2, n = xs.length, dash) {
+  g.strokeStyle = col; g.lineWidth = w; g.setLineDash(dash || []); g.beginPath();
+  for (let i = 0; i < n; i++) { const px = X(xs[i]), py = Y(ys[i]); i ? g.lineTo(px, py) : g.moveTo(px, py); }
+  g.stroke(); g.setLineDash([]);
+}
+function stairs(g, xs, ys, X, Y, col, n) {
+  g.strokeStyle = col; g.lineWidth = 2.2; g.beginPath();
+  for (let i = 0; i < n; i++) { const px = X(xs[i]); if (i) g.lineTo(px, Y(ys[i - 1])); else g.moveTo(px, Y(ys[0])); g.lineTo(px, Y(ys[i])); }
+  g.stroke();
+}
+function run(dur, draw) {
+  cancelAnimationFrame(anim);
+  runs++; if (reduce) { draw(1); return; }
+  const t0 = performance.now(), me = ++runs;
+  const step = t => { if (me !== runs) return; const p = Math.max(0, Math.min((t - t0) / dur, 1)); draw(p); if (p < 1) anim = requestAnimationFrame(step); };
+  anim = requestAnimationFrame(step);
+  setTimeout(() => { if (me === runs) { cancelAnimationFrame(anim); draw(1); } }, dur + 150);
+}
+
+const draws = {
+  3(cv) {
+    run(3500, p => {
+      const [g, W, H] = setup(cv), bx = box(W, H), [X, Y] = sc(bx, [0, 100], [0, 30]), s = D.stair;
+      axes(g, bx, W, [[bx.x1, bx.y0 + 18, "100", "right"], [bx.x0 - 6, bx.y1 + 4, "30", "right"], [bx.x0, bx.y0 + 18, "0"]]);
+      stairs(g, s.x, s.pi, X, Y, C.amber, Math.max(1, Math.round(p * s.x.length)));
+      if (p > .35) line(g, s.x, s.li, X, Y, C.teal, 2.5, Math.round(Math.min((p - .35) / .65, 1) * s.x.length));
+    });
+  },
+  4(cv) {
+    const Ks = ["K0", "K1", "K3", "K10", "K30", "K100", "K300"], nums = [0, 1, 3, 10, 30, 100, 300];
+    const sl = document.getElementById("ksl"), out = document.getElementById("kval");
+    const paint = () => {
+      const k = +sl.value, [g, W, H] = setup(cv), bx = box(W, H, .08, .05, .34, .2), [X, Y] = sc(bx, [2, 40], [0, 45]), s = D.psi;
+      axes(g, bx, W, [[bx.x1, bx.y0 + 18, "40", "right"], [bx.x0, bx.y0 + 18, "2"]]);
+      g.globalAlpha = .45; line(g, s.x, s.true, X, Y, C.amber, 2); g.globalAlpha = 1;
+      line(g, s.x, s[Ks[k]], X, Y, C.teal, 2.6); out.textContent = nums[k];
+    };
+    sl.oninput = paint; paint();
+    if (!reduce && +sl.value === 0) { let k = 0; clearInterval(draws._t); draws._t = setInterval(() => { if (cur !== 4 || k >= 6) return clearInterval(draws._t); sl.value = ++k; paint(); }, 1100); }
+  },
+  5(cv) {
+    const out = document.getElementById("sval"), gam = 32.935;
+    const paint = () => {
+      const [g, W, H] = setup(cv), sig = draws._sig;
+      const strip = { x0: W * .07, x1: W * .27, y0: H * .9, y1: H * .3 }, h = D.zeros[D.zeros.length - 1] + 3;
+      g.fillStyle = C.panel; g.fillRect(strip.x0, strip.y1, strip.x1 - strip.x0, strip.y0 - strip.y1);
+      const mid = (strip.x0 + strip.x1) / 2, zx = s => strip.x0 + s * (strip.x1 - strip.x0), zy = t => strip.y0 - t / h * (strip.y0 - strip.y1);
+      g.strokeStyle = C.amber; g.setLineDash([6, 6]); g.beginPath(); g.moveTo(mid, strip.y0); g.lineTo(mid, strip.y1); g.stroke(); g.setLineDash([]);
+      g.fillStyle = C.amber; for (const t of D.zeros) { if (Math.abs(t - gam) < .01) continue; g.beginPath(); g.arc(mid, zy(t), 3, 0, 7); g.fill(); }
+      const y = zy(gam); g.strokeStyle = C.coral; g.lineWidth = 2;
+      for (const s of sig === .5 ? [.5] : [sig, 1 - sig]) { g.beginPath(); g.arc(zx(s), y, 7, 0, 7); g.stroke(); }
+      if (sig !== .5) { g.setLineDash([4, 4]); g.beginPath(); g.moveTo(zx(sig), y); g.lineTo(zx(1 - sig), y); g.stroke(); g.setLineDash([]); }
+      draws._hit = { x: zx(Math.max(sig, 1 - sig)), y, strip, zx };
+      const bx = box(W, H, .34, .05, .34, .1), [X, Y] = sc(bx, [1, 1000], [-45, 45]);
+      axes(g, bx, W, [[bx.x1, bx.y0 + 16, "1,000", "right"], [bx.x0, bx.y0 + 16, "1"]]);
+      g.strokeStyle = C.grid; g.beginPath(); g.moveTo(bx.x0, Y(0)); g.lineTo(bx.x1, Y(0)); g.stroke();
+      const xs = [], on = [], off = [], ss = Math.max(sig, 1 - sig);
+      for (let i = 0; i <= 900; i++) { const x = 1 + i * 999 / 900; xs.push(x); const c = Math.cos(gam * Math.log(x)); on.push(Math.sqrt(x) * c); off.push(Math.pow(x, ss) * c); }
+      g.save(); g.beginPath(); g.rect(0, bx.y1 - 40, W, bx.y0 - bx.y1 + 80); g.clip();
+      if (ss > .5) line(g, xs, off, X, Y, C.coral, 2.2); line(g, xs, on, X, Y, C.teal, 2.2); g.restore();
+      out.textContent = ss.toFixed(2);
+      if (ss > .62) { g.fillStyle = C.coral; g.font = `${Math.max(11, W * .014)}px "IBM Plex Mono", monospace`; g.textAlign = "right"; g.fillText("it left the slide", bx.x1, bx.y1 - 14); }
+    };
+    if (draws._sig === undefined) draws._sig = .5;
+    let drag = false;
+    cv.onpointerdown = e => { const r = cv.getBoundingClientRect(), hx = e.clientX - r.left, hy = e.clientY - r.top, H = draws._hit;
+      if (Math.hypot(hx - H.x, hy - H.y) < 30 || (hx > H.strip.x0 - 20 && hx < H.strip.x1 + 20 && Math.abs(hy - H.y) < 30)) { drag = true; cv.setPointerCapture(e.pointerId); } };
+    cv.onpointermove = e => { if (!drag) return; const r = cv.getBoundingClientRect(), H = draws._hit;
+      draws._sig = Math.min(.95, Math.max(.05, Math.round(((e.clientX - r.left - H.strip.x0) / (H.strip.x1 - H.strip.x0)) * 100) / 100)); paint(); };
+    cv.onpointerup = () => { drag = false; };
+    cv.tabIndex = 0; cv.setAttribute("aria-label", "Zero position: use left and right arrow keys");
+    cv.onkeydown = e => { if (e.key === "ArrowUp" || e.key === "ArrowDown") { draws._sig = Math.min(.95, Math.max(.05, draws._sig + (e.key === "ArrowUp" ? .05 : -.05))); paint(); e.stopPropagation(); e.preventDefault(); } };
+    paint();
+  },
+  6(cv) {
+    run(3000, p => {
+      const [g, W, H] = setup(cv);
+      const L = box(W, H, .06, .53, .38, .12), R = box(W, H, .53, .05, .38, .12);
+      const c = D.coin, n = Math.round(p * c.n.length);
+      let [X, Y] = sc(L, [0, 1e6], [-1100, 1100]);
+      axes(g, L, W, [[L.x1, L.y0 + 16, "1,000,000 flips", "right"], [L.x0 + 4, L.y1 - 8, "±√flips", "left"]]);
+      const bn = [], bp = [], bm = []; for (let i = 0; i <= 200; i++) { const x = i * 5000; bn.push(x); bp.push(Math.sqrt(x)); bm.push(-Math.sqrt(x)); }
+      line(g, bn, bp, X, Y, C.dim, 1.2); line(g, bn, bm, X, Y, C.dim, 1.2); line(g, c.n, c.dev, X, Y, C.amber, 1.8, n);
+      const e = D.err; [X, Y] = sc(R, [0, 1e6], [-700, 700]);
+      axes(g, R, W, [[R.x1, R.y0 + 16, "up to 1,000,000", "right"], [R.x0 + 4, R.y1 - 8, "√x·ln x / 8π", "left"]]);
+      line(g, e.x, e.band, X, Y, C.dim, 1.2); line(g, e.x, e.band.map(v => -v), X, Y, C.dim, 1.2);
+      line(g, e.x, e.e, X, Y, C.teal, 2.2, Math.round(p * e.x.length));
+    });
+  },
+  7(cv) {
+    run(1800, p => {
+      const [g, W, H] = setup(cv), bx = box(W, H, .1, .1, .34, .12), [X, Y] = sc(bx, [0, 3], [0, 1.1]), s = D.spacing;
+      axes(g, bx, W, [[bx.x0, bx.y0 + 16, "0"], [bx.x1, bx.y0 + 16, "3× the average gap", "right"]]);
+      g.fillStyle = C.amber;
+      s.h.forEach((h, i) => { const a = s.edges[i], b = s.edges[i + 1]; const x0 = X(a) + 1, x1 = X(b) - 1, y = Y(h * Math.min(p * 1.4, 1)); g.fillRect(x0, y, x1 - x0, bx.y0 - y); });
+      if (p > .6) { const xs = [], gu = [], po = []; for (let i = 0; i <= 200; i++) { const x = i * 3 / 200; xs.push(x); gu.push(32 / Math.PI ** 2 * x * x * Math.exp(-4 * x * x / Math.PI)); po.push(Math.exp(-x)); }
+        line(g, xs, po, X, Y, C.dim, 1.8, 201, [6, 5]); line(g, xs, gu, X, Y, C.teal, 2.6); }
+    });
+  }
+};
+
+function go(i) {
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  slides.forEach((s, k) => s.classList.toggle("on", k === cur));
+  document.getElementById("pos").textContent = `${cur + 1} / ${slides.length}`;
+  document.getElementById("notes").textContent = NOTES[cur];
+  const cv = slides[cur].querySelector("canvas"); if (cv && draws[cur]) draws[cur](cv);
+  try { localStorage.setItem("ql-slide", cur); } catch (e) {}
+}
+document.getElementById("next").onclick = () => go(cur + 1);
+document.getElementById("prev").onclick = () => go(cur - 1);
+document.getElementById("nbtn").onclick = () => { const n = document.getElementById("notes"); n.hidden = !n.hidden; };
+document.getElementById("fs").onclick = () => { document.getElementById("stage").requestFullscreen?.().catch(() => {}); };
+document.getElementById("stage").addEventListener("click", e => { if (e.target.closest("canvas, input, .ctl")) return; go(cur + 1); });
+addEventListener("keydown", e => {
+  if (e.target.matches("input")) return;
+  if (["ArrowRight", " ", "PageDown"].includes(e.key)) { e.preventDefault(); go(cur + 1); }
+  if (["ArrowLeft", "PageUp"].includes(e.key)) { e.preventDefault(); go(cur - 1); }
+  if (e.key === "n" || e.key === "N") document.getElementById("nbtn").click();
+});
+addEventListener("resize", () => go(cur));
+let start = 0; try { start = +localStorage.getItem("ql-slide") || 0; } catch (e) {}
+go(start);
+</script>

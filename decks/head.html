@@ -1,0 +1,60 @@
+<title>The Quiet Line</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one 16:9 stage, centered; dull corporate slides first, then a dark "real" deck drawn on canvas. Single dark look by design. */
+:root {
+  --ink: #E9E6F2; --dim: #8E98C2; --night: #121A3A; --panel: #1B2550;
+  --amber: #F2B05E; --teal: #4FC1B5; --coral: #EE7B6A;
+  --dull-bg: #FFFFFF; --dull-ink: #1F2A44; --dull-bar: #2F5597;
+  --f-display: "Fraunces", Georgia, serif; --f-body: "IBM Plex Sans", system-ui, sans-serif; --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--night); color: var(--ink); font-family: var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-rows: 1fr auto; overflow: hidden; }
+#wrap { display: grid; place-items: center; min-height: 0; padding-block: 12px; }
+#stage { position: relative; width: min(100%, calc((100vh - 120px) * 16 / 9)); aspect-ratio: 16 / 9; max-width: 100%;
+  border-radius: 6px; overflow: hidden; background: var(--night); box-shadow: 0 0 0 1px #2A356A; }
+.slide { position: absolute; inset: 0; display: none; }
+.slide.on { display: block; }
+.dull { background: var(--dull-bg); color: var(--dull-ink); font-family: Calibri, Carlito, "Segoe UI", Arial, sans-serif; }
+.dull .bar { background: var(--dull-bar); color: #fff; padding: 3.5% 6%; font-size: clamp(16px, 3.4cqw, 44px); font-weight: 600; }
+.dull ul { margin: 5% 8%; font-size: clamp(12px, 2.3cqw, 30px); line-height: 1.7; }
+.dull .cover { display: grid; place-content: center; height: 100%; text-align: center; gap: 2%;
+  background: linear-gradient(180deg, #fff 0 62%, #DCE6F5 62% 100%); }
+.dull .cover h1 { font-size: clamp(22px, 5.2cqw, 68px); margin: 0; color: var(--dull-bar); font-weight: 600; }
+.dull .cover p { margin: 0; font-size: clamp(12px, 2.1cqw, 26px); color: #5B6B88; }
+.dull .foot { position: absolute; bottom: 3%; right: 4%; font-size: clamp(9px, 1.2cqw, 14px); color: #8A95AA; }
+#stage { container-type: inline-size; }
+.break { display: grid; place-content: center; text-align: center; height: 100%; gap: 3%; }
+.break .a { font-family: var(--f-display); font-size: clamp(24px, 6cqw, 80px); color: var(--ink); }
+.break .b { font-family: var(--f-display); font-size: clamp(18px, 3.6cqw, 46px); color: var(--amber); opacity: 0; transition: opacity .8s .9s; }
+.slide.on .break .b { opacity: 1; }
+.real canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cap { position: absolute; left: 5%; top: 5%; max-width: 62%; }
+.cap h2 { margin: 0 0 .4em; font-family: var(--f-display); font-weight: 600; font-size: clamp(16px, 3.1cqw, 40px); text-wrap: balance; }
+.cap p { margin: 0; color: var(--dim); font-size: clamp(11px, 1.55cqw, 20px); line-height: 1.45; max-width: 52ch; }
+.big { position: absolute; right: 5%; top: 6%; text-align: right; font-family: var(--f-mono); }
+.big b { display: block; font-size: clamp(18px, 3.8cqw, 48px); font-weight: 500; color: var(--amber); font-variant-numeric: tabular-nums; }
+.big span { font-size: clamp(9px, 1.2cqw, 15px); color: var(--dim); letter-spacing: .06em; text-transform: uppercase; }
+.ctl { position: absolute; left: 5%; bottom: 5%; display: flex; gap: 10px; align-items: center; font-family: var(--f-mono);
+  font-size: clamp(10px, 1.3cqw, 16px); color: var(--dim); }
+.ctl input[type=range] { width: clamp(120px, 26cqw, 340px); accent-color: var(--teal); }
+.hint { color: var(--teal); }
+.end { display: grid; place-content: center; height: 100%; gap: 1.2em; text-align: center; }
+.end h2 { font-family: var(--f-display); font-weight: 400; font-size: clamp(22px, 4.6cqw, 60px); margin: 0; }
+.end .row { display: flex; gap: 4cqw; justify-content: center; flex-wrap: wrap; font-family: var(--f-mono); }
+.end .row div { display: grid; gap: .3em; }
+.end .row b { font-size: clamp(16px, 3cqw, 38px); color: var(--amber); font-weight: 500; }
+.end .row span { color: var(--dim); font-size: clamp(10px, 1.3cqw, 16px); }
+#bar { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; padding-block: 8px 14px;
+  font-family: var(--f-mono); font-size: 13px; color: var(--dim); }
+#bar button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid #2F3A72; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+#bar button:focus-visible, .ctl input:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+#notes { max-width: 70ch; margin: 0 auto 10px; color: var(--ink); font-size: 15px; line-height: 1.5; background: var(--panel);
+  border: 1px solid #2F3A72; border-radius: 6px; padding: 10px 14px; }
+@media (prefers-reduced-motion: reduce) { .break .b { transition: none; } }
+</style>
